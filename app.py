@@ -187,15 +187,7 @@ with st.container():
             st.session_state.momentum_line.append(new_score)
             
             # Process round normally
-    # Then check alerts after processing
-    alerts = stop_loss_alert()
-    if alerts:
-        st.session_state.danger_zones.append(len(st.session_state.rounds)-1)
-        with st.chat_message("assistant", avatar="⚠️"):
-            st.markdown("**QUANTUM ALERTS:**")
-            for alert in alerts:
-                st.write(alert)
-            st.progress(0.95, text="95% RISK PROBABILITY")
+    
             # Track blues
             if mult < 2.0:
                 st.session_state.consecutive_blues +=1
@@ -219,7 +211,16 @@ with st.container():
                 st.session_state.danger_zones.append(len(st.session_state.rounds)-1)
             if entropy_collapse_detected():
                 st.session_state.entropy_warnings.append(len(st.session_state.rounds)-1)
-            
+
+            alerts = stop_loss_alert()
+            if alerts:
+                st.session_state.danger_zones.append(len(st.session_state.rounds)-1)
+                with st.chat_message("assistant", avatar="⚠️"):
+                    st.markdown("**QUANTUM ALERTS:**")
+                    for alert in alerts:
+                        st.write(alert)
+                    st.progress(0.95, text="95% RISK PROBABILITY")
+
         if st.button("🔄 FULL RESET", type="secondary"):
             st.session_state.clear()
             st.rerun()
@@ -242,7 +243,10 @@ with st.container():
 # Alert system
 if st.session_state.entropy_warnings:
     st.error(f"⚡ ENTROPY COLLAPSE DETECTED ({len(st.session_state.entropy_warnings)} warnings)")
-if stop_loss_alert():
-    st.error("🚨 HARD STOP ACTIVATED - CEASE FIRE")
+alerts = stop_loss_alert()
+if alerts:
+    st.warning("⚠️ RISK THRESHOLD BREACHED - DEFENSIVE MEASURES ACTIVE")
+    for alert in alerts:
+        st.toast(alert, icon="⚠️")
 elif st.session_state.danger_zones:
     st.warning(f"⚠️ FIBONACCI TRAP ZONES ({len(st.session_state.danger_zones)})")
