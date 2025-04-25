@@ -52,26 +52,14 @@ def enhanced_fib_trap():
     return False
 
 # ===== DYNAMIC SYSTEMS ===== #  
-def stop_loss_triggered():
-    """Hard stop conditions"""
+def stop_loss_alert():  # Renamed from stop_loss_triggered
+    """Warning system instead of hard stop"""
+    alerts = []
     if st.session_state.consecutive_blues >=3:
-        return True
+        alerts.append(f"🚨 3+ CONSECUTIVE BLUES (Current: {st.session_state.consecutive_blues})")
     if (len(st.session_state.rounds) - st.session_state.last_pink_index) >15:
-        return True
-    return False
-
-def current_stake():
-    """Risk-adjusted stake sizing"""
-    pattern = st.session_state.current_pattern  
-    base = {  
-        'STABLE_FLOW': 0.035,  
-        'LUCRATIVE_BURST': 0.05,  
-        'RED_EXTENSION': 0.0075,  
-        'HOUSE_TRAP': 0.0,  
-        'NEUTRAL': 0.02  
-    }[pattern]  
-    if st.session_state.entropy_warnings: base *= 0.4  
-    return min(base, 0.05)
+        alerts.append("🚨 15+ ROUNDS SINCE LAST PINK ZONE")
+    return alerts
 
 # ===== PATTERN WARFARE ADDITIONS ===== #  
 def classify_pattern():  
@@ -136,6 +124,9 @@ def execute_countermeasures():
 def create_tactical_chart():
     plt.style.use('dark_background')
     fig, ax = plt.subplots(figsize=(12,6))
+
+
+
     
     # Core momentum line
     momentum = pd.Series(st.session_state.momentum_line)
@@ -169,9 +160,15 @@ def create_tactical_chart():
     for warning in st.session_state.entropy_warnings:
         ax.axvline(warning, color='#ff9100', alpha=0.3)
 
+    for i, alert in enumerate(st.session_state.danger_zones):
+        ax.axvline(alert, color='#ff0000' if i%2==0 else '#ff9100', 
+                  alpha=0.4, linestyle='--', lw=1)
+        
+
     ax.set_title("CYA PATTERN WARFARE v7.0", color='#00fffa', fontsize=18)
     ax.set_facecolor('#000000')
     return fig
+
 
 # ===== INTERFACE ===== #
 st.set_page_config(page_title="CYA Tactical", layout="wide")
@@ -183,12 +180,22 @@ with st.container():
     with col1:
         mult = st.number_input("ENTER MULTIPLIER", 1.0, 1000.0, 1.0, 0.1)
     with col2:
-        if st.button("🚀 ANALYZE", type="primary") and not stop_loss_triggered():
+        if st.button("🚀 ANALYZE", type="primary"):
             # Core updates
             st.session_state.rounds.append(mult)
             new_score = st.session_state.momentum_line[-1] + score_round(mult)
             st.session_state.momentum_line.append(new_score)
             
+            # Process round normally
+    # Then check alerts after processing
+    alerts = stop_loss_alert()
+    if alerts:
+        st.session_state.danger_zones.append(len(st.session_state.rounds)-1)
+        with st.chat_message("assistant", avatar="⚠️"):
+            st.markdown("**QUANTUM ALERTS:**")
+            for alert in alerts:
+                st.write(alert)
+            st.progress(0.95, text="95% RISK PROBABILITY")
             # Track blues
             if mult < 2.0:
                 st.session_state.consecutive_blues +=1
@@ -235,7 +242,7 @@ with st.container():
 # Alert system
 if st.session_state.entropy_warnings:
     st.error(f"⚡ ENTROPY COLLAPSE DETECTED ({len(st.session_state.entropy_warnings)} warnings)")
-if stop_loss_triggered():
+if stop_loss_alert():
     st.error("🚨 HARD STOP ACTIVATED - CEASE FIRE")
 elif st.session_state.danger_zones:
     st.warning(f"⚠️ FIBONACCI TRAP ZONES ({len(st.session_state.danger_zones)})")
