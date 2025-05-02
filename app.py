@@ -161,20 +161,37 @@ with st.container():
                 st.session_state.pink_zones.append(len(st.session_state.rounds)-1)
             
             # Original detection suite
-            recent_rounds = st.session_state.rounds[-15:]
-            st.session_state.fib_traps += detect_fib_trap(recent_rounds)
-            st.session_state.entropy_zones += detect_entropy_collapse(recent_rounds)
-            st.session_state.house_traps += detect_house_trap(recent_rounds)
-            st.session_state.minute_clusters += detect_minute_cluster(recent_rounds)
+            recent_rounds = st.session_state.rounds[-15:] 
+            start_idx = max(0, len(st.session_state.rounds) - 15)
+
+            detected_fib = detect_fib_trap(recent_rounds)
+            st.session_state.fib_traps += [start_idx + i for i in detected_fib]
+
+            detected_entropy = detect_entropy_collapse(recent_rounds)
+            st.session_state.entropy_zones += [start_idx + i for i in detected_entropy]
+
+            detected_house = detect_house_trap(recent_rounds)
+            st.session_state.house_traps += [start_idx + i for i in detected_house]
+
+            detected_minute = detect_minute_cluster(recent_rounds)
+            st.session_state.minute_clusters += [start_idx + i for i in detected_minute]
             
             # New phase/cycle updates
             update_phase_clusters()
             detect_cycles()
             
         if st.button("☢️ FULL SYSTEM RESET", type="secondary"):
-            for key in st.session_state.keys():
-                if key != 'sniper_input':
-                    del st.session_state[key]
+                # PROPER RESET SEQUENCE
+                st.session_state.rounds = []
+                st.session_state.momentum = [0]
+                st.session_state.pink_zones = []
+                st.session_state.fib_traps = []
+                st.session_state.entropy_zones = []
+                st.session_state.house_traps = []
+                st.session_state.minute_clusters = []
+                st.session_state.phase_clusters = []
+                st.session_state.cycle_lengths = []
+                st.session_state.last_peak = -1
 
 # === TACTICAL PLOTTER ===
 fig, ax = plt.subplots(figsize=(14,7), facecolor='black')
