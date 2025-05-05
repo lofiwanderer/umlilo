@@ -30,7 +30,7 @@ if 'last_peak' not in st.session_state:
 
 # Add to session state initialization
 if 'crash_probs' not in st.session_state:
-    st.session_state.crash_probs = []
+    st.session_state.crash_probs = [0.5]  # Initialize with neutral probability
 
 # === QUANTUM CORE ===
 def score_round(m):
@@ -45,22 +45,20 @@ def score_round(m):
 
 # Quantum-inspired probability simulator
 def generate_crash_probability():
-        multiplier_history = st.session_state.rounds[-20:] if len(st.session_state.rounds)>=20 else st.session_state.rounds
-        """Hybrid geometric distribution with quantum tunneling effects"""
-        base_p = 0.98 ** (len(multiplier_history)+1)
-        volatility = np.std([m for m in multiplier_history if m < 5])
-        return min(0.99, base_p + (volatility * 0.12))
+    multiplier_history = st.session_state.rounds[-20:] if len(st.session_state.rounds)>=20 else st.session_state.rounds
+    base_p = 0.98 ** (len(multiplier_history)+1)
+    volatility = np.std([m for m in multiplier_history if m < 5])
+    return min(0.99, base_p + (volatility * 0.12))
 
 
 def calculate_entropic_pressure(window=10):
-    """Auto-pulls from session state"""
     if len(st.session_state.rounds) < window:
-        return 0.0  # Default safety
+        return 0.0
     
     rounds = st.session_state.rounds[-window:]
     bins = np.histogram(rounds, bins=[1,2,5,10,20,50])[0]
-    entropy = -np.sum((bins/len(rounds)) * np.log2(bins/len(rounds) + 1e-9))
-    return 1/(1 + np.exp(-(entropy - 1.5)))
+    entropy_val = entropy(bins/len(rounds) + 1e-9, base=2)
+    return 1/(1 + np.exp(-(entropy_val - 1.5)))
 
 
 def compute_tactical_ema(momentum):
@@ -76,6 +74,8 @@ def compute_tactical_ema(momentum):
     ema = [momentum[0]]
     for price in momentum[1:]:
         ema.append(alpha * price + (1 - alpha) * ema[-1])
+
+    ema = [max(-20, min(100, val)) for val in ema]  # Clamp EMA values
     return ema
 
 # === SNIPER DETECTION SUITE ===
@@ -178,7 +178,8 @@ def enhanced_plot(ax):
                 color='#ff00ff', alpha=0.6, label='Crash Probability')
         ax2.set_ylim(0, 1)
         ax2.legend(loc='upper right')
-
+        
+    
     
     
 # === CORE SYSTEM INIT ===
@@ -199,21 +200,24 @@ with st.container():
             # 1. Store raw multiplier
             st.session_state.rounds.append(mult)
             
-            # 2. Calculate crash probability FIRST
-            crash_prob = generate_crash_probability()  # Uses historical rounds
+            # 2. Calculate probabilities
+            crash_prob = generate_crash_probability()
             entropic_pressure = calculate_entropic_pressure()
             
-            # 3. Update momentum WITH quantum pressure
-            new_momentum = st.session_state.momentum[-1] + score_round(mult)
-            new_momentum *= (1 + entropic_pressure)
-            st.session_state.momentum.append(new_momentum)
+            # 3. Calculate SCALED score with pressure
+            current_score = score_round(mult)
+            scaled_score = current_score * (1 + entropic_pressure)
             
-            # 4. NOW compute EMA with latest crash_prob
-            ema = compute_tactical_ema(st.session_state.momentum)
+            # 4. Update momentum with bounded growth
+            new_momentum = st.session_state.momentum[-1] + scaled_score
             
-            # 5. Store predictions
+            # 5. Apply stabilization factor to prevent runaway values
+            stabilization_factor = 0.95 if abs(new_momentum) > 50 else 1.0
+            st.session_state.momentum.append(new_momentum * stabilization_factor)
+            
+            # 6. Store predictions and continue with other logic...
             st.session_state.crash_probs.append(crash_prob)
-    
+        
             
             if mult >= 10.0:
                 st.session_state.pink_zones.append(len(st.session_state.rounds)-1)
@@ -258,6 +262,9 @@ with st.container():
                 st.session_state.phase_clusters = []
                 st.session_state.cycle_lengths = []
                 st.session_state.last_peak = -1
+                st.session_state.crash_prob = []
+
+                st.session_state.clear()
 
 # === TACTICAL PLOTTER ===
 fig, ax = plt.subplots(figsize=(14,7), facecolor='black')
@@ -298,18 +305,22 @@ with st.expander("LIVE COMBAT TELEMETRY", expanded=True):
     # Modify tactical telemetry columns
     cols[6].metric(
         "Crash Pressure", 
-        f"{crash_prob*100:.1f}%",
-        delta=f"entropy {entropic_pressure*100:.1f}%",
+        f"{st.session_state.crash_probs[-1]*100:.1f}%" if st.session_state.crash_probs else "N/A",
+        delta=f"entropy {entropic_pressure*100:.1f}%" if 'entropic_pressure' in locals() else "",
         help="Quantum probability of imminent crash"
     )
+    current_ema = compute_tactical_ema(st.session_state.momentum) if st.session_state.momentum else []
     # Add to HUD metrics
     cols[7].metric(
         "Quantum EMA", 
-        f"{ema[-1]:.1f}" if ema else "N/A",
-        delta=f"Δ{ema[-1]-ema[-2]:.1f}" if len(ema)>1 else "",
-        help="Adaptive EMA span: " + f"{3.0 - (crash_prob*2.5):.1f}"
+        f"{current_ema[-1]:.1f}" if current_ema else "N/A",
+        delta=f"Δ{current_ema[-1]-current_ema[-2]:.1f}" if len(current_ema)>1 else "",
+        help="Adaptive EMA span: " + (
+            f"{3.0 - (st.session_state.crash_probs[-1]*2.5):.1f}" 
+            if st.session_state.crash_probs 
+            else "N/A"
+        )
     )
-
     
 
 st.markdown("""
