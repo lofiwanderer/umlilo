@@ -1,6 +1,9 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy
+# Add to imports
+from scipy.stats import entropy
 
 # === CORE SYSTEM INIT ===
 # Replace the existing initialization with this:
@@ -24,7 +27,10 @@ if 'cycle_lengths' not in st.session_state:
     st.session_state.cycle_lengths = []
 if 'last_peak' not in st.session_state:
     st.session_state.last_peak = -1
-    
+
+# Add to session state initialization
+if 'crash_probs' not in st.session_state:
+    st.session_state.crash_probs = []
 
 # === QUANTUM CORE ===
 def score_round(m):
@@ -37,9 +43,36 @@ def score_round(m):
     if m < 50.0: return 3.0
     return 4.0  # 50x+
 
-def compute_tactical_ema(momentum, span=3.05, smoothing=1.00):
-    """Ultra-responsive EMA for sniper signals"""
-    alpha = 2 / (span + 1) * smoothing
+# Quantum-inspired probability simulator
+def generate_crash_probability():
+        multiplier_history = st.session_state.rounds[-20:] if len(st.session_state.rounds)>=20 else st.session_state.rounds
+        """Hybrid geometric distribution with quantum tunneling effects"""
+        base_p = 0.98 ** (len(multiplier_history)+1)
+        volatility = np.std([m for m in multiplier_history if m < 5])
+        return min(0.99, base_p + (volatility * 0.12))
+
+
+def calculate_entropic_pressure(window=10):
+    """Auto-pulls from session state"""
+    if len(st.session_state.rounds) < window:
+        return 0.0  # Default safety
+    
+    rounds = st.session_state.rounds[-window:]
+    bins = np.histogram(rounds, bins=[1,2,5,10,20,50])[0]
+    entropy = -np.sum((bins/len(rounds)) * np.log2(bins/len(rounds) + 1e-9))
+    return 1/(1 + np.exp(-(entropy - 1.5)))
+
+
+def compute_tactical_ema(momentum):
+    """Replace original static EMA with adaptive version"""
+    # Get latest crash probability from session state
+    crash_prob = st.session_state.crash_probs[-1] if st.session_state.crash_probs else 0.5
+    
+    # Quantum adaptive scaling
+    span = 3.0 - (crash_prob * 2.5)  # Range: 0.5 (high crash risk) to 3.0 (normal)
+    span = max(0.5, min(5.0, span))  # Clamp values
+    
+    alpha = 2 / (span + 1) * 1.05  # Your original smoothing factor
     ema = [momentum[0]]
     for price in momentum[1:]:
         ema.append(alpha * price + (1 - alpha) * ema[-1])
@@ -138,6 +171,16 @@ def enhanced_plot(ax):
     plot_sniper_zones(ax, st.session_state.house_traps, '#ffa500', 'House Trap')
     plot_sniper_zones(ax, st.session_state.minute_clusters, '#bf00ff', 'Minute Cluster')
 
+    # Add probability curve
+    if len(st.session_state.crash_probs) > 1:
+        ax2 = ax.twinx()
+        ax2.plot(st.session_state.crash_probs, 
+                color='#ff00ff', alpha=0.6, label='Crash Probability')
+        ax2.set_ylim(0, 1)
+        ax2.legend(loc='upper right')
+
+    
+    
 # === CORE SYSTEM INIT ===
 
 # === WAR ROOM INTERFACE ===
@@ -153,9 +196,24 @@ with st.container():
     with col2:
         if st.button("🚀 FIRE ANALYSIS", type="primary"):
             # Original core updates
+            # 1. Store raw multiplier
             st.session_state.rounds.append(mult)
-            st.session_state.momentum.append(
-                st.session_state.momentum[-1] + score_round(mult))
+            
+            # 2. Calculate crash probability FIRST
+            crash_prob = generate_crash_probability()  # Uses historical rounds
+            entropic_pressure = calculate_entropic_pressure()
+            
+            # 3. Update momentum WITH quantum pressure
+            new_momentum = st.session_state.momentum[-1] + score_round(mult)
+            new_momentum *= (1 + entropic_pressure)
+            st.session_state.momentum.append(new_momentum)
+            
+            # 4. NOW compute EMA with latest crash_prob
+            ema = compute_tactical_ema(st.session_state.momentum)
+            
+            # 5. Store predictions
+            st.session_state.crash_probs.append(crash_prob)
+    
             
             if mult >= 10.0:
                 st.session_state.pink_zones.append(len(st.session_state.rounds)-1)
@@ -179,7 +237,15 @@ with st.container():
             # New phase/cycle updates
             update_phase_clusters()
             detect_cycles()
-            
+
+              
+            # Add to button handler
+            if crash_prob > 0.85 and len(st.session_state.rounds) > 10:
+                st.toast("🚨 CRASH IMMINENT: Activate counter-measures", icon="⚠️")
+                # Trigger automated response
+                st.session_state.pink_zones.append(len(st.session_state.rounds))
+                    
+                        
         if st.button("☢️ FULL SYSTEM RESET", type="secondary"):
                 # PROPER RESET SEQUENCE
                 st.session_state.rounds = []
@@ -209,7 +275,7 @@ st.pyplot(fig)
 
 # === TACTICAL HUD ===
 with st.expander("LIVE COMBAT TELEMETRY", expanded=True):
-    cols = st.columns(6)  # Expanded from 5 to 6 columns
+    cols = st.columns(8)  # Expanded from 5 to 8 columns
     
     # Original metrics
     cols[0].metric("Active Rounds", len(st.session_state.rounds))
@@ -228,6 +294,23 @@ with st.expander("LIVE COMBAT TELEMETRY", expanded=True):
         f"{len(st.session_state.phase_clusters)} Clusters",
         delta=f"Cycle: {st.session_state.cycle_lengths[-1] if st.session_state.cycle_lengths else 'N/A'}"
     )
+
+    # Modify tactical telemetry columns
+    cols[6].metric(
+        "Crash Pressure", 
+        f"{crash_prob*100:.1f}%",
+        delta=f"entropy {entropic_pressure*100:.1f}%",
+        help="Quantum probability of imminent crash"
+    )
+    # Add to HUD metrics
+    cols[7].metric(
+        "Quantum EMA", 
+        f"{ema[-1]:.1f}" if ema else "N/A",
+        delta=f"Δ{ema[-1]-ema[-2]:.1f}" if len(ema)>1 else "",
+        help="Adaptive EMA span: " + f"{3.0 - (crash_prob*2.5):.1f}"
+    )
+
+    
 
 st.markdown("""
 <style>
