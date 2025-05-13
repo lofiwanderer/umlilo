@@ -110,23 +110,26 @@ if not df.empty:
     ax.fill_between(df["timestamp"], df["msi"], where=(df["msi"] <= -3), color='#ff3333', alpha=0.5, label="Pullback Zone")
 
     # Pullback trap detection
-    # === Pullback Trap Detection (Corrected)
+    # === Pullback Trap Detection v3.0 (Fully Accurate) ===
     pullback_indices = []
     
     for i in range(2, len(df)):
-        last_three = df['multiplier'].iloc[i-2:i+1].values
+        m1, m2, m3 = df['multiplier'].iloc[i-2:i+1].values
         msi_now = df['msi'].iloc[i]
-        
-        # Check only if current MSI is in positive territory (≥ 3)
+    
         if msi_now >= 2:
-            is_consecutive_blues = all(r < 2.0 for r in last_three)
-            is_descending_blues = last_three[0] > last_three[1] > last_three[2] and all(r < 2.0 for r in last_three)
-            
-            if is_consecutive_blues or is_descending_blues:
+            # Case 1: Any 3 consecutive blues (all < 2.0)
+            three_consecutive_blues = m1 < 2.0 and m2 < 2.0 and m3 < 2.0
+    
+            # Case 2: Two descending blues (< 2.0) in the last 2 rounds
+            two_descending_blues = m2 < 2.0 and m3 < 2.0 and m2 > m3
+    
+            if three_consecutive_blues or two_descending_blues:
                 ax.axvspan(df['timestamp'].iloc[i] - pd.Timedelta(minutes=0.5),
                            df['timestamp'].iloc[i] + pd.Timedelta(minutes=0.5),
-                           color='red', alpha=0.15)
+                           color='red', alpha=0.2)
                 pullback_indices.append(i)
+
 
     # Pink Projection Zones (round-based, not time-based)
     # Pink Projection Zones: Short (8–12) and Long (18–22)
@@ -162,10 +165,13 @@ if not df.empty:
             end = df["timestamp"].iloc[end_idx]
             ax.axvspan(start, end, color='purple', alpha=0.5)
 
-    
+    for i in pullback_indices:
+        ax.scatter(df["timestamp"].iloc[i], df["msi"].iloc[i],
+                   color='red', s=80, edgecolor='black', linewidth=1.5, zorder=5)
 
-    ax.set_title("MSI Tactical Map", color='white')
-    ax.tick_params(colors='white')
+
+    ax.set_title("MSI Tactical Map", color='black')
+    ax.tick_params(colors='black')
     ax.legend()
     st.pyplot(fig)
 
