@@ -1,12 +1,18 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
+import scipy
+import scipy.stats as stats
+
 import matplotlib.pyplot as plt
 from datetime import datetime
+from scipy.fft import rfft, rfftfreq
+import math
 
 # ======================= CONFIG ==========================
 st.set_page_config(page_title="CYA Quantum Tracker", layout="wide")
-st.title("🔥 CYA MOMENTUM TRACKER: Phase 1 + 2 + 3")
+st.title("🔥 CYA MOMENTUM TRACKER: Phase 1 + 2 + 3 + 4")
 
 # ================ SESSION STATE INIT =====================
 if "roundsc" not in st.session_state:
@@ -22,7 +28,9 @@ with st.sidebar:
     WINDOW_SIZE = st.slider("MSI Window Size", 5, 100, 20)
     PINK_THRESHOLD = st.number_input("Pink Threshold", value=10.0)
     STRICT_RTT = st.checkbox("Strict RTT Mode", value=False)
-
+    if st.button("🔄 Full Reset", help="Clear all historical data"):
+        st.session_state.roundsc = []
+        st.rerun()
 # =================== ROUND ENTRY ========================
 st.subheader("Manual Round Entry")
 mult = st.number_input("Enter round multiplier", min_value=0.01, step=0.01)
@@ -35,212 +43,172 @@ if st.button("➕ Add Round"):
         "score": score
     })
 
-# ================= GA VALIDATOR + FORECAST ENGINE =================
-def ga_detect_pattern(msi_series):
-    if len(msi_series) < 10:
-        return None
-    recent = list(msi_series[-10:].fillna(0))
-    if recent[-1] < recent[-2] < recent[-3] and recent[-4] > recent[-3]:
-        return {"pattern": "Surge Trap", "confidence": 83, "range": (len(msi_series)-10, len(msi_series)-1)}
-    if recent[-1] > recent[-2] > recent[-3] and recent[-4] < recent[-3]:
-        return {"pattern": "Ramp-Up Burst", "confidence": 74, "range": (len(msi_series)-10, len(msi_series)-1)}
-    return None
-
-
-def forecast_msi(msi_now, avg_score):
-    return [round(msi_now + avg_score*(i+1), 2) for i in range(3)]
-
-
-def get_msi_slope(df, window=3):
-        if len(df) < window + 1:
-            return 0.0
-        y = df["msi"].iloc[-(window+1):].values
-        x = np.arange(len(y))
-        slope = np.polyfit(x, y, 1)[0]
-        return round(slope, 2)
-
-
 # =================== CONVERT TO DATAFRAME ================
 df = pd.DataFrame(st.session_state.roundsc)
+
+def rrqi(df, window=30):
+    recent = df.tail(window)
+    blues = len(recent[recent['type'] == 'Blue'])
+    purples = len(recent[recent['type'] == 'Purple'])
+    pinks = len(recent[recent['type'] == 'Pink'])
+    quality = (purples + 2*pinks - blues) / window
+    return round(quality, 2)
+
+# === TPI CALCULATIONS ===
+def calculate_purple_pressure(df, window=10):
+    recent = df.tail(window)
+    purple_scores = recent[recent['type'] == 'Purple']['score']
+    if len(purple_scores) == 0:
+        return 0
+    return purple_scores.sum() / window
+
+def calculate_blue_decay(df, window=10):
+    recent = df.tail(window)
+    blue_scores = recent[recent['type'] == 'Blue']['multiplier']
+    if len(blue_scores) == 0:
+        return 0
+    decay = np.mean([2.0 - b for b in blue_scores])  # The lower the blue, the higher the decay
+    return decay * (len(blue_scores) / window)
+
+def compute_tpi(df, window=10):
+    pressure = calculate_purple_pressure(df, window)
+    decay = calculate_blue_decay(df, window)
+    return round(pressure - decay, 2)
+
+def bollinger_bands(series, window, num_std=2):
+    rolling_mean = series.rolling(window).mean()
+    rolling_std = series.rolling(window).std()
+    upper_band = rolling_mean + num_std * rolling_std
+    lower_band = rolling_mean - num_std * rolling_std
+    return rolling_mean, upper_band, lower_band
+
+
 
 if not df.empty:
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df["type"] = df["multiplier"].apply(lambda x: "Pink" if x >= PINK_THRESHOLD else ("Purple" if x >= 2 else "Blue"))
     df["msi"] = df["score"].rolling(WINDOW_SIZE).sum()
     df["momentum"] = df["score"].cumsum()
-
-    # ======= MDI Calculation =======
-    mdi_value = None
-    mdi_note = "N/A"
+    # === Define latest_msi safely ===
+    latest_msi = df["msi"].iloc[-1] if not df["msi"].isna().all() else 0
+    latest_tpi = compute_tpi(df, window=WINDOW_SIZE)
     
-    if len(df) >= 6:
-        msi_delta = df["msi"].iloc[-1] - df["msi"].iloc[-6]
-        mom_delta = df["momentum"].iloc[-1] - df["momentum"].iloc[-6]
-    
-        if mom_delta != 0:
-            mdi_value = round(msi_delta / mom_delta, 2)
-            if mdi_value > 1.2:
-                mdi_note = "⬆️ Upward Divergence"
-            elif mdi_value < -1.2:
-                mdi_note = "⬇️ Downward Divergence"
-            else:
-                mdi_note = "⚖️ Neutral Divergence"
+    # Multi-window BBs on MSI
+    df["bb_mid_20"], df["bb_upper_20"], df["bb_lower_20"] = bollinger_bands(df["msi"], 20, 2)
+    df["bb_mid_10"], df["bb_upper_10"], df["bb_lower_10"] = bollinger_bands(df["msi"], 10, 1.5)
+    df["bb_mid_40"], df["bb_upper_40"], df["bb_lower_40"] = bollinger_bands(df["msi"], 40, 2.5)
+
+    df["bb_squeeze"] = df["bb_upper_10"] - df["bb_lower_10"]
+    df["bb_squeeze_flag"] = df["bb_squeeze"] < df["bb_squeeze"].rolling(30).quantile(0.25)
 
 
-    # PHASE 3 Pattern Validator
-    st.session_state.ga_pattern = ga_detect_pattern(df["msi"].fillna(0))
+    # === Harmonic Cycle Estimation ===
+    scores = df['score'].fillna(0).values
+    N = len(scores)
+    T = 1
 
-    # PHASE 3 Forecast Bubble
-    if len(df) >= WINDOW_SIZE + 3:
-        avg_score = np.mean(df["score"].iloc[-WINDOW_SIZE:])
-        st.session_state.forecast_msi = forecast_msi(df["msi"].iloc[-1], avg_score)
+    if N >= 20:
+        yf = rfft(scores - np.mean(scores))
+        xf = rfftfreq(N, T)
+        dominant_freq = xf[np.argmax(np.abs(yf[1:])) + 1]
+        dominant_cycle = round(1 / dominant_freq) if dominant_freq != 0 else 0
+        harmonic_wave = np.sin(2 * np.pi * dominant_freq * np.arange(N))
+    else:
+        dominant_cycle = None
+        harmonic_wave = None
+
+    # === RRQI Calculation ===
+    rrqi_val = rrqi(df, 30)
 
     # ================== MSI CHART =======================
     st.subheader("Momentum Score Index (MSI)")
     fig, ax = plt.subplots(figsize=(12, 4))
-    ax.set_facecolor("black")
+    ax.set_facecolor("white")
     # === Zero Axis Line for Orientation ===
-    ax.axhline(0, color='white', linestyle='--', linewidth=3, alpha=0.8)
-
-    ax.plot(df["timestamp"], df["msi"], color='white', lw=2, label="MSI")
+    ax.axhline(0, color='black', linestyle='--', linewidth=3, alpha=0.8)
+    ax.plot(df["timestamp"], df["msi"], color='black', lw=2, label="MSI")
 
     # MSI Zones
-    ax.fill_between(df["timestamp"], df["msi"], where=(df["msi"] >= 6), color='#ff69b4', alpha=0.5, label="Burst Zone")
-    ax.fill_between(df["timestamp"], df["msi"], where=((df["msi"] > 3) & (df["msi"] < 6)), color='#00ffff', alpha=0.5, label="Surge Zone")
-    ax.fill_between(df["timestamp"], df["msi"], where=(df["msi"] <= -3), color='#ff3333', alpha=0.5, label="Pullback Zone")
+    ax.fill_between(df["timestamp"], df["msi"], where=(df["msi"] >= 6), color='#ff69b4', alpha=0.8, label="Burst Zone")
+    ax.fill_between(df["timestamp"], df["msi"], where=((df["msi"] > 3) & (df["msi"] < 6)), color='#00ffff', alpha=0.3, label="Surge Zone")
+    ax.fill_between(df["timestamp"], df["msi"], where=(df["msi"] <= -3), color='#ff3333', alpha=0.8, label="Pullback Zone")
 
-    # Pullback trap detection
-    # === Pullback Trap Detection v3.0 (Fully Accurate) ===
-    pullback_indices = []
+    # Plot Bollinger Bands
+    ax.plot(df["timestamp"], df["bb_upper_20"], color='maroon', linestyle='--', alpha=1.0, label="BB Upper (20)")
+    ax.plot(df["timestamp"], df["bb_lower_20"], color='maroon', linestyle='--', alpha=1.0, label="BB Lower (20)")
+    ax.plot(df["timestamp"], df["bb_mid_20"], color='maroon', linestyle=':', alpha=1.0)
     
-    for i in range(2, len(df)):
-        m1, m2, m3 = df['multiplier'].iloc[i-2:i+1].values
-        msi_now = df['msi'].iloc[i]
+    # Optional: Short-term band
+    ax.plot(df["timestamp"], df["bb_upper_10"], color='cyan', linestyle='--', alpha=1.0)
+    ax.plot(df["timestamp"], df["bb_lower_10"], color='cyan', linestyle='--', alpha=1.0)
+
+    # Optional: long-term band
+    ax.plot(df["timestamp"], df["bb_upper_40"], color='black', linestyle='--', alpha=1.0)
+    ax.plot(df["timestamp"], df["bb_lower_40"], color='black', linestyle='--', alpha=1.0)
     
-        if msi_now >= 2:
-            # Case 1: Any 3 consecutive blues (all < 2.0)
-            three_consecutive_blues = m1 < 2.0 and m2 < 2.0 and m3 < 2.0
-    
-            # Case 2: Two descending blues (< 2.0) in the last 2 rounds
-            two_descending_blues = m2 < 2.0 and m3 < 2.0 and m2 > m3
-    
-            if three_consecutive_blues or two_descending_blues:
-                ax.axvspan(df['timestamp'].iloc[i] - pd.Timedelta(minutes=0.5),
-                           df['timestamp'].iloc[i] + pd.Timedelta(minutes=0.5),
-                           color='red', alpha=0.2)
-                pullback_indices.append(i)
 
+    # Plot squeeze zones
+    for i in range(len(df)):
+        if df["bb_squeeze_flag"].iloc[i]:
+            ax.axvspan(df["timestamp"].iloc[i] - pd.Timedelta(minutes=0.25),
+                       df["timestamp"].iloc[i] + pd.Timedelta(minutes=0.25),
+                       color='purple', alpha=0.9)
 
-    # Pink Projection Zones (round-based, not time-based)
-    # Pink Projection Zones: Short (8–12) and Long (18–22)
-    pink_idxs = df.index[df['type'] == 'Pink'].tolist()
-    for idx in pink_idxs:
-        for offset in list(range(8, 13)) + list(range(18, 23)):
-            future = idx + offset
-            if future < len(df):
-                ax.axvspan(df["timestamp"].iloc[future] - pd.Timedelta(minutes=0.25),
-                           df["timestamp"].iloc[future] + pd.Timedelta(minutes=0.25),
-                           color='magenta', alpha=0.06)
+    # RRQI line (optional bubble)
+    if rrqi_val:
+        ax.axhline(rrqi_val, color='cyan', linestyle=':', alpha=0.9, label='RRQI Level')
 
+    # Harmonic Forecast Plot
+    if harmonic_wave is not None:
+        ax.plot(df["timestamp"], harmonic_wave, 
+                color='green', linestyle='-', alpha=0.7, label=f"Harmonic Cycle ~{dominant_cycle}r")
 
-    # MDI
-   # if len(df) >= 6:
-   #     msi_delta = df["msi"].iloc[-1] - df["msi"].iloc[-6]
-   #     mom_delta = df["momentum"].iloc[-1] - df["momentum"].iloc[-6]
-   #     if mom_delta != 0:
-   #         mdi = msi_delta / mom_delta
-   #         if abs(mdi) >= 1.5:
-   #             ax.text(df["timestamp"].iloc[-1], df["msi"].max()*0.9,
-   #                     f"MDI = {mdi:.2f}", color='yellow', fontsize=10)#
-    # Pattern Match Zone
-    # === Pattern Match Zone Overlay (Safe Index-Based)
-    if st.session_state.ga_pattern:
-        pattern_range = st.session_state.ga_pattern['range']
-        start_idx = pattern_range[0]
-        end_idx = pattern_range[1]
-
-    # Confirm both indices are valid before drawing
-        if 0 <= start_idx < len(df) and 0 <= end_idx < len(df):
-            start = df["timestamp"].iloc[start_idx]
-            end = df["timestamp"].iloc[end_idx]
-            ax.axvspan(start, end, color='purple', alpha=0.5)
-
-    for i in pullback_indices:
-        ax.scatter(df["timestamp"].iloc[i], df["msi"].iloc[i],
-                   color='red', s=80, edgecolor='black', linewidth=1.5, zorder=5)
-
-
-    ax.set_title("MSI Tactical Map", color='black')
+    ax.set_title("MSI Tactical Map + Harmonics", color='black')
     ax.tick_params(colors='black')
     ax.legend()
     st.pyplot(fig)
 
-    # === UI Pullback Trap Warnings
-    if pullback_indices:
-        st.warning(f"⚠️ {len(pullback_indices)} Pullback Trap(s) Detected in Hot Zones — Watch for Entry Fakes")
+    # RRQI Status
+    st.metric("🧠 RRQI", rrqi_val, delta="Last 30 rounds")
+    if rrqi_val >= 0.3:
+        st.success("🔥 Happy Hour Detected — Tactical Entry Zone")
+    elif rrqi_val <= -0.2:
+        st.error("⚠️ Dead Zone — Avoid Aggressive Entries")
+    else:
+        st.info("⚖️ Mixed Zone — Scout Cautiously")
 
+    if dominant_cycle is not None:
+        if dominant_cycle >= 25:
+            st.success(f"🧠 Harmonic Cycle Stable (~{dominant_cycle}r): Conditions Favor Purple/Pink")
+        elif 10 <= dominant_cycle < 25:
+            st.info(f"⚖️ Harmonic Cycle Moderate (~{dominant_cycle}r): Entry Needs Confirmation")
+        else:
+            st.error(f"⚠️ Harmonic Cycle Volatile (~{dominant_cycle}r): Increased Blue Risk")
 
+        
+    if not df["bb_upper_20"].isna().all():
+        future_upper = df["bb_upper_20"].iloc[-1]
+        future_lower = df["bb_lower_20"].iloc[-1]
+        st.info(f"Forecast MSI Range (Next Rounds): {future_lower:.2f} → {future_upper:.2f}")
+
+    # === TPI INTERPRETATION HUD ===
+    st.metric("TPI", f"{latest_tpi}", delta="Trend Pressure")
+    
+    if latest_msi >= 3:
+        if latest_tpi > 0.5:
+            st.success("🔥 Valid Surge — Pressure Confirmed")
+        elif latest_tpi < -0.5:
+            st.warning("⚠️ Hollow Surge — Likely Trap")
+        else:
+            st.info("🧐 Weak Surge — Monitor Closely")
+    else:
+        st.info("Trend too soft — TPI not evaluated.")
+
+    
     # Log
     st.subheader("Round Log (Editable)")
     edited = st.data_editor(df.tail(30), use_container_width=True, num_rows="dynamic")
     st.session_state.roundsc = edited.to_dict('records')
-
-    # Projections
-    st.subheader("Sniper Pink Projections")
-
-    
-    # Sniper Projection Detection
-    df["projected_by"] = None
-    df["projects_to"] = None
-    
-    for i, row in df.iterrows():
-        if row["type"] == "Pink":
-            # Check if this pink is projected by a prior pink
-            for j, prior in df.iloc[:i].iterrows():
-                delta_rounds = i - j
-                if prior["type"] == "Pink" and (8 <= delta_rounds <= 12 or 18 <= delta_rounds <= 22):
-                    df.at[i, "projected_by"] = prior["timestamp"].strftime("%H:%M:%S")
-                    df.at[j, "projects_to"] = df["timestamp"].iloc[i].strftime("%H:%M:%S")
-                    break
-
-    st.dataframe(
-    df[df["type"] == "Pink"][["timestamp", "multiplier", "projected_by", "projects_to"]].tail(10),
-    use_container_width=True
-    )
-    # Entry Decision
-    st.subheader("Entry Decision Assistant")
-    latest_msi = df["msi"].iloc[-1]
-    # === Visual Slope Display ===
-    msi_slope = get_msi_slope(df)
-    
-    slope_arrow = "↗️" if msi_slope > 0.1 else "↘️" if msi_slope < -0.1 else "➡️"
-    slope_color = "green" if msi_slope > 0.1 else "red" if msi_slope < -0.1 else "gray"
-    
-    st.markdown(f"<span style='color:{slope_color}; font-size: 20px;'>MSI Slope: {slope_arrow} {msi_slope}</span>", unsafe_allow_html=True)
-
-    if latest_msi >= 6:
-        st.success("✅ PINK Entry Zone")
-    elif 3 <= latest_msi < 6:
-        st.info("🟣 PURPLE Surge Opportunity")
-    elif latest_msi <= -3:
-        st.warning("❌ Pullback Danger — Avoid")
-    else:
-        st.info("⏳ Neutral — Wait and Observe")
-
-    st.info(f"🧭 MDI: `{mdi_value}` — {mdi_note}")
-
-
-    # Forecast Display
-    if st.session_state.forecast_msi:
-        st.subheader("🔮 Forecast MSI Bubble")
-        for i, val in enumerate(st.session_state.forecast_msi, 1):
-            st.write(f"MSI in {i} rounds: {val}")
-
-    # GA Pattern
-    if st.session_state.ga_pattern:
-        st.subheader("⚠️ Pattern Warning")
-        p = st.session_state.ga_pattern
-        st.warning(f"{p['pattern']} Detected — {p['confidence']}% Match")
 
 else:
     st.info("Enter at least 1 round to begin analysis.")
