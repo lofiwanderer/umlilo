@@ -222,7 +222,7 @@ if not df.empty:
         return round(val, precision) if pd.notnull(val) else None
 
     
-    if df['upper_slope'] is not None:
+    if len(df["score"].fillna(0).values) > 20:
         
         upper_slope = safe_round(latest['upper_slope'])* 100,
         lower_slope = safe_round(latest['lower_slope'])* 100,
