@@ -13,69 +13,9 @@ import math
 from matplotlib.collections import LineCollection
 
 # Add this at the top after imports
-# ======================= STYLES ==========================
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&display=swap');
-    
-    :root {
-        --primary: #6366f1;
-        --secondary: #a855f7;
-        --accent: #ec4899;
-        --dark: #0f172a;
-    }
-    
-    * {
-        font-family: 'Space Grotesk', sans-serif;
-    }
-    
-    [data-testid="stMetric"] {
-        background: linear-gradient(45deg, #0f172a, #1e293b);
-        border-radius: 12px;
-        padding: 15px;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-        border: 1px solid #334155 !important;
-    }
-    
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f172a 60%, #1e293b) !important;
-        border-right: 1px solid #334155 !important;
-    }
-    
-    .stPlotlyChart, .stDataFrame {
-        border: 1px solid #334155;
-        border-radius: 12px;
-        padding: 15px;
-        background: #0f172a !important;
-    }
-    
-    .stButton button {
-        background: linear-gradient(45deg, #6366f1, #a855f7) !important;
-        color: white !important;
-        border: none;
-        border-radius: 8px;
-        padding: 8px 20px;
-        transition: all 0.3s;
-    }
-    
-    .stButton button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 6px -1px rgba(99,102,241,0.3);
-    }
-    
-    .stNumberInput, .stTextInput {
-        border: 1px solid #334155 !important;
-        border-radius: 8px !important;
-    }
-    
-    .stAlert {
-        border-radius: 12px !important;
-    }
-</style>
-""", unsafe_allow_html=True)
 
 # ======================= CONFIG ==========================
-#st.set_page_config(page_title="CYA Quantum Tracker", layout="wide")
+st.set_page_config(page_title="CYA Quantum Tracker", layout="wide")
 st.title("🔥 CYA MOMENTUM TRACKER: Phase 1 + 2 + 3 + 4")
 
 # ================ SESSION STATE INIT =====================
@@ -224,12 +164,12 @@ if not df.empty:
     
     if len(df["score"].fillna(0).values) > 20:
         
-        upper_slope = safe_round(latest['upper_slope'])* 100,
-        lower_slope = safe_round(latest['lower_slope'])* 100,
-        upper_accel = safe_round(latest['upper_accel'])* 100,
-        lower_accel = safe_round(latest['lower_accel'])* 100,
-        bandwidth = safe_round(latest['bandwidth']),
-        bandwidth_delta = safe_round(latest['bandwidth_delta']* 100),
+        upper_slope = round(safe_round(latest['upper_slope'])* 100),
+        lower_slope = round(safe_round(latest['lower_slope'])* 100),
+        upper_accel = round(safe_round(latest['upper_accel'])* 100),
+        lower_accel = round(safe_round(latest['lower_accel'])* 100),
+        bandwidth = round(safe_round(latest['bandwidth'])),
+        bandwidth_delta = round(safe_round(latest['bandwidth_delta'])* 100),
        
     else:
         upper_slope = safe_round(latest['upper_slope']),
