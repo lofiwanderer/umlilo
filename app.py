@@ -127,140 +127,172 @@ def get_zone_color(pct):
         return 'red'
 
 
-
-if not df.empty:
+# Only run heavy calculations if new round was added
+@st.cache_data(show_spinner=False)
+def analyze_data(data, pink_threshold, window_size):
+    df = data.copy()
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df["type"] = df["multiplier"].apply(lambda x: "Pink" if x >= PINK_THRESHOLD else ("Purple" if x >= 2 else "Blue"))
     df["msi"] = df["score"].rolling(WINDOW_SIZE).sum()
     df["momentum"] = df["score"].cumsum()
-    # === Define latest_msi safely ===
+            # === Define latest_msi safely ===
     latest_msi = df["msi"].iloc[-1] if not df["msi"].isna().all() else 0
     latest_tpi = compute_tpi(df, window=WINDOW_SIZE)
     
-    # Multi-window BBs on MSI
+# Multi-window BBs on MSI
+
     df["bb_mid_20"], df["bb_upper_20"], df["bb_lower_20"] = bollinger_bands(df["msi"], 20, 2)
     df["bb_mid_10"], df["bb_upper_10"], df["bb_lower_10"] = bollinger_bands(df["msi"], 10, 1.5)
     df["bb_mid_40"], df["bb_upper_40"], df["bb_lower_40"] = bollinger_bands(df["msi"], 40, 2.5)
     df['bandwidth'] = df["bb_upper_10"] - df["bb_lower_10"]  # Width of the band
-
+    
     # Compute slope (1st derivative) for upper/lower bands
     df['upper_slope'] = df["bb_upper_10"].diff()
     df['lower_slope'] = df["bb_lower_10"].diff()
-
+    
     # Compute acceleration (2nd derivative) for upper/lower bands
     df['upper_accel'] = df['upper_slope'].diff()
     df['lower_accel'] = df['lower_slope'].diff()
-
-    # How fast the band is expanding or shrinking
-    df['bandwidth_delta'] = df['bandwidth'].diff()
     
-    # Pull latest values from the last row
+        # How fast the band is expanding or shrinking
+    df['bandwidth_delta'] = df['bandwidth'].diff()
+        
+        # Pull latest values from the last row
     latest = df.iloc[-1]
-
-     # Prepare and safely round/format outputs, avoiding NoneType formatting
+    
+         # Prepare and safely round/format outputs, avoiding NoneType formatting
     def safe_round(val, precision=4):
         return round(val, precision) if pd.notnull(val) else None
-
     
-    if len(df["score"].fillna(0).values) > 20:
         
+    if len(df["score"].fillna(0).values) > 20:
+            
         upper_slope = round(safe_round(latest['upper_slope'])* 100),
         lower_slope = round(safe_round(latest['lower_slope'])* 100),
         upper_accel = round(safe_round(latest['upper_accel'])* 100),
         lower_accel = round(safe_round(latest['lower_accel'])* 100),
         bandwidth = round(safe_round(latest['bandwidth'])),
         bandwidth_delta = round(safe_round(latest['bandwidth_delta'])* 100),
-       
+           
     else:
-        upper_slope = safe_round(latest['upper_slope']),
-        lower_slope = safe_round(latest['lower_slope']),
-        upper_accel = safe_round(latest['upper_accel']),
-        lower_accel = safe_round(latest['lower_accel']),
-        bandwidth = safe_round(latest['bandwidth']),
-        bandwidth_delta = safe_round(latest['bandwidth_delta']),
-          
+            upper_slope = safe_round(latest['upper_slope']),
+            lower_slope = safe_round(latest['lower_slope']),
+            upper_accel = safe_round(latest['upper_accel']),
+            lower_accel = safe_round(latest['lower_accel']),
+            bandwidth = safe_round(latest['bandwidth']),
+            bandwidth_delta = safe_round(latest['bandwidth_delta']),
+              
+        
     
-
+        
     
-
-    
+        
     df["bb_squeeze"] = df["bb_upper_10"] - df["bb_lower_10"]
     df["bb_squeeze_flag"] = df["bb_squeeze"] < df["bb_squeeze"].rolling(5).quantile(0.25)
-
-
-    # === Harmonic Cycle Estimation ===
+    
+    
+        # === Harmonic Cycle Estimation ===
+    
     scores = df["score"].fillna(0).values
     N = len(scores)
     T = 1
-    
-    # === Harmonic Analysis ===
+        
+        # === Harmonic Analysis ===
     dominant_cycle = detect_dominant_cycle(scores)
-    
+        
     if dominant_cycle:
         current_round_position = len(scores) % dominant_cycle
         wave_label, wave_pct = get_phase_label(current_round_position, dominant_cycle)
-    
-        # Recompute FFT for wave fitting
+        
+            # Recompute FFT for wave fitting
         yf = rfft(scores - np.mean(scores))
         xf = rfftfreq(N, T)
         idx_max = np.argmax(np.abs(yf[1:])) + 1
         dominant_freq = xf[idx_max]
-        
-        # Harmonic wave fit + forecast
+            
+            # Harmonic wave fit + forecast
         phase = np.angle(yf[idx_max])
-
-        # === Harmonic Fit (Past)
+    
+            # === Harmonic Fit (Past)
         x_past = np.arange(N)  # Safe, aligned x for past
         harmonic_wave = np.sin(2 * np.pi * dominant_freq * x_past + phase)
         dom_slope = np.polyfit(np.arange(N), harmonic_wave, 1)[0] if N > 1 else 0
-
-        # === Harmonic Forecast (Future)
+    
+            # === Harmonic Forecast (Future)
         forecast_len = 5
         future_x = np.arange(N, N + forecast_len)
         harmonic_forecast = np.sin(2 * np.pi * dominant_freq * future_x + phase)
+        forecast_times = [df["timestamp"].iloc[-1] + pd.Timedelta(seconds=5 * i) for i in range(forecast_len)]
 
-         # Secondary harmonic (micro-wave) in 8–12 range
+             # Secondary harmonic (micro-wave) in 8–12 range
         mask_micro = (xf > 0.08) & (xf < 0.15)
         micro_idx = np.argmax(np.abs(yf[mask_micro])) + 1 if np.any(mask_micro) else 0
         micro_freq = xf[micro_idx] if micro_idx < len(xf) else 0
         micro_phase = np.angle(yf[micro_idx]) if micro_idx < len(yf) else 0
         micro_wave = np.sin(2 * np.pi * micro_freq * np.arange(N) + micro_phase)
         micro_slope = np.polyfit(np.arange(N), micro_wave, 1)[0] if N > 1 else 0
-    
-        # Energy Integrity Score (EIS)
+        
+            # Energy Integrity Score (EIS)
         blues = len(df[df["score"] < 0])
         purples = len(df[(df["score"] == 1.0) | (df["score"] == 1.5)])
         pinks = len(df[df["score"] >= 2.0])
         eis = (purples * 1 + pinks * 2) - blues
-    
-        # Alignment test
+        
+            # Alignment test
         if dom_slope > 0 and micro_slope > 0:
             interference = "Constructive (Aligned)"
         elif dom_slope * micro_slope < 0:
             interference = "Destructive (Conflict)"
         else:
             interference = "Neutral or Unclear"
-    
-        # === Channel Bounds (1-STD deviation)
+        
+            # === Channel Bounds (1-STD deviation)
         amplitude = np.std(scores)
         upper_channel = harmonic_forecast + amplitude
         lower_channel = harmonic_forecast - amplitude
-
-        
+    
+            
     else:
-        current_round_position = None
-        harmonic_wave = []
-        harmonic_forecast = []
-        forecast_times = []
-        wave_label = None
-        wave_pct = None
-        dom_slope = 0
-        micro_slope = 0
-        eis = 0
-        interference = "N/A"
+            current_round_position = None
+            harmonic_wave = []
+            micro_wave = []
+            harmonic_forecast = []
+            forecast_times = []
+            wave_label = None
+            wave_pct = None
+            dom_slope = 0
+            micro_slope = 0
+            eis = 0
+            interference = "N/A"
+
+
+    
+            
+    return df, latest_msi, latest_tpi, upper_slope, lower_slope, upper_accel, lower_accel, bandwidth, bandwidth_delta, dominant_cycle, current_round_position, wave_label, wave_pct, dom_slope, micro_slope, eis, interference, harmonic_wave, micro_wave, harmonic_forecast, forecast_times
+    # === RRQI Calculation ===
+    rrqi_val = rrqi(df, 30)
+if not df.empty:
+    (df, latest_msi, latest_tpi, upper_slope, lower_slope, upper_accel, lower_accel,
+ bandwidth, bandwidth_delta, dominant_cycle, current_round_position,
+ wave_label, wave_pct, dom_slope, micro_slope, eis, interference,
+ harmonic_wave, micro_wave, harmonic_forecast, forecast_times) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE)
+   
     # === RRQI Calculation ===
     rrqi_val = rrqi(df, 30)
 
+    
+    scores = df["score"].fillna(0).values
+    N = len(scores)
+
+    
+
+    
+    amplitude = np.std(scores)
+    upper_channel = harmonic_forecast + amplitude
+    lower_channel = harmonic_forecast - amplitude
+
+    
+    st.metric("number of rounds", N)
     # ================== MSI CHART =======================
     st.subheader("Momentum Score Index (MSI)")
     fig, ax = plt.subplots(figsize=(12, 4))
@@ -329,10 +361,7 @@ if not df.empty:
         # Dashed forecast overlay
     ax.plot(forecast_times, harmonic_forecast, color='green', linestyle='--', alpha=0.5, label="Forecast (Next)")
 
-    #Harmonic Forecast Plot
-    #if harmonic_wave is not None and len(harmonic_wave) == N:
-        #ax.plot(x_past, harmonic_wave, label="Harmonic Fit", color='blue')
-        
+    
     #if harmonic_forecast is not None and len(harmonic_forecast) > 0:
         #for i in range(len(future_x)-1):
             #color = 'green' #if harmonic_forecast[i+1] > harmonic_forecast[i] else 'red'
@@ -345,7 +374,10 @@ if not df.empty:
     ax.set_title("MSI Tactical Map + Harmonics", color='black')
     
     ax.legend()
-    st.pyplot(fig)
+    plot_slot = st.empty()
+    with plot_slot.container():
+        st.pyplot(fig)
+    
 
     # RRQI Status
     st.metric("🧠 RRQI", rrqi_val, delta="Last 30 rounds")
@@ -411,9 +443,11 @@ if not df.empty:
 
     
     # Log
-    st.subheader("Round Log (Editable)")
-    edited = st.data_editor(df.tail(30), use_container_width=True, num_rows="dynamic")
-    st.session_state.roundsc = edited.to_dict('records')
+    with st.expander("📄 Review / Edit Recent Rounds"):
+        edited = st.data_editor(df.tail(30), use_container_width=True, num_rows="dynamic")
+        if st.button("✅ Commit Edits"):
+            st.session_state.roundsc = edited.to_dict('records')
+            st.rerun()
 
 else:
     st.info("Enter at least 1 round to begin analysis.")
