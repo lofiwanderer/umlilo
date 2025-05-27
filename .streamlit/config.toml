@@ -1,0 +1,10 @@
+[server]
+runOnSave = false
+enableWebsocketCompression = false
+maxUploadSize = 200
+maxMessageSize = 200
+headless = true
+
+[client]
+toolbarMode = "minimal"
+showSidebarNavigation = false
