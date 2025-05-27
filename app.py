@@ -35,6 +35,11 @@ with st.sidebar:
     if st.button("🔄 Full Reset", help="Clear all historical data"):
         st.session_state.roundsc = []
         st.rerun()
+    # 🔥 Clear cached functions (wave features, FFTs, BBs)
+    if st.button("🧹 Clear Cache", help="Force harmonic + MSI recalculation"):
+        st.cache_data.clear()  # 💡 Streamlit’s built-in cache clearer
+        st.success("Cache cleared — recalculations will run fresh.")
+        
 # =================== ROUND ENTRY ========================
 st.subheader("Manual Round Entry")
 mult = st.number_input("Enter round multiplier", min_value=0.01, step=0.01)
