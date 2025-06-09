@@ -518,7 +518,8 @@ def analyze_data(data, pink_threshold, window_size):
         amplitude = np.std(scores)
         upper_channel = harmonic_forecast + amplitude
         lower_channel = harmonic_forecast - amplitude
-    
+        
+        gamma_amplitude = np.max(np.abs(yf)) if len(yf) > 0 else 0
     
         
             
