@@ -491,7 +491,11 @@ def analyze_data(data, pink_threshold, window_size):
         micro_wave = np.sin(2 * np.pi * micro_freq * np.arange(N) + micro_phase)
         micro_slope = np.polyfit(np.arange(N), micro_wave, 1)[0] if N > 1 else 0
         
-        micro_amplitude = np.abs(yf[mask_micro][micro_idx]) if np.any(mask_micro) else 0
+        if np.any(mask_micro):
+            micro_amplitudes = np.abs(yf[mask_micro])
+            micro_amplitude = np.max(micro_amplitudes)  # Get maximum amplitude in micro band
+        else:
+            micro_amplitude = 0
         micro_cycle_len = round(1 / micro_freq) if micro_freq else None
         micro_position = (N - 1) % micro_cycle_len + 1 if micro_cycle_len else None
         micro_phase_label, micro_pct = get_phase_label(micro_position, micro_cycle_len) if micro_cycle_len else ("N/A", None)
