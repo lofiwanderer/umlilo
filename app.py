@@ -7,6 +7,7 @@ import scipy.stats as stats
 import sklearn
 
 import matplotlib.pyplot as plt
+
 from datetime import datetime
 from scipy.fft import rfft, rfftfreq
 import math
@@ -561,20 +562,26 @@ if not df.empty:
     lower_channel = harmonic_forecast - amplitude
 
     
-    st.metric("number of rounds", N)
+    col_entry, col_hud = st.columns([2, 1])
+    with col_entry:
+        st.metric("number of rounds", N)
     
-    
+    with col_hud:
     # Add this below:
-    if resonance_forecast_vals is not None:
-        next_pred = "↑ UP" if resonance_forecast_vals[0] > 0 else "↓ DOWN"
-        st.metric("Next Round Prediction", next_pred, 
-                  delta=f"Confidence: {abs(resonance_forecast_vals[0]):.2f}")
-        
+        if resonance_forecast_vals is not None:
+            with st.expander("🧬Next Round Prediction"):
+                next_pred = "↑ UP" if resonance_forecast_vals[0] > 0 else "↓ DOWN"
+                st.metric("Next Round Prediction", next_pred, 
+                      delta=f"Confidence: {abs(resonance_forecast_vals[0]):.2f}")
+            if wave_label is not None and wave_pct is not None:
+                st.metric("Dominant Cycle Length", f"{dominant_cycle} rounds")
+                st.metric("Wave Position", f"Round {current_round_position} of {dominant_cycle}")
+                st.metric("Wave Phase", f"{wave_label} ({wave_pct:.1f}%)") 
     # ================== MSI CHART =======================
     def plot_msi_chart(df, harmonic_wave, micro_wave, harmonic_forecast, forecast_times):
 
         st.subheader("Momentum Score Index (MSI)")
-        fig, ax = plt.subplots(figsize=(12, 4))
+        fig, ax = plt.subplots(figsize=(12, 8))
         fig.patch.set_facecolor('#0f172a')
         ax.set_facecolor('#EBF5FF')
         ax.tick_params(colors='white')
