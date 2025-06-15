@@ -90,7 +90,7 @@ with st.sidebar:
         
 # =================== ROUND ENTRY ========================
 st.subheader("Manual Round Entry")
-round_input = st.query_params().get("round_input", [""])[0]
+round_input = st.query_params.get("round_input", [""])[0]
 #mult = st.number_input("Enter round multiplier", min_value=0.01, step=0.01)
 
 if round_input:
