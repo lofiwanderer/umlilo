@@ -25,44 +25,35 @@ from matplotlib.collections import LineCollection
 st.set_page_config(page_title="CYA Quantum Tracker", layout="wide")
 st.title("🔥 CYA MOMENTUM TRACKER: Phase 1 + 2 + 3 + 4")
 
-# === CSS for Floating Input Panel ===
 st.markdown("""
 <style>
-#floating-entry {
+#fab-container {
     position: fixed;
-    bottom: 20px;
-    right: 30px;
-    background-color: #1E293B;
-    padding: 15px 20px;
+    bottom: 25px;
+    right: 25px;
     z-index: 9999;
-    border-radius: 12px;
-    border: 2px solid #00ffff;
-    box-shadow: 0 4px 15px rgba(0,255,255,0.4);
-    color: white;
 }
-#floating-entry input {
-    padding: 5px;
-    width: 90px;
-    font-size: 14px;
-    border-radius: 5px;
-    border: none;
-    margin-right: 10px;
-}
-#floating-entry button {
-    padding: 5px 10px;
+button.fab {
+    height: 60px;
+    width: 60px;
+    border-radius: 50%;
     background-color: #00ffff;
-    border: none;
-    border-radius: 5px;
+    color: black;
+    font-size: 32px;
     font-weight: bold;
+    border: none;
     cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+button.fab:hover {
+    background-color: #0ff;
+    box-shadow: 0 0 20px #0ff;
 }
 </style>
 
-<div id="floating-entry">
+<div id="fab-container">
   <form action="" method="GET">
-    <label for="round_input">➕ Round:</label>
-    <input type="text" name="round_input" id="round_input" placeholder="e.g. 2.45" />
-    <button type="submit">Add</button>
+    <button class="fab" name="show_modal" value="1">+</button>
   </form>
 </div>
 """, unsafe_allow_html=True)
@@ -105,22 +96,28 @@ with st.sidebar:
 # =================== ROUND ENTRY ========================
 st.subheader("Manual Round Entry")
 params = st.query_params
-if "round_input" in params:
-    mult = float(params["round_input"][0])
-    score = 2 if mult >=  PINK_THRESHOLD  else 1 if mult >= 2 else -1
-    st.session_state.roundsc.append({
-            "timestamp": datetime.now(),
-            "multiplier": mult,
-            "score": score
-        })
+show_modal = "show_modal" in params
+if show_modal:
+    with st.modal("➕ Enter New Round"):
+        round_val = st.text_input("Enter multiplier (e.g. 2.45)", key="modal_round_input")
+        confirm = st.button("Add Round")
+        
+        if confirm:
+            mult = float(params["round_input"][0])
+            score = 2 if mult >=  PINK_THRESHOLD  else 1 if mult >= 2 else -1
+            st.session_state.roundsc.append({
+                    "timestamp": datetime.now(),
+                    "multiplier": mult,
+                    "score": score
+                })
        
          
-    st.success(f"✅ Round {mult} added")
-    st.st.query_params  # Reset URL input param
-    st.rerun()
+            st.success(f"✅ Round {mult} added")
+            st.query_params  # Reset URL input param
+            st.rerun()
         
-else:
-    st.error("Invalid sticky input — must be numeric")
+        else:
+            st.error("Invalid sticky input — must be numeric")
 
     
         
