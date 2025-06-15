@@ -98,7 +98,8 @@ st.subheader("Manual Round Entry")
 params = st.query_params
 show_modal = "show_modal" in params
 if show_modal:
-    with st.modal("➕ Enter New Round"):
+    st.markdown("## ➕ Add New Round")
+    with st.expander("Click to Enter New Round", expanded=True):
         round_val = st.text_input("Enter multiplier (e.g. 2.45)", key="modal_round_input")
         confirm = st.button("Add Round")
         
