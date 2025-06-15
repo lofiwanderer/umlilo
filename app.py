@@ -100,11 +100,11 @@ show_modal = "show_modal" in params
 if show_modal:
     st.markdown("## ➕ Add New Round")
     with st.expander("Click to Enter New Round", expanded=True):
-        round_val = st.text_input("Enter multiplier (e.g. 2.45)", key="modal_round_input")
+        round_val = st.number_input("Enter multiplier (e.g. 2.45)", key="modal_round_input")
         confirm = st.button("Add Round")
         
         if confirm:
-            mult = float(params["round_input"][0])
+            mult = mult = float(round_val)
             score = 2 if mult >=  PINK_THRESHOLD  else 1 if mult >= 2 else -1
             st.session_state.roundsc.append({
                     "timestamp": datetime.now(),
