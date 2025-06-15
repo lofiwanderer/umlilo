@@ -5,9 +5,10 @@ import numpy as np
 import scipy
 import scipy.stats as stats
 import sklearn
-
+import pywt
 import matplotlib.pyplot as plt
-
+import plotly.graph_objects as go
+import plotly.express as px
 from datetime import datetime
 from scipy.fft import rfft, rfftfreq
 import math
@@ -15,6 +16,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from matplotlib import gridspec
 # === Color-coded Future Wave Zones ===
 from matplotlib.collections import LineCollection
+import streamlit_javascript as stj
 
 
 # Add this at the top after imports
@@ -22,6 +24,34 @@ from matplotlib.collections import LineCollection
 # ======================= CONFIG ==========================
 st.set_page_config(page_title="CYA Quantum Tracker", layout="wide")
 st.title("🔥 CYA MOMENTUM TRACKER: Phase 1 + 2 + 3 + 4")
+
+# === FLOATING ENTRY BUTTON (CSS Overlay) ===
+st.markdown("""
+<style>
+#sticky-container {
+    position: fixed;
+    bottom: 20px;
+    right: 25px;
+    z-index: 9999;
+    background-color: #1E293B;
+    padding: 12px 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    border: 2px solid #00ffff;
+}
+#sticky-container:hover {
+    box-shadow: 0 0 20px #00ffff;
+}
+</style>
+
+<div id="sticky-container">
+<form action="" method="POST">
+    <label style="color:white; margin-right:10px;">↳ Add Round:</label>
+    <input name="round_input" id="round_input" placeholder="e.g. 2.45" style="width:80px;" />
+    <button type="submit">➕</button>
+</form>
+</div>
+""", unsafe_allow_html=True)
 
 # ================ SESSION STATE INIT =====================
 if "roundsc" not in st.session_state:
@@ -60,16 +90,23 @@ with st.sidebar:
         
 # =================== ROUND ENTRY ========================
 st.subheader("Manual Round Entry")
-mult = st.number_input("Enter round multiplier", min_value=0.01, step=0.01)
+round_input = st.experimental_get_query_params().get("round_input", [""])[0]
+#mult = st.number_input("Enter round multiplier", min_value=0.01, step=0.01)
 
-if st.button("➕ Add Round"):
-    score = 2 if mult >= PINK_THRESHOLD else (1 if mult >= 2.0 else -1)
-    st.session_state.roundsc.append({
-        "timestamp": datetime.now(),
-        "multiplier": mult,
-        "score": score
-    })
-
+if round_input:
+    try:
+        mult = float(round_input)
+        score = 2 if mult >= PINK_THRESHOLD else (1 if mult >= 2.0 else -1)
+        st.session_state.roundsc.append({
+            "timestamp": datetime.now(),
+            "multiplier": mult,
+            "score": score
+        })
+        st.success(f"✅ Round {mult} added")
+        st.experimental_set_query_params()  # Reset URL input param
+        st.rerun()
+    except:
+        st.error("Invalid sticky input — must be numeric")
 
 # =================== CONVERT TO DATAFRAME ================
 df = pd.DataFrame(st.session_state.roundsc)
@@ -138,6 +175,16 @@ def get_phase_label(position, cycle_length):
         return "Falling Phase", pct
     else:
         return "End Phase", pct
+
+def morlet_wavelet_power(df, wavelet='cmor', max_scale=64):
+    scores = df["score"].fillna(0).values
+    scales = np.arange(1, max_scale)
+    
+    # Compute CWT
+    coeffs, freqs = pywt.cwt(scores, scales, wavelet)
+    power = np.abs(coeffs) ** 2
+    
+    return coeffs, power, freqs, scales
 
 def decision_hud_panel(dominant_phase, dominant_pct, micro_phase, micro_pct,
                        resonance_score, fractal_match_type=None, anchor_forecast_type=None):
@@ -368,7 +415,15 @@ def analyze_data(data, pink_threshold, window_size):
             # === Define latest_msi safely ===
     latest_msi = df["msi"].iloc[-1] if not df["msi"].isna().all() else 0
     latest_tpi = compute_tpi(df, window=WINDOW_SIZE)
-    
+
+
+    # === MSI CALCULATION (Momentum Score Index) ===
+    window_size = min(WINDOW_SIZE, len(df))
+    recent_df = df.tail(window_size)
+    msi_score = recent_df['score'].mean()
+    msi_color = 'green' if msi_score > 0.5 else ('yellow' if msi_score > 0 else 'red')
+
+
 # Multi-window BBs on MSI
 
     df["bb_mid_20"], df["bb_upper_20"], df["bb_lower_20"] = bollinger_bands(df["msi"], 20, 2)
@@ -538,11 +593,11 @@ def analyze_data(data, pink_threshold, window_size):
 
     
             
-    return df, latest_msi, latest_tpi, upper_slope, lower_slope, upper_accel, lower_accel, bandwidth, bandwidth_delta, dominant_cycle, current_round_position, wave_label, wave_pct, dom_slope, micro_slope, eis, interference, harmonic_wave, micro_wave, harmonic_forecast, forecast_times,micro_pct, micro_phase_label, micro_freq, dominant_freq, phase, gamma_amplitude, micro_amplitude , micro_phase, micro_cycle_len, micro_position, harmonic_waves, resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals
+    return df, latest_msi, window_size, recent_df,msi_score,msi_color, latest_tpi, upper_slope, lower_slope, upper_accel, lower_accel, bandwidth, bandwidth_delta, dominant_cycle, current_round_position, wave_label, wave_pct, dom_slope, micro_slope, eis, interference, harmonic_wave, micro_wave, harmonic_forecast, forecast_times,micro_pct, micro_phase_label, micro_freq, dominant_freq, phase, gamma_amplitude, micro_amplitude , micro_phase, micro_cycle_len, micro_position, harmonic_waves, resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals
     # === RRQI Calculation ===
     rrqi_val = rrqi(df, 30)
 if not df.empty:
-    (df, latest_msi, latest_tpi, upper_slope, lower_slope, upper_accel, lower_accel,
+    (df, latest_msi,window_size, recent_df,msi_score,msi_color, latest_tpi, upper_slope, lower_slope, upper_accel, lower_accel,
  bandwidth, bandwidth_delta, dominant_cycle, current_round_position,
  wave_label, wave_pct, dom_slope, micro_slope, eis, interference,
  harmonic_wave, micro_wave, harmonic_forecast, forecast_times,micro_pct, micro_phase_label, micro_freq, dominant_freq, phase, gamma_amplitude, micro_amplitude , micro_phase, micro_cycle_len, micro_position, harmonic_waves, resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE)
@@ -578,98 +633,61 @@ if not df.empty:
                 st.metric("Wave Position", f"Round {current_round_position} of {dominant_cycle}")
                 st.metric("Wave Phase", f"{wave_label} ({wave_pct:.1f}%)") 
     # ================== MSI CHART =======================
-    def plot_msi_chart(df, harmonic_wave, micro_wave, harmonic_forecast, forecast_times):
+    def plot_msi_chart(df,window_size, recent_df,msi_score,msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times):
 
-        st.subheader("Momentum Score Index (MSI)")
-        fig, ax = plt.subplots(figsize=(12, 8))
-        fig.patch.set_facecolor('#0f172a')
-        ax.set_facecolor('#EBF5FF')
-        ax.tick_params(colors='white')
-        ax.xaxis.label.set_color('white')
-        ax.yaxis.label.set_color('white')
-        ax.title.set_color('white')
-        ax.spines['bottom'].set_color('white')
-        ax.spines['left'].set_color('white')
-        # === Zero Axis Line for Orientation ===
-        ax.axhline(0, color='black', linestyle='--', linewidth=3, alpha=0.8)
-        ax.plot(df["timestamp"], df["msi"], color='black', lw=2, label="MSI")
-    
-        # MSI Zones
-        ax.fill_between(df["timestamp"], df["msi"], where=(df["msi"] >= 6), color='#905AAF', alpha=0.3, label="Burst Zone")
-        ax.fill_between(df["timestamp"], df["msi"], where=((df["msi"] > 3) & (df["msi"] < 6)), color='#00ffff', alpha=0.3, label="Surge Zone")
-        ax.fill_between(df["timestamp"], df["msi"], where=(df["msi"] <= -3), color='#ff3333', alpha=0.8, label="Pullback Zone")
-    
-        # Plot Bollinger Bands
-        ax.plot(df["timestamp"], df["bb_upper_20"], color='maroon', linestyle='--', alpha=1.0, )
-        ax.plot(df["timestamp"], df["bb_lower_20"], color='maroon', linestyle='--', alpha=1.0, )
-        ax.plot(df["timestamp"], df["bb_mid_20"], color='maroon', linestyle=':', alpha=1.0)
+        df = pd.DataFrame(st.session_state.roundsc)
         
-        # Optional: Short-term band
-        ax.plot(df["timestamp"], df["bb_upper_10"], color='#0AEFFF', linestyle='--', alpha=1.0)
-        ax.plot(df["timestamp"], df["bb_lower_10"], color='#0AEFFF', linestyle='--', alpha=1.0)
-    
-        # Optional: long-term band
-        ax.plot(df["timestamp"], df["bb_upper_40"], color='black', linestyle='--', alpha=1.0)
-        ax.plot(df["timestamp"], df["bb_lower_40"], color='black', linestyle='--', alpha=1.0)
+        # MSI with Bollinger Bands
+        st.subheader("MSI with Bollinger Bands")
+        window = min(20, max(5, len(df) // 2))
         
-    
-        # Plot squeeze zones
-        for i in range(len(df)):
-            if df["bb_squeeze_flag"].iloc[i]:
-                ax.axvspan(df["timestamp"].iloc[i] - pd.Timedelta(minutes=0.25),
-                           df["timestamp"].iloc[i] + pd.Timedelta(minutes=0.25),
-                           color='purple', alpha=0.9)
-    
-        # RRQI line (optional bubble)
-        if rrqi_val:
-            ax.axhline(rrqi_val, color='cyan', linestyle=':', alpha=0.9, label='RRQI Level')
-    
-        if micro_amplitude > 0:
-            past_times = df["timestamp"].iloc[-N:].tolist()
-            ax.plot(past_times, micro_wave, label="Micro Wave", linestyle='dashdot', color='black', alpha=0.7)
-            
-        if harmonic_wave is not None and len(harmonic_wave) == N:
-            past_times = df["timestamp"].iloc[-N:].tolist()
-            ax.plot(past_times, harmonic_wave, label="Harmonic Fit", color='blue', linewidth=2)
-            #ax.plot(past_times, micro_wave, label="Micro Wave", linestyle='dashdot', color='black')
-    
-        # Build future times for forecast
-        if harmonic_forecast is not None and len(harmonic_forecast) > 0:
-            forecast_times = [df["timestamp"].iloc[-1] + pd.Timedelta(seconds=5 * i) for i in range(len(harmonic_forecast))]
+        # Calculate rolling MSI and Bollinger Bands
+        df['msi'] = df['score'].rolling(window=min(window, len(df))).mean()
+        df['msi'] = df['msi'].fillna(df['score'])
+        rolling_mean, upper_band, lower_band = bollinger_bands(df['msi'], window)
         
-            # Forecast Channel
-        #if lower_channel is not None and upper_channel is not None:
-            #ax.fill_between(forecast_times, lower_channel, upper_channel, color='green', alpha=0.2, label="Forecast Channel")
-            
-            # Forecast Segments (stepwise)
-        for i in range(len(harmonic_forecast) - 1):
-            color = 'green'  # Optional: dynamic gradient if needed
-            ax.plot([forecast_times[i], forecast_times[i + 1]],
-                [harmonic_forecast[i], harmonic_forecast[i + 1]],
-                    color=color, linewidth=2)
+        # Plotting with Plotly
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df['timestamp'], y=rolling_mean, name='MSI', line=dict(color='blue')))
+        fig.add_trace(go.Scatter(x=df['timestamp'], y=upper_band, name='Upper Band', line=dict(width=0.5, color='white')))
+        fig.add_trace(go.Scatter(x=df['timestamp'], y=lower_band, name='Lower Band', line=dict(width=0.5, color='red')))
+        fig.add_trace(go.Scatter(x=df['timestamp'], y=df['msi'], mode='markers', name='MSI Points', 
+                                marker=dict(size=8, color=df['score'], colorscale='Viridis', showscale=True)))
         
-            # Dashed forecast overlay
-        ax.plot(forecast_times, harmonic_forecast, color='green', linestyle='--', alpha=0.5, label="Forecast (Next)")
-    
-        
-        #if harmonic_forecast is not None and len(harmonic_forecast) > 0:
-            #for i in range(len(future_x)-1):
-                #color = 'green' #if harmonic_forecast[i+1] > harmonic_forecast[i] else 'red'
-                #ax.plot([df["timestamp"].iloc[-1] + pd.Timedelta(seconds=5*i),
-                         #df["timestamp"].iloc[-1] + pd.Timedelta(seconds=5*(i+1))],
-                        #[harmonic_forecast[i], harmonic_forecast[i+1]], color=color, linewidth=2)
-                 #ax.axvline(N - 1, color='red', linestyle=':', label='Now')
-    
-             
-        ax.set_title("MSI Tactical Map + Harmonics", color='black')
-        
-        ax.legend()
-        plot_slot = st.empty()
-        with plot_slot.container():
-            st.pyplot(fig)
+        fig.update_layout(
+            title='Momentum Score Index (MSI) with Bollinger Bands',
+            xaxis_title='Time',
+            yaxis_title='MSI Value',
+            template='plotly_dark',
+            height=500
+        )
+        st.plotly_chart(fig, use_container_width=True)
             
         
-    plot_msi_chart(df, harmonic_wave, micro_wave, harmonic_forecast, forecast_times)
+    plot_msi_chart(df,window_size, recent_df,msi_score,msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times)
+    # === MORLET PANEL ===
+    if N >= 20:
+        st.markdown("## 🌊 Morlet Wavelet Burst Tracker")
+        coeffs, power, freqs, scales = morlet_wavelet_power(df)
+    
+        fig, ax = plt.subplots(figsize=(12, 6))
+        t = np.arange(power.shape[1])  # Time axis
+    
+        im = ax.imshow(
+            power, extent=[t[0], t[-1], scales[-1], scales[0]],
+            aspect='auto', cmap='plasma'
+        )
+        ax.set_title("Morlet Power Map (Time × Scale)")
+        ax.set_ylabel("Wavelet Scale (lower = faster)")
+        ax.set_xlabel("Round Index")
+        fig.colorbar(im, ax=ax, label="Power")
+    
+        st.pyplot(fig)
+    
+        # Optional: Phase tracking signal
+        mean_energy = np.mean(power, axis=0)
+        st.line_chart(mean_energy, height=200)
+        st.caption("Average Burst Energy Across Scales (watch for peaks)")
     
     # ===== QUANTUM STRING DASHBOARD =====
     with st.expander("🌀 Quantum String Resonance Analyzer"):
@@ -1034,15 +1052,15 @@ if not df.empty:
         with st.expander("🔗 Fractal Anchoring Visualizer"):
             fractal_anchor_visualizer(df)
     
-    decision_hud_panel(
-        dominant_phase=wave_label or "N/A",
-        dominant_pct=wave_pct or 0,
-        micro_phase=micro_phase_label or "N/A",
-        micro_pct=micro_pct or 0,
-        resonance_score=resonance_score if 'resonance_score' in locals() else 0,
-        fractal_match_type=st.session_state.get("last_fractal_match", []),
-        anchor_forecast_type=st.session_state.get("last_anchor_type", "N/A")
-    )
+        decision_hud_panel(
+            dominant_phase=wave_label or "N/A",
+            dominant_pct=wave_pct or 0,
+            micro_phase=micro_phase_label or "N/A",
+            micro_pct=micro_pct or 0,
+            resonance_score=resonance_score if 'resonance_score' in locals() else 0,
+            fractal_match_type=st.session_state.get("last_fractal_match", []),
+            anchor_forecast_type=st.session_state.get("last_anchor_type", "N/A")
+        )
 
     # RRQI Status
     st.metric("🧠 RRQI", rrqi_val, delta="Last 30 rounds")
