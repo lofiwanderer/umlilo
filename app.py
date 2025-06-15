@@ -16,7 +16,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from matplotlib import gridspec
 # === Color-coded Future Wave Zones ===
 from matplotlib.collections import LineCollection
-import streamlit_javascript as stj
+#import streamlit_javascript as stj
 
 
 # Add this at the top after imports
