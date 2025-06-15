@@ -88,9 +88,10 @@ with st.container():
     input_col1, input_col2 = st.columns([2, 1])
     round_input = input_col1.number_input("➕ Add Round", key="sticky_input", label_visibility="collapsed")
     add_button = input_col2.button("Add", key="sticky_btn")
+    PINK_THRESHOLD = 10.0
     if add_button:
          mult = float(round_input)
-         score = 2 if mult >= pink_threshold else 1 if mult >= 2 else -1
+         score = 2 if mult >=  PINK_THRESHOLD  else 1 if mult >= 2 else -1
          st.session_state.roundsc.append({
             "timestamp": datetime.now(),
             "multiplier": mult,
