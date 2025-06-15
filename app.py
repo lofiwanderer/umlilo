@@ -117,10 +117,10 @@ with float_input.container():
         st.rerun()  # Soft rerun (preserves state)
             
         
-     else:
+    else:
         st.error("Invalid sticky input — must be numeric")
 
-     st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
         
            
     
