@@ -58,8 +58,7 @@ st.markdown("""
     cursor: pointer;
 }
 </style>
-""", unsafe_allow_html=True))
-
+""", unsafe_allow_html=True)
 # ================ SESSION STATE INIT =====================
 if "roundsc" not in st.session_state:
     st.session_state.roundsc = []
