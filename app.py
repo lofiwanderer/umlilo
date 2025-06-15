@@ -86,7 +86,7 @@ st.subheader("Manual Round Entry")
 with st.container():
     st.markdown('<div id="floating-entry">', unsafe_allow_html=True)
     input_col1, input_col2 = st.columns([2, 1])
-    round_input = input_col1.text_input("➕ Add Round", key="sticky_input", label_visibility="collapsed")
+    round_input = input_col1.number_input("➕ Add Round", key="sticky_input", label_visibility="collapsed")
     add_button = input_col2.button("Add", key="sticky_btn")
     if add_button:
          mult = float(round_input)
