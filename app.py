@@ -25,32 +25,20 @@ from matplotlib.collections import LineCollection
 st.set_page_config(page_title="CYA Quantum Tracker", layout="wide")
 st.title("🔥 CYA MOMENTUM TRACKER: Phase 1 + 2 + 3 + 4")
 
-# === FLOATING ENTRY BUTTON (CSS Overlay) ===
 st.markdown("""
 <style>
-#sticky-container {
+#floating-entry {
     position: fixed;
     bottom: 20px;
-    right: 25px;
-    z-index: 9999;
+    right: 30px;
     background-color: #1E293B;
-    padding: 12px 20px;
-    border-radius: 10px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    padding: 15px;
+    z-index: 9999;
+    border-radius: 12px;
     border: 2px solid #00ffff;
-}
-#sticky-container:hover {
-    box-shadow: 0 0 20px #00ffff;
+    box-shadow: 0 4px 15px rgba(0,255,255,0.4);
 }
 </style>
-
-<div id="sticky-container">
-<form action="" method="POST">
-    <label style="color:white; margin-right:10px;">↳ Add Round:</label>
-    <input name="round_input" id="round_input" placeholder="e.g. 2.45" style="width:80px;" />
-    <button type="submit">➕</button>
-</form>
-</div>
 """, unsafe_allow_html=True)
 
 # ================ SESSION STATE INIT =====================
@@ -90,24 +78,29 @@ with st.sidebar:
         
 # =================== ROUND ENTRY ========================
 st.subheader("Manual Round Entry")
-round_input = st.query_params.get("round_input", [""])[0]
+# === FLOATING INPUT BOX (no <form>) ===
+float = st.empty()  # Will use this as sticky container
 #mult = st.number_input("Enter round multiplier", min_value=0.01, step=0.01)
 
-if round_input:
-    try:
-        mult = float(round_input)
-        score = 2 if mult >= PINK_THRESHOLD else (1 if mult >= 2.0 else -1)
-        st.session_state.roundsc.append({
+with float.container():
+    st.markdown('<div id="floating-entry">', unsafe_allow_html=True)
+    round_input = st.text_input("➕ Add Round", key="sticky_input", label_visibility="collapsed")
+    if st.button("Add", key="sticky_btn"):
+        try:
+            mult = float(round_input)
+            score = 2 if mult >= pink_threshold else 1 if mult >= 2 else -1
+            st.session_state.roundsc.append({
             "timestamp": datetime.now(),
             "multiplier": mult,
             "score": score
         })
-        st.success(f"✅ Round {mult} added")
-        st.experimental_set_query_params()  # Reset URL input param
-        st.rerun()
-    except:
-        st.error("Invalid sticky input — must be numeric")
-
+       
+            st.success(f"✅ Round {mult} added")
+            st.experimental_set_query_params()  # Reset URL input param
+            st.rerun()
+        except:
+            st.error("Invalid sticky input — must be numeric")
+    st.markdown('</div>', unsafe_allow_html=True)
 # =================== CONVERT TO DATAFRAME ================
 df = pd.DataFrame(st.session_state.roundsc)
 
