@@ -104,9 +104,9 @@ with st.sidebar:
         
 # =================== ROUND ENTRY ========================
 st.subheader("Manual Round Entry")
-params = st.experimental_get_query_params()
+params = st.query_params()
 if "round_input" in params:
-    mult = float(round_input)
+    mult = float(params["round_input"][0])
     score = 2 if mult >=  PINK_THRESHOLD  else 1 if mult >= 2 else -1
     st.session_state.roundsc.append({
             "timestamp": datetime.now(),
@@ -116,7 +116,7 @@ if "round_input" in params:
        
          
     st.success(f"✅ Round {mult} added")
-    st.experimental_set_query_params()  # Reset URL input param
+    st.st.query_params()  # Reset URL input param
     st.rerun()
         
 else:
