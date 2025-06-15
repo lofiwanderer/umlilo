@@ -86,7 +86,7 @@ with float.container():
     st.markdown('<div id="floating-entry">', unsafe_allow_html=True)
     round_input = st.text_input("➕ Add Round", key="sticky_input", label_visibility="collapsed")
     if st.button("Add", key="sticky_btn"):
-        try:
+        
             mult = float(round_input)
             score = 2 if mult >= pink_threshold else 1 if mult >= 2 else -1
             st.session_state.roundsc.append({
@@ -98,7 +98,7 @@ with float.container():
             st.success(f"✅ Round {mult} added")
             st.experimental_set_query_params()  # Reset URL input param
             st.rerun()
-        except:
+    else:
             st.error("Invalid sticky input — must be numeric")
     st.markdown('</div>', unsafe_allow_html=True)
 # =================== CONVERT TO DATAFRAME ================
