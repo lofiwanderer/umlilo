@@ -25,38 +25,40 @@ from matplotlib.collections import LineCollection
 st.set_page_config(page_title="CYA Quantum Tracker", layout="wide")
 st.title("🔥 CYA MOMENTUM TRACKER: Phase 1 + 2 + 3 + 4")
 
+# === FLOATING CSS PANEL ===
 st.markdown("""
 <style>
-#fab-container {
+#float-box {
     position: fixed;
     bottom: 25px;
     right: 25px;
+    background-color: #1E293B;
+    padding: 15px 20px;
     z-index: 9999;
+    border-radius: 12px;
+    border: 2px solid #00ffff;
+    box-shadow: 0 4px 15px rgba(0,255,255,0.4);
+    color: white;
+    width: 200px;
 }
-button.fab {
-    height: 60px;
-    width: 60px;
-    border-radius: 50%;
-    background-color: #00ffff;
-    color: black;
-    font-size: 32px;
-    font-weight: bold;
+#float-box input {
+    width: 100%;
+    padding: 6px;
+    margin-bottom: 5px;
+    border-radius: 5px;
     border: none;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
-button.fab:hover {
-    background-color: #0ff;
-    box-shadow: 0 0 20px #0ff;
+#float-box button {
+    width: 100%;
+    padding: 6px;
+    background-color: #00ffff;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
 }
 </style>
-
-<div id="fab-container">
-  <form action="" method="GET">
-    <button class="fab" name="show_modal" value="1">+</button>
-  </form>
-</div>
-""", unsafe_allow_html=True)
+""", unsafe_allow_html=True))
 
 # ================ SESSION STATE INIT =====================
 if "roundsc" not in st.session_state:
@@ -95,15 +97,13 @@ with st.sidebar:
         
 # =================== ROUND ENTRY ========================
 st.subheader("Manual Round Entry")
-params = st.query_params
-show_modal = "show_modal" in params
-if show_modal:
-    st.markdown("## ➕ Add New Round")
-    with st.expander("Click to Enter New Round", expanded=True):
-        round_val = st.number_input("Enter multiplier (e.g. 2.45)", key="modal_round_input")
-        confirm = st.button("Add Round")
+float_input = st.empty()  # Create empty anchor
+with float_input.container():
+    st.markdown('<div id="float-box">', unsafe_allow_html=True)
+    round_val = st.number_input("↳ Add Round", key="float_input", label_visibility="collapsed")
+    add_click = st.button("Add", key="float_add")
         
-        if confirm:
+        if add_click:
             mult = mult = float(round_val)
             score = 2 if mult >=  PINK_THRESHOLD  else 1 if mult >= 2 else -1
             st.session_state.roundsc.append({
@@ -114,13 +114,13 @@ if show_modal:
        
          
             st.success(f"✅ Round {mult} added")
-            st.query_params  # Reset URL input param
-            st.rerun()
+            st.session_state["float_input"] = ""  # Reset input
+            st.rerun()  # Soft rerun (preserves state)
         
         else:
             st.error("Invalid sticky input — must be numeric")
 
-    
+        st.markdown('</div>', unsafe_allow_html=True)
         
            
     
