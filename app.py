@@ -102,24 +102,25 @@ with float_input.container():
     round_val = st.number_input("↳ Add Round", key="float_input", label_visibility="collapsed")
     add_click = st.button("Add", key="float_add")
         
-        if add_click:
-            mult = mult = float(round_val)
-            score = 2 if mult >=  PINK_THRESHOLD  else 1 if mult >= 2 else -1
-            st.session_state.roundsc.append({
+    if add_click:
+        mult = mult = float(round_val)
+        score = 2 if mult >=  PINK_THRESHOLD  else 1 if mult >= 2 else -1
+        st.session_state.roundsc.append({
                     "timestamp": datetime.now(),
                     "multiplier": mult,
                     "score": score
                 })
        
          
-            st.success(f"✅ Round {mult} added")
-            st.session_state["float_input"] = ""  # Reset input
-            st.rerun()  # Soft rerun (preserves state)
+        st.success(f"✅ Round {mult} added")
+        st.session_state["float_input"] = ""  # Reset input
+        st.rerun()  # Soft rerun (preserves state)
+            
         
-        else:
-            st.error("Invalid sticky input — must be numeric")
+     else:
+        st.error("Invalid sticky input — must be numeric")
 
-        st.markdown('</div>', unsafe_allow_html=True)
+     st.markdown('</div>', unsafe_allow_html=True)
         
            
     
