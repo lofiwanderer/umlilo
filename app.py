@@ -25,7 +25,7 @@ from matplotlib.collections import LineCollection
 st.set_page_config(page_title="CYA Quantum Tracker", layout="wide")
 st.title("🔥 CYA MOMENTUM TRACKER: Phase 1 + 2 + 3 + 4")
 
-# === SAFE FLOATING STICKY INPUT PANEL ===
+# === CSS for Floating Input Panel ===
 st.markdown("""
 <style>
 #floating-entry {
@@ -33,13 +33,38 @@ st.markdown("""
     bottom: 20px;
     right: 30px;
     background-color: #1E293B;
-    padding: 15px;
+    padding: 15px 20px;
     z-index: 9999;
     border-radius: 12px;
     border: 2px solid #00ffff;
     box-shadow: 0 4px 15px rgba(0,255,255,0.4);
+    color: white;
+}
+#floating-entry input {
+    padding: 5px;
+    width: 90px;
+    font-size: 14px;
+    border-radius: 5px;
+    border: none;
+    margin-right: 10px;
+}
+#floating-entry button {
+    padding: 5px 10px;
+    background-color: #00ffff;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
 }
 </style>
+
+<div id="floating-entry">
+  <form action="" method="GET">
+    <label for="round_input">➕ Round:</label>
+    <input type="text" name="round_input" id="round_input" placeholder="e.g. 2.45" />
+    <button type="submit">Add</button>
+  </form>
+</div>
 """, unsafe_allow_html=True)
 
 # ================ SESSION STATE INIT =====================
@@ -79,34 +104,28 @@ with st.sidebar:
         
 # =================== ROUND ENTRY ========================
 st.subheader("Manual Round Entry")
-# === FLOATING INPUT BOX (no <form>) ===
-#float = st.empty()  # Will use this as sticky container
-#mult = st.number_input("Enter round multiplier", min_value=0.01, step=0.01)
-
-with st.container():
-    st.markdown('<div id="floating-entry">', unsafe_allow_html=True)
-    input_col1, input_col2 = st.columns([2, 1])
-    round_input = input_col1.number_input("➕ Add Round", key="sticky_input", label_visibility="collapsed")
-    add_button = input_col2.button("Add", key="sticky_btn")
-    PINK_THRESHOLD = 10.0
-    if add_button:
-         mult = float(round_input)
-         score = 2 if mult >=  PINK_THRESHOLD  else 1 if mult >= 2 else -1
-         st.session_state.roundsc.append({
+params = st.experimental_get_query_params()
+if "round_input" in params:
+    mult = float(round_input)
+    score = 2 if mult >=  PINK_THRESHOLD  else 1 if mult >= 2 else -1
+    st.session_state.roundsc.append({
             "timestamp": datetime.now(),
             "multiplier": mult,
             "score": score
         })
        
-         st.success(f"✅ Round {mult} added")
-         st.experimental_set_query_params()  # Reset URL input param
-         st.rerun()
+         
+    st.success(f"✅ Round {mult} added")
+    st.experimental_set_query_params()  # Reset URL input param
+    st.rerun()
         
+else:
+    st.error("Invalid sticky input — must be numeric")
+
+    
         
            
-    else:
-            st.error("Invalid sticky input — must be numeric")
-    st.markdown('</div>', unsafe_allow_html=True)
+    
 # =================== CONVERT TO DATAFRAME ================
 df = pd.DataFrame(st.session_state.roundsc)
 
