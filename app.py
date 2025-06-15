@@ -25,13 +25,13 @@ from matplotlib.collections import LineCollection
 st.set_page_config(page_title="CYA Quantum Tracker", layout="wide")
 st.title("🔥 CYA MOMENTUM TRACKER: Phase 1 + 2 + 3 + 4")
 
-# === FLOATING CSS PANEL ===
+# === CSS for Floating Input Panel ===
 st.markdown("""
 <style>
-#float-box {
+#floating-entry {
     position: fixed;
-    bottom: 25px;
-    right: 25px;
+    bottom: 20px;
+    right: 30px;
     background-color: #1E293B;
     padding: 15px 20px;
     z-index: 9999;
@@ -39,18 +39,17 @@ st.markdown("""
     border: 2px solid #00ffff;
     box-shadow: 0 4px 15px rgba(0,255,255,0.4);
     color: white;
-    width: 200px;
 }
-#float-box input {
-    width: 100%;
-    padding: 6px;
-    margin-bottom: 5px;
+#floating-entry input {
+    padding: 5px;
+    width: 90px;
+    font-size: 14px;
     border-radius: 5px;
     border: none;
+    margin-right: 10px;
 }
-#float-box button {
-    width: 100%;
-    padding: 6px;
+#floating-entry button {
+    padding: 5px 10px;
     background-color: #00ffff;
     border: none;
     border-radius: 5px;
@@ -58,6 +57,14 @@ st.markdown("""
     cursor: pointer;
 }
 </style>
+
+<div id="floating-entry">
+  <form action="" method="GET">
+    <label for="round_input">➕ Round:</label>
+    <input type="text" name="round_input" id="round_input" placeholder="e.g. 2.45" />
+    <button type="submit">Add</button>
+  </form>
+</div>
 """, unsafe_allow_html=True)
 # ================ SESSION STATE INIT =====================
 if "roundsc" not in st.session_state:
@@ -96,14 +103,9 @@ with st.sidebar:
         
 # =================== ROUND ENTRY ========================
 st.subheader("Manual Round Entry")
-float_input = st.empty()  # Create empty anchor
-with float_input.container():
-    st.markdown('<div id="float-box">', unsafe_allow_html=True)
-    round_val = st.number_input("↳ Add Round", key="float_input", label_visibility="collapsed")
-    add_click = st.button("Add", key="float_add")
-        
-    if add_click:
-        mult = mult = float(round_val)
+params = st.query_params
+    if "round_input" in params:
+        mult = float(params["round_input"][0])
         score = 2 if mult >=  PINK_THRESHOLD  else 1 if mult >= 2 else -1
         st.session_state.roundsc.append({
                     "timestamp": datetime.now(),
@@ -113,14 +115,16 @@ with float_input.container():
        
          
         st.success(f"✅ Round {mult} added")
-        st.session_state["float_input"] = ""  # Reset input
+        st.query_params
         st.rerun()  # Soft rerun (preserves state)
             
         
     else:
         st.error("Invalid sticky input — must be numeric")
 
-    st.markdown('</div>', unsafe_allow_html=True)
+
+    
+    
         
            
     
