@@ -25,6 +25,7 @@ from matplotlib.collections import LineCollection
 st.set_page_config(page_title="CYA Quantum Tracker", layout="wide")
 st.title("🔥 CYA MOMENTUM TRACKER: Phase 1 + 2 + 3 + 4")
 
+# === SAFE FLOATING STICKY INPUT PANEL ===
 st.markdown("""
 <style>
 #floating-entry {
@@ -79,25 +80,29 @@ with st.sidebar:
 # =================== ROUND ENTRY ========================
 st.subheader("Manual Round Entry")
 # === FLOATING INPUT BOX (no <form>) ===
-float = st.empty()  # Will use this as sticky container
+#float = st.empty()  # Will use this as sticky container
 #mult = st.number_input("Enter round multiplier", min_value=0.01, step=0.01)
 
-with float.container():
+with st.container():
     st.markdown('<div id="floating-entry">', unsafe_allow_html=True)
-    round_input = st.text_input("➕ Add Round", key="sticky_input", label_visibility="collapsed")
-    if st.button("Add", key="sticky_btn"):
-        
-            mult = float(round_input)
-            score = 2 if mult >= pink_threshold else 1 if mult >= 2 else -1
-            st.session_state.roundsc.append({
+    input_col1, input_col2 = st.columns([2, 1])
+    round_input = input_col1.text_input("➕ Add Round", key="sticky_input", label_visibility="collapsed")
+    add_button = input_col2.button("Add", key="sticky_btn")
+    if add_button:
+         mult = float(round_input)
+         score = 2 if mult >= pink_threshold else 1 if mult >= 2 else -1
+         st.session_state.roundsc.append({
             "timestamp": datetime.now(),
             "multiplier": mult,
             "score": score
         })
        
-            st.success(f"✅ Round {mult} added")
-            st.experimental_set_query_params()  # Reset URL input param
-            st.rerun()
+         st.success(f"✅ Round {mult} added")
+         st.experimental_set_query_params()  # Reset URL input param
+         st.rerun()
+        
+        
+           
     else:
             st.error("Invalid sticky input — must be numeric")
     st.markdown('</div>', unsafe_allow_html=True)
