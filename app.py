@@ -859,65 +859,49 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     st.plotly_chart(fig, use_container_width=True)
 
 # =================== MAIN APP FUNCTIONALITY ========================
-
-# Create the floating add round input
+# =================== FLOATING ADD ROUND UI ========================
 def create_floating_add_round_ui():
-    with st.container():
-        style = """
-        <style>
-        .floating-container {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 1000;
-            background-color: #262730;
-            border-radius: 10px;
-            padding: 15px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-            width: 300px;
-            border: 1px solid #4CAF50;
-        }
-        .floating-container h3 {
-            margin-top: 0;
-            color: #4CAF50;
-        }
-        </style>
-        <div class="floating-container">
-            <h3>⚡ Quick Add Round</h3>
-            <div id="round-mult-container">
-                <p>Enter multiplier: <span id="current-mult"></span></p>
-                <input type="range" min="1" max="50" value="2" step="0.1" id="mult-slider" 
-                    oninput="this.nextElementSibling.value = this.value">
-                <output id="mult-value">2.0</output>
-                <button id="add-round-btn" style="background-color: #4CAF50; color: white; border: none; 
-                    padding: 10px 15px; border-radius: 5px; margin-top: 10px; cursor: pointer;">
-                    ➕ Add Round
-                </button>
-            </div>
+    # Create container with fixed positioning
+    st.markdown("""
+    <style>
+    .floating-container {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+        background-color: #262730;
+        border-radius: 10px;
+        padding: 15px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        width: 300px;
+        border: 1px solid #4CAF50;
+    }
+    .floating-container h3 {
+        margin-top: 0;
+        color: #4CAF50;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Create the container using markdown
+    floating_html = f"""
+    <div class="floating-container">
+        <h3>⚡ Quick Add Round</h3>
+        <div id="round-mult-container">
+            <p>Enter multiplier: {st.session_state.current_mult:.1f}x</p>
+            <input type="range" min="1" max="50" value="{st.session_state.current_mult:.1f}" step="0.1" 
+                oninput="this.nextElementSibling.value = this.value + 'x'">
+            <output>{st.session_state.current_mult:.1f}x</output>
+            <button onclick="window.parent.document.querySelector('button[kind=primary]').click()"
+                style="background-color: #4CAF50; color: white; border: none; padding: 10px 15px; border-radius: 5px; margin-top: 10px; cursor: pointer;">
+                ➕ Add Round
+            </button>
         </div>
-        <script>
-            const multSlider = document.getElementById('mult-slider');
-            const multValue = document.getElementById('mult-value');
-            const addRoundBtn = document.getElementById('add-round-btn');
-            
-            // Initialize with session state value if available
-            if (window.frameElement) {
-                const sessionValue = window.parent.document.getElementById('current-mult')?.textContent;
-                if (sessionValue) {
-                    multSlider.value = sessionValue;
-                    multValue.value = sessionValue;
-                }
-            }
-            
-            addRoundBtn.onclick = function() {
-                window.parent.postMessage({
-                    type: 'streamlit:addRound',
-                    multiplier: parseFloat(multSlider.value)
-                }, '*');
-            };
-        </script>
-        """
-        st.markdown(style, unsafe_allow_html=True)
+    </div>
+    """
+    
+    # Render the floating container
+    st.markdown(floating_html, unsafe_allow_html=True)
 
 # Fast entry mode UI - simplified UI for mobile/quick decisions
 def fast_entry_mode_ui(pink_threshold):
