@@ -450,10 +450,10 @@ def thre_panel(df):
     
     return df
     
-def compute_surge_probability(latest_rds, latest_delta, fnr_index):
+def compute_surge_probability(thre_val, delta_slope, fnr_index):
     # Normalize inputs
-    thre_score = np.clip((latest_rds + 2) / 4, 0, 1)          # maps -2→1 to 0→1
-    slope_score = np.clip((latest_delta + 1) / 2, 0, 1)       # maps -1→1 to 0→1
+    thre_score = np.clip((thre_val + 2) / 4, 0, 1)          # maps -2→1 to 0→1
+    slope_score = np.clip((delta_slope + 1) / 2, 0, 1)       # maps -1→1 to 0→1
     fnr_score = np.clip((fnr_index + 1) / 2, 0, 1)           # maps -1→1 to 0→1
 
     # Weighted blend (adjustable)
