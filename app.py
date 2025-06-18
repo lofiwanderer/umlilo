@@ -766,12 +766,15 @@ def analyze_data(data, pink_threshold, window_size):
     bandwidth_delta = (0, )
         
     if len(df["score"].fillna(0).values) > 20:
-        upper_slope = (round(safe_round(latest['upper_slope']) if 'upper_slope' in latest else 0), )
-        lower_slope = (round(safe_round(latest['lower_slope']) if 'lower_slope' in latest else 0), )
-        upper_accel = (round(safe_round(latest['upper_accel']) if 'upper_accel' in latest else 0), )
-        lower_accel = (round(safe_round(latest['lower_accel']) if 'lower_accel' in latest else 0), )
-        bandwidth = (round(safe_round(latest['bandwidth']) if 'bandwidth' in latest else 0), )
-        bandwidth_delta = (round(safe_round(latest['bandwidth_delta']) * 100 if 'bandwidth_delta' in latest else 0), )
+        if upper_slope is not None:
+            upper_slope = (round(safe_round(latest['upper_slope']) if 'upper_slope' in latest else 0), )
+            lower_slope = (round(safe_round(latest['lower_slope']) if 'lower_slope' in latest else 0), )
+            upper_accel = (round(safe_round(latest['upper_accel']) if 'upper_accel' in latest else 0), )
+            lower_accel = (round(safe_round(latest['lower_accel']) if 'lower_accel' in latest else 0), )
+            bandwidth = (round(safe_round(latest['bandwidth']) if 'bandwidth' in latest else 0), )
+            bandwidth_delta = (round(safe_round(latest['bandwidth_delta']) * 100 if 'bandwidth_delta' in latest else 0), )
+                
+        
     
     df["bb_squeeze"] = df["bb_upper_10"] - df["bb_lower_10"]
     df["bb_squeeze_flag"] = df["bb_squeeze"] < df["bb_squeeze"].rolling(5).quantile(0.25)
