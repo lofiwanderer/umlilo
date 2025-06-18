@@ -766,10 +766,10 @@ def analyze_data(data, pink_threshold, window_size):
     bandwidth_delta = (0, )
         
     if len(df["score"].fillna(0).values) > 20:
-        upper_slope = (round(safe_round(latest['upper_slope']) * 100 if 'upper_slope' in latest else 0), )
-        lower_slope = (round(safe_round(latest['lower_slope']) * 100 if 'lower_slope' in latest else 0), )
-        upper_accel = (round(safe_round(latest['upper_accel']) * 100 if 'upper_accel' in latest else 0), )
-        lower_accel = (round(safe_round(latest['lower_accel']) * 100 if 'lower_accel' in latest else 0), )
+        upper_slope = (round(safe_round(latest['upper_slope']) if 'upper_slope' in latest else 0), )
+        lower_slope = (round(safe_round(latest['lower_slope']) if 'lower_slope' in latest else 0), )
+        upper_accel = (round(safe_round(latest['upper_accel']) if 'upper_accel' in latest else 0), )
+        lower_accel = (round(safe_round(latest['lower_accel']) if 'lower_accel' in latest else 0), )
         bandwidth = (round(safe_round(latest['bandwidth']) if 'bandwidth' in latest else 0), )
         bandwidth_delta = (round(safe_round(latest['bandwidth_delta']) * 100 if 'bandwidth_delta' in latest else 0), )
     
