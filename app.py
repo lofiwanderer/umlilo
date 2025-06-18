@@ -1125,11 +1125,12 @@ if not df.empty:
     # === SHOW THRE PANEL IF ENABLED ===
     if show_thre: 
         with st.expander("🔬 True Harmonic Resonance Engine (THRE)", expanded=False):
-            thre_panel(df)
+            df, latest_rds, latest_delta = thre_panel(df)
     # === LIVE PROBABILITY PANEL ===
             if len(df) >= 20:
                 st.markdown("### 🎯 Surge Probability Engine (THRE + FNR Fusion)")
-                 if len(df) >= 20 :
+                 if fnr_metrics and latest_rds is not None and latest_delta is not None :
+                     
                      surge_prob, components = compute_surge_probability(
                      thre_val=latest_rds,
                      delta_slope=latest_delta,
