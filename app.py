@@ -1134,18 +1134,16 @@ if not df.empty:
                 if fnr_metrics and latest_rds is not None and latest_delta is not None :
                     
                      
-                    surge_prob = compute_surge_probability(
+                    surge_prob, components = compute_surge_probability(
                     thre_val=latest_rds,
                     delta_slope=latest_delta,
                     fnr_index=fnr_metrics["FNR_index"]
                     )
-                    components = compute_surge_probability(
-                    thre_val=latest_rds,
-                    delta_slope=latest_delta,
-                    fnr_index=fnr_metrics["FNR_index"]
-                    )
+                    surge_score = surge_prob  # now it's just a number like 0.84
+
                     col1, col2 = st.columns([1, 2])
-                    col1.metric("🔮 Surge Probability", f"{int(surge_prob * 100)}%")
+                    col1.metric("🔮 Surge Probability", f"{int(surge_score * 100)}%")
+
                     col2.progress(surge_prob)
         
                     st.markdown("Component Breakdown")
