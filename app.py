@@ -1131,36 +1131,37 @@ if not df.empty:
     # === LIVE PROBABILITY PANEL ===
             if len(df) >= 20:
                 st.markdown("### 🎯 Surge Probability Engine (THRE + FNR Fusion)")
-                 if fnr_metrics and latest_rds is not None and latest_delta is not None :
+                if fnr_metrics and latest_rds is not None and latest_delta is not None :
+                    
                      
-                     surge_prob = compute_surge_probability(
-                     thre_val=latest_rds,
-                     delta_slope=latest_delta,
-                     fnr_index=fnr_metrics["FNR_index"]
-                     )
-                     components = compute_surge_probability(
-                     thre_val=latest_rds,
-                     delta_slope=latest_delta,
-                     fnr_index=fnr_metrics["FNR_index"]
-                     )
-                     col1, col2 = st.columns([1, 2])
-                     col1.metric("🔮 Surge Probability", f"{int(surge_prob * 100)}%")
-                     col2.progress(surge_prob)
+                    surge_prob = compute_surge_probability(
+                    thre_val=latest_rds,
+                    delta_slope=latest_delta,
+                    fnr_index=fnr_metrics["FNR_index"]
+                    )
+                    components = compute_surge_probability(
+                    thre_val=latest_rds,
+                    delta_slope=latest_delta,
+                    fnr_index=fnr_metrics["FNR_index"]
+                    )
+                    col1, col2 = st.columns([1, 2])
+                    col1.metric("🔮 Surge Probability", f"{int(surge_prob * 100)}%")
+                    col2.progress(surge_prob)
         
-                     st.markdown("Component Breakdown")
-                     st.write(f"**THRE Signal**: {components['thre_component']}")
-                     st.write(f"**FNR Alignment**: {components['fnr_component']}")
-                     st.write(f"**THRE Δ Slope**: {components['slope_component']}")
+                    st.markdown("Component Breakdown")
+                    st.write(f"**THRE Signal**: {components['thre_component']}")
+                    st.write(f"**FNR Alignment**: {components['fnr_component']}")
+                    st.write(f"**THRE Δ Slope**: {components['slope_component']}")
         
                      # Optional guidance output
-                     if surge_prob >= 0.8:
-                         st.success("💖 Pink Entry Confirmed — Surge Stack is Aligned")
-                     elif surge_prob >= 0.6:
-                         st.info("🟣 Purple Entry Likely — Some Constructive Field Detected")
-                     elif surge_prob <= 0.3:
-                         st.warning("🔵 Risk of Collapse — Weak Field Detected")
-                     else:
-                         st.info("⚪ Neutral Field — Entry Requires Caution")
+                    if surge_prob >= 0.8:
+                        st.success("💖 Pink Entry Confirmed — Surge Stack is Aligned")
+                    elif surge_prob >= 0.6:
+                        st.info("🟣 Purple Entry Likely — Some Constructive Field Detected")
+                    elif surge_prob <= 0.3:
+                        st.warning("🔵 Risk of Collapse — Weak Field Detected")
+                    else:
+                        st.info("⚪ Neutral Field — Entry Requires Caution")
             
             
        
