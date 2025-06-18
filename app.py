@@ -15,6 +15,8 @@ from scipy.signal import hilbert
 import math
 from sklearn.metrics.pairwise import cosine_similarity
 from matplotlib import gridspec
+import morlet_phase_enhancement
+from morlet_phase_enhancement import morlet_phase_panel
 
 # ======================= CONFIG ==========================
 st.set_page_config(page_title="CYA Quantum Tracker", layout="wide")
@@ -583,33 +585,33 @@ def fpm_panel(df, msi_col="msi", score_col="score", window_sizes=[5, 8, 13]):
                     next_outcome = next_seq["round_type"].tolist() if len(next_seq) > 0 else []
 
         # === Display Results ===
-        with st.expander(f"Fractal Match: Last {win} Rounds"):
-            col1, col2 = st.columns(2)
+        st.markdown(f"Fractal Match: Last {win} Rounds")
+        col1, col2 = st.columns(2)
 
-            with col1:
-                st.markdown(f"**Current Pattern (Last {win}):**")
-                st.text(" ".join(current_pattern))
-                st.markdown(f"**MSI Slope:** {np.round(current_slope, 2)}")
+        with col1:
+            st.markdown(f"**Current Pattern (Last {win}):**")
+            st.text(" ".join(current_pattern))
+            st.markdown(f"**MSI Slope:** {np.round(current_slope, 2)}")
 
-            with col2:
-                st.markdown(f"**Best Historical Match:**")
-                st.text(" ".join(best_match) if best_match else "N/A")
-                st.markdown(f"**Match Score:** {best_score:.3f}")
+        with col2:
+            st.markdown(f"**Best Historical Match:**")
+            st.text(" ".join(best_match) if best_match else "N/A")
+            st.markdown(f"**Match Score:** {best_score:.3f}")
 
-            if next_outcome and len(next_outcome) > 0:
-                st.success(f"📡 Projected Next Rounds: {' '.join(next_outcome)}")
-                # Simple forecast classifier
-                if next_outcome.count("P") + next_outcome.count("p") >= 2:
-                    st.markdown("🔮 Forecast: **💥 Surge Mirror**")
-                    st.session_state.last_fractal_match = "Pink"
-                elif next_outcome.count("B") >= 2:
-                    st.markdown("⚠️ Forecast: **Blue Reversal / Collapse**")
-                    st.session_state.last_fractal_match = "Blue"
-                else:
-                    st.markdown("🧘 Forecast: **Stable / Mixed Pulse**")
-                    st.session_state.last_fractal_match = "Purple"
+        if next_outcome and len(next_outcome) > 0:
+            st.success(f"📡 Projected Next Rounds: {' '.join(next_outcome)}")
+            # Simple forecast classifier
+            if next_outcome.count("P") + next_outcome.count("p") >= 2:
+                st.markdown("🔮 Forecast: **💥 Surge Mirror**")
+                st.session_state.last_fractal_match = "Pink"
+            elif next_outcome.count("B") >= 2:
+                st.markdown("⚠️ Forecast: **Blue Reversal / Collapse**")
+                st.session_state.last_fractal_match = "Blue"
             else:
-                st.session_state.last_fractal_match = None
+                st.markdown("🧘 Forecast: **Stable / Mixed Pulse**")
+                st.session_state.last_fractal_match = "Purple"
+        else:
+            st.session_state.last_fractal_match = None
 
 def fractal_anchor_visualizer(df, msi_col="msi", score_col="score", window=8):
     st.subheader("🔗 Fractal Anchoring Visualizer")
@@ -1057,25 +1059,7 @@ if not df.empty:
         st.line_chart(mean_energy, height=200)
         st.caption("Average Burst Energy Across Scales (watch for peaks)")
 
-        # === Burst Classifier ===
-        st.markdown("### 🧠 Burst Phase Classification (Morlet)")
-        
-        mean_energy = np.mean(power, axis=0)
-        burst_results = classify_morlet_bursts(mean_energy, min_width=3)
-        
-        if burst_results:
-            for burst in burst_results[-5:]:  # Show latest 5 only
-                st.markdown(f"**{burst['label']}** at round `{burst['index']}` | Width: `{burst['width']}` | Strength: `{burst['strength']}`")
-        
-            # Optional line plot to mark classified bursts
-            fig, ax = plt.subplots(figsize=(10, 2))
-            ax.plot(mean_energy, color='purple', lw=2)
-            for b in burst_results:
-                ax.axvline(b['index'], color='green' if "SURGE" in b['label'] else 'red', linestyle='--')
-                ax.text(b['index'], mean_energy[b['index']] + 0.2, b['label'].split()[0], rotation=90, fontsize=8)
-            st.pyplot(fig)
-        else:
-            st.info("No surge or burst zones detected in the recent wave window.")
+        morlet_phase_panel(df, scores_col="score")
 
         st.markdown("### 🧬 Fractal Nonlinear Resonance Engine (FNR)")
 
