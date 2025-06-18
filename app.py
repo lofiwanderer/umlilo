@@ -1097,7 +1097,7 @@ if not df.empty:
         # === LIVE PROBABILITY PANEL ===
         st.markdown("### 🎯 Surge Probability Engine (THRE + FNR Fusion)")
         
-        if fnr_metrics and "latest_rds" in locals() and "latest_delta" in locals():
+        if fnr_metrics :
             surge_prob, components = compute_surge_probability(
                 thre_val=latest_rds,
                 delta_slope=latest_delta,
