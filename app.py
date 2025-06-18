@@ -452,7 +452,7 @@ def thre_panel(df):
     elif latest_rds < -0.5: st.warning("⚠️ Destructive Micro-Waves — High Risk")
     else: st.info("⚖️ Neutral Zone — Mid-Range Expected")
     
-    return df, latest_rds, latest_delta
+    return (df, latest_rds, latest_delta)
     
 def compute_surge_probability(thre_val, delta_slope, fnr_index):
     # Normalize inputs
@@ -1111,7 +1111,7 @@ if not df.empty:
     # === SHOW THRE PANEL IF ENABLED ===
     if show_thre: 
         with st.expander("🔬 True Harmonic Resonance Engine (THRE)", expanded=False):
-            df, latest_rds, latest_delta = thre_panel(df)
+            (df, latest_rds, latest_delta) = thre_panel(df)
     # === LIVE PROBABILITY PANEL ===
             if len(df) >= 20:
                 st.markdown("### 🎯 Surge Probability Engine (THRE + FNR Fusion)")
