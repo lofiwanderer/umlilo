@@ -10,6 +10,8 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
 from scipy.fft import rfft, rfftfreq
+from scipy.signal import find_peaks, peak_widths
+from scipy.signal import hilbert
 import math
 from sklearn.metrics.pairwise import cosine_similarity
 from matplotlib import gridspec
@@ -106,7 +108,62 @@ def morlet_wavelet_power(scores, wavelet='cmor', max_scale=64):
     power = np.abs(coeffs) ** 2
     
     return coeffs, power, freqs, scales
+    
+@st.cache_data
+def classify_morlet_bursts(mean_energy, power_threshold=None, min_width=3):
+    if power_threshold is None:
+        power_threshold = np.mean(mean_energy) + np.std(mean_energy)
 
+    # Detect peaks
+    peaks, props = find_peaks(mean_energy, height=power_threshold)
+
+    # Measure widths
+    widths, h_eval, left_ips, right_ips = peak_widths(mean_energy, peaks, rel_height=0.5)
+
+    classifications = []
+    for i, peak in enumerate(peaks):
+        width = widths[i]
+        label = "💥 SURGE PHASE" if width >= min_width else "⚠️ FAKE BURST"
+        classifications.append({
+            "index": peak,
+            "width": round(width, 2),
+            "strength": round(props['peak_heights'][i], 2),
+            "label": label
+        })
+    
+    return classifications
+    
+@st.cache_data
+def compute_fnr_index_from_morlet(power_matrix, scales):
+    if power_matrix.shape[0] < 10:
+        return None
+
+    # Extract high-scale (macro) and low-scale (micro) energy patterns
+    micro_band = power_matrix[2:6, :]     # e.g., scales 3–6
+    macro_band = power_matrix[-6:-2, :]   # e.g., top 4 macro scales
+
+    micro_wave = np.mean(micro_band, axis=0)
+    macro_wave = np.mean(macro_band, axis=0)
+
+    # Normalize both
+    micro_wave -= np.mean(micro_wave)
+    macro_wave -= np.mean(macro_wave)
+    micro_wave /= (np.std(micro_wave) + 1e-9)
+    macro_wave /= (np.std(macro_wave) + 1e-9)
+
+    # Product method (constructive > 0, destructive < 0)
+    interaction_wave = micro_wave * macro_wave
+    fnr_index = np.mean(interaction_wave)
+
+    # Cosine similarity (phase match strength)
+    cos_sim = cosine_similarity(micro_wave.reshape(1, -1), macro_wave.reshape(1, -1))[0][0]
+
+    return {
+        "FNR_index": round(fnr_index, 4),
+        "Phase_cosine_similarity": round(cos_sim, 4),
+        "alignment": "Constructive" if fnr_index > 0.2 else "Destructive" if fnr_index < -0.2 else "Neutral"
+    }
+    
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
@@ -392,6 +449,20 @@ def thre_panel(df):
     else: st.info("⚖️ Neutral Zone — Mid-Range Expected")
     
     return df
+    
+def compute_surge_probability(latest_rds, latest_delta, fnr_index):
+    # Normalize inputs
+    thre_score = np.clip((thre_val + 2) / 4, 0, 1)          # maps -2→1 to 0→1
+    slope_score = np.clip((delta_slope + 1) / 2, 0, 1)       # maps -1→1 to 0→1
+    fnr_score = np.clip((fnr_index + 1) / 2, 0, 1)           # maps -1→1 to 0→1
+
+    # Weighted blend (adjustable)
+    surge_prob = 0.5 * thre_score + 0.3 * fnr_score + 0.2 * slope_score
+    return round(surge_prob, 4), {
+        "thre_component": round(thre_score, 4),
+        "fnr_component": round(fnr_score, 4),
+        "slope_component": round(slope_score, 4)
+    }
 
 def cos_phase_panel(df, dom_freq, micro_freq, dom_phase, micro_phase):
     st.subheader("🌀 Cosine Phase Alignment Panel")
@@ -983,7 +1054,75 @@ if not df.empty:
         mean_energy = np.mean(power, axis=0)
         st.line_chart(mean_energy, height=200)
         st.caption("Average Burst Energy Across Scales (watch for peaks)")
-    
+
+        # === Burst Classifier ===
+        st.markdown("### 🧠 Burst Phase Classification (Morlet)")
+        
+        mean_energy = np.mean(power, axis=0)
+        burst_results = classify_morlet_bursts(mean_energy, min_width=3)
+        
+        if burst_results:
+            for burst in burst_results[-5:]:  # Show latest 5 only
+                st.markdown(f"**{burst['label']}** at round `{burst['index']}` | Width: `{burst['width']}` | Strength: `{burst['strength']}`")
+        
+            # Optional line plot to mark classified bursts
+            fig, ax = plt.subplots(figsize=(10, 2))
+            ax.plot(mean_energy, color='purple', lw=2)
+            for b in burst_results:
+                ax.axvline(b['index'], color='green' if "SURGE" in b['label'] else 'red', linestyle='--')
+                ax.text(b['index'], mean_energy[b['index']] + 0.2, b['label'].split()[0], rotation=90, fontsize=8)
+            st.pyplot(fig)
+        else:
+            st.info("No surge or burst zones detected in the recent wave window.")
+
+        st.markdown("### 🧬 Fractal Nonlinear Resonance Engine (FNR)")
+
+        fnr_metrics = compute_fnr_index_from_morlet(power, scales)
+        
+        if fnr_metrics:
+            col1, col2, col3 = st.columns(3)
+            col1.metric("🔀 FNR Index", fnr_metrics["FNR_index"])
+            col2.metric("📐 Cosine Phase", fnr_metrics["Phase_cosine_similarity"])
+            col3.metric("🧭 Alignment Type", fnr_metrics["alignment"])
+        
+            if fnr_metrics["alignment"] == "Constructive":
+                st.success("💥 Constructive Interference — True Surge Field Detected")
+            elif fnr_metrics["alignment"] == "Destructive":
+                st.error("🌪 Destructive Phase — Collapse Pressure Likely")
+            else:
+                st.info("🧘 Neutral Field — Moderate Risk Zone")
+        else:
+            st.warning("Not enough wavelet data to compute FNR")
+
+        # === LIVE PROBABILITY PANEL ===
+        st.markdown("### 🎯 Surge Probability Engine (THRE + FNR Fusion)")
+        
+        if fnr_metrics and "latest_rds" in locals() and "latest_delta" in locals():
+            surge_prob, components = compute_surge_probability(
+                thre_val=latest_rds,
+                delta_slope=latest_delta,
+                fnr_index=fnr_metrics["FNR_index"]
+            )
+        
+            col1, col2 = st.columns([1, 2])
+            col1.metric("🔮 Surge Probability", f"{int(surge_prob * 100)}%")
+            col2.progress(surge_prob)
+        
+            with st.expander("Component Breakdown"):
+                st.write(f"**THRE Signal**: {components['thre_component']}")
+                st.write(f"**FNR Alignment**: {components['fnr_component']}")
+                st.write(f"**THRE Δ Slope**: {components['slope_component']}")
+        
+            # Optional guidance output
+            if surge_prob >= 0.8:
+                st.success("💖 Pink Entry Confirmed — Surge Stack is Aligned")
+            elif surge_prob >= 0.6:
+                st.info("🟣 Purple Entry Likely — Some Constructive Field Detected")
+            elif surge_prob <= 0.3:
+                st.warning("🔵 Risk of Collapse — Weak Field Detected")
+            else:
+                st.info("⚪ Neutral Field — Entry Requires Caution")
+
     # === QUANTUM STRING DASHBOARD ===
     with st.expander("🌀 Quantum String Resonance Analyzer", expanded=False):
         st.subheader("🧵 Multi-Harmonic Resonance Matrix")
