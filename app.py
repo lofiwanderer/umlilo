@@ -22,6 +22,8 @@ st.title("🔥 CYA MOMENTUM TRACKER: Phase 1 + 2 + 3 + 4")
 
 # Create a container for the floating add round button
 floating_container = st.empty()
+latest_rds = None
+latest_delta = None
 
 # ================ SESSION STATE INIT =====================
 if "roundsc" not in st.session_state:
