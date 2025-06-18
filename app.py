@@ -1131,7 +1131,12 @@ if not df.empty:
                 st.markdown("### 🎯 Surge Probability Engine (THRE + FNR Fusion)")
                  if fnr_metrics and latest_rds is not None and latest_delta is not None :
                      
-                     surge_prob, components = compute_surge_probability(
+                     surge_prob = compute_surge_probability(
+                     thre_val=latest_rds,
+                     delta_slope=latest_delta,
+                     fnr_index=fnr_metrics["FNR_index"]
+                     )
+                     components = compute_surge_probability(
                      thre_val=latest_rds,
                      delta_slope=latest_delta,
                      fnr_index=fnr_metrics["FNR_index"]
