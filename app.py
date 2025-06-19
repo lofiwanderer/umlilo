@@ -937,6 +937,8 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     ax.plot(df["timestamp"], df["bb_upper"], linestyle='--', color='green')
     ax.plot(df["timestamp"], df["bb_lower"], linestyle='--', color='red')
     ax.fill_between(df["timestamp"], df["bb_lower"], df["bb_upper"], color='gray', alpha=0.1)
+    ax.plot(df["timestamp"], df["bb_upper_10"], color='#0AEFFF', linestyle='--', alpha=1.0)
+    ax.plot(df["timestamp"], df["bb_lower_10"], color='#0AEFFF', linestyle='--', alpha=1.0)
     
     # Highlight squeeze
     ax.scatter(df[df["squeeze_flag"]]["timestamp"], df[df["squeeze_flag"]]["msi"], color='purple', label="Squeeze", s=20)
@@ -947,7 +949,10 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     
     ax.set_title("📊 MSI Volatility Tracker")
     ax.legend()
-    st.pyplot(fig)
+    plot_slot = st.empty()
+    with plot_slot.container():
+        st.pyplot(fig)
+            
 
 # =================== MAIN APP FUNCTIONALITY ========================
 # =================== FLOATING ADD ROUND UI ========================
