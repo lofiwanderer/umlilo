@@ -939,6 +939,8 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     ax.fill_between(df["timestamp"], df["bb_lower"], df["bb_upper"], color='gray', alpha=0.1)
     ax.plot(df["timestamp"], df["bb_upper_10"], color='#0AEFFF', linestyle='--', label="upperBB", alpha=1.0)
     ax.plot(df["timestamp"], df["bb_lower_10"], color='#0AEFFF', linestyle='--', alpha=1.0)
+    ax.plot(df["timestamp"], latest_tpi, label="TPI (Trend Pressure)", color='darkorange', linestyle='--')
+    ax.axhline(0, color='gray', linestyle=':')
     
     # Highlight squeeze
     ax.scatter(df[df["squeeze_flag"]]["timestamp"], df[df["squeeze_flag"]]["msi"], color='purple', label="Squeeze", s=20)
@@ -1095,7 +1097,33 @@ if not df.empty:
         else:
             st.warning("Not enough wavelet data to compute FNR")
 
+        if "fnr_index_log" not in st.session_state:
+            
+            st.session_state.fnr_index_log = []
         
+        if fnr_metrics and fnr_metrics["FNR_index"] is not None:
+            st.session_state.fnr_index_log.append({
+                "timestamp": datetime.now(),
+                "value": fnr_metrics["FNR_index"]
+            })
+        
+        # === FNR Field Alignment Graph ===
+        st.markdown("### 🔀 FNR Index Alignment Graph")
+        
+        if len(st.session_state.fnr_index_log) > 2:
+            fnr_df = pd.DataFrame(st.session_state.fnr_index_log)
+            fig, ax = plt.subplots(figsize=(10, 3))
+            ax.plot(fnr_df["timestamp"], fnr_df["value"], label="FNR Index", color='blue')
+            ax.axhline(0, linestyle='--', color='gray', alpha=0.7)
+            ax.axhline(0.3, linestyle='--', color='green', label="Constructive Threshold")
+            ax.axhline(-0.3, linestyle='--', color='red', label="Destructive Threshold")
+            ax.set_title("FNR Index Field Alignment Over Time")
+            ax.legend()
+            plot_slot = st.empty()
+            with plot_slot.container():
+                st.pyplot(fig)
+else:
+    st.info("FNR index graph will appear after a few rounds.")
 
     # === QUANTUM STRING DASHBOARD ===
     with st.expander("🌀 Quantum String Resonance Analyzer", expanded=False):
