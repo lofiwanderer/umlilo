@@ -937,7 +937,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     ax.plot(df["timestamp"], df["bb_upper"], linestyle='--', color='green')
     ax.plot(df["timestamp"], df["bb_lower"], linestyle='--', color='red')
     ax.fill_between(df["timestamp"], df["bb_lower"], df["bb_upper"], color='gray', alpha=0.1)
-    ax.plot(df["timestamp"], df["bb_upper_10"], color='#0AEFFF', linestyle='--', alpha=1.0)
+    ax.plot(df["timestamp"], df["bb_upper_10"], color='#0AEFFF', linestyle='--', label="upperBB", alpha=1.0)
     ax.plot(df["timestamp"], df["bb_lower_10"], color='#0AEFFF', linestyle='--', alpha=1.0)
     
     # Highlight squeeze
