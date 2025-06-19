@@ -725,7 +725,7 @@ def analyze_data(data, pink_threshold, window_size):
     # Define latest_msi safely
     latest_msi = df["msi"].iloc[-1] if not df["msi"].isna().all() else 0
     latest_tpi = compute_tpi(df, window=window_size)
-    df["tpi"] = compute_tpi(df, window=window_size)
+    df = compute_tpi(df, window=window_size)
     
     df["bb_mid"]   = df["msi"].rolling(WINDOW_SIZE).mean()
     df["bb_std"]   = df["msi"].rolling(WINDOW_SIZE).std()
