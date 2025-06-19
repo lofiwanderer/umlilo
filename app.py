@@ -189,7 +189,7 @@ def calculate_blue_decay(df, window=10):
 def compute_tpi(df, window=10):
     pressure = calculate_purple_pressure(df, window)
     decay = calculate_blue_decay(df, window)
-    return round(pressure - decay, 2
+    return round(pressure - decay, 2)
 
 @st.cache_data
 def rrqi(df, window=30):
