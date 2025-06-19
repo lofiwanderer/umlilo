@@ -171,7 +171,7 @@ def compute_fnr_index_from_morlet(power_matrix, scales):
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
-    return recent[recent['type'] == 'Purple']['score'].sum() / window if len(recent) > 0 else 
+    return recent[recent['type'] == 'Purple']['score'].sum() / window if len(recent) > 0 else 0
 
 @st.cache_data
 def calculate_blue_decay(df, window=10):
