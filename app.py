@@ -1161,8 +1161,7 @@ if not df.empty:
        
         
              
-    if FAST_ENTRY_MODE:
-        fast_entry_mode_ui(PINK_THRESHOLD)
+    
     # === SHOW COSINE PHASE PANEL IF ENABLED ===
     if show_cos_panel: 
         with st.expander("🌀 Cosine Phase Alignment Panel", expanded=False):
