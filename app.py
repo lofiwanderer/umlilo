@@ -171,7 +171,10 @@ def compute_fnr_index_from_morlet(power_matrix, scales):
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
-    return recent[recent['type'] == 'Purple']['score'].sum() / window if len(recent) > 0 else 0
+    purple_scores = recent[recent['type'] == 'Purple']['score']
+    if len(purple_scores) == 0:
+        return 0
+    return purple_scores.sum() / window
 
 @st.cache_data
 def calculate_blue_decay(df, window=10):
@@ -184,11 +187,9 @@ def calculate_blue_decay(df, window=10):
 
 @st.cache_data
 def compute_tpi(df, window=10):
-    df = df.copy()
-    df["tpi"] = df["score"].rolling(window).apply(lambda x: (
-        np.sum(np.where(x == 1, 1, 0)) - np.sum(np.where(x == -1, 2.0 - x, 0))
-    ), raw=True)
-    return df
+    pressure = calculate_purple_pressure(df, window)
+    decay = calculate_blue_decay(df, window)
+    return round(pressure - decay, 2
 
 @st.cache_data
 def rrqi(df, window=30):
@@ -725,7 +726,7 @@ def analyze_data(data, pink_threshold, window_size):
     # Define latest_msi safely
     latest_msi = df["msi"].iloc[-1] if not df["msi"].isna().all() else 0
     latest_tpi = compute_tpi(df, window=window_size)
-    df = compute_tpi(df, window=window_size)
+    
     
     df["bb_mid"]   = df["msi"].rolling(WINDOW_SIZE).mean()
     df["bb_std"]   = df["msi"].rolling(WINDOW_SIZE).std()
@@ -939,7 +940,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     ax.fill_between(df["timestamp"], df["bb_lower"], df["bb_upper"], color='gray', alpha=0.1)
     ax.plot(df["timestamp"], df["bb_upper_10"], color='#0AEFFF', linestyle='--', label="upperBB", alpha=1.0)
     ax.plot(df["timestamp"], df["bb_lower_10"], color='#0AEFFF', linestyle='--', alpha=1.0)
-    ax.plot(df["timestamp"], df["tpi"], label="TPI (Trend Pressure)", color='darkorange', linestyle='--')
+   
     ax.axhline(0, color='gray', linestyle=':')
     
     # Highlight squeeze
