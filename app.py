@@ -1122,8 +1122,8 @@ if not df.empty:
             plot_slot = st.empty()
             with plot_slot.container():
                 st.pyplot(fig)
-else:
-    st.info("FNR index graph will appear after a few rounds.")
+        else:
+            st.info("FNR index graph will appear after a few rounds.")
 
     # === QUANTUM STRING DASHBOARD ===
     with st.expander("🌀 Quantum String Resonance Analyzer", expanded=False):
