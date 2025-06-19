@@ -1254,12 +1254,12 @@ if not df.empty:
     with st.expander("💹 Bollinger Bands Stats", expanded=False):
         st.subheader("💹 Bollinger Bands Stats")
         if upper_slope is not None:
-            st.metric("Upper Slope", f"{upper_slope[0]}%")
-            st.metric("Upper Acceleration", f"{upper_accel[0]}%")
-            st.metric("Lower Slope", f"{lower_slope[0]}%")
-            st.metric("Lower Acceleration", f"{lower_accel[0]}%")
-            st.metric("Bandwidth", f"{bandwidth[0]} Scale (0-20)")
-            st.metric("Bandwidth Delta", f"{bandwidth_delta[0]}% shift from last round")
+            st.metric("Upper Slope", f"{upper_slope}%")
+            st.metric("Upper Acceleration", f"{upper_accel}%")
+            st.metric("Lower Slope", f"{lower_slope}%")
+            st.metric("Lower Acceleration", f"{lower_accel}%")
+            st.metric("Bandwidth", f"{bandwidth} Scale (0-20)")
+            st.metric("Bandwidth Delta", f"{bandwidth_delta}% shift from last round")
         else:
             st.info("Not enough data for Bollinger Band metrics")
     
