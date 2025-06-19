@@ -1123,8 +1123,7 @@ if not df.empty:
         with st.expander("🔬 True Harmonic Resonance Engine (THRE)", expanded=False):
             (df, latest_rds, latest_delta) = thre_panel(df)
             # Display fast entry mode if enabled
-            if FAST_ENTRY_MODE:
-                fast_entry_mode_ui(PINK_THRESHOLD)
+            
     # === LIVE PROBABILITY PANEL ===
             if len(df) >= 20:
                 st.markdown("### 🎯 Surge Probability Engine (THRE + FNR Fusion)")
@@ -1162,7 +1161,8 @@ if not df.empty:
        
         
              
-    
+    if FAST_ENTRY_MODE:
+        fast_entry_mode_ui(PINK_THRESHOLD)
     # === SHOW COSINE PHASE PANEL IF ENABLED ===
     if show_cos_panel: 
         with st.expander("🌀 Cosine Phase Alignment Panel", expanded=False):
