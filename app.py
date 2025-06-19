@@ -726,6 +726,24 @@ def analyze_data(data, pink_threshold, window_size):
     # Define latest_msi safely
     latest_msi = df["msi"].iloc[-1] if not df["msi"].isna().all() else 0
     latest_tpi = compute_tpi(df, window=window_size)
+    
+    df["bb_mid"]   = df["msi"].rolling(WINDOW_SIZE).mean()
+    df["bb_std"]   = df["msi"].rolling(WINDOW_SIZE).std()
+    df["bb_upper"] = df["bb_mid"] + 2 * df["bb_std"]
+    df["bb_lower"] = df["bb_mid"] - 2 * df["bb_std"]
+    df["bandwidth"] = df["bb_upper"] - df["bb_lower"]
+    
+    # === Detect Squeeze Zones (Low Volatility)
+    squeeze_threshold = df["bandwidth"].rolling(10).quantile(0.25)
+    df["squeeze_flag"] = df["bandwidth"] < squeeze_threshold
+    
+    # === Directional Breakout Detector
+    df["breakout_up"]   = df["msi"] > df["bb_upper"]
+    df["breakout_down"] = df["msi"] < df["bb_lower"]
+    
+    # === Slope & Acceleration
+    df["msi_slope"]  = df["msi"].diff()
+    df["msi_accel"]  = df["msi_slope"].diff()
 
     # MSI CALCULATION (Momentum Score Index)
     window_size = min(window_size, len(df))
@@ -912,29 +930,24 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         
     # MSI with Bollinger Bands
     st.subheader("MSI with Bollinger Bands")
-    window = min(20, max(5, len(df) // 2))
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(df["timestamp"], df["msi"], label="MSI", color='black')
     
-    # Calculate rolling MSI and Bollinger Bands
-    df['msi'] = df['score'].rolling(window=min(window, len(df))).mean()
-    df['msi'] = df['msi'].fillna(df['score'])
-    rolling_mean, upper_band, lower_band = bollinger_bands(df['msi'], window)
+    # BB lines
+    ax.plot(df["timestamp"], df["bb_upper"], linestyle='--', color='green')
+    ax.plot(df["timestamp"], df["bb_lower"], linestyle='--', color='red')
+    ax.fill_between(df["timestamp"], df["bb_lower"], df["bb_upper"], color='gray', alpha=0.1)
     
-    # Plotting with Plotly
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df['timestamp'], y=rolling_mean, name='MSI', line=dict(color='blue')))
-    fig.add_trace(go.Scatter(x=df['timestamp'], y=upper_band, name='Upper Band', line=dict(width=0.5, color='white')))
-    fig.add_trace(go.Scatter(x=df['timestamp'], y=lower_band, name='Lower Band', line=dict(width=0.5, color='red')))
-    fig.add_trace(go.Scatter(x=df['timestamp'], y=df['msi'], mode='markers', name='MSI Points', 
-                          marker=dict(size=8, color=df['score'], colorscale='Viridis', showscale=True)))
+    # Highlight squeeze
+    ax.scatter(df[df["squeeze_flag"]]["timestamp"], df[df["squeeze_flag"]]["msi"], color='purple', label="Squeeze", s=20)
     
-    fig.update_layout(
-        title='Momentum Score Index (MSI) with Bollinger Bands',
-        xaxis_title='Time',
-        yaxis_title='MSI Value',
-        template='plotly_dark',
-        height=500
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    # Highlight breakouts
+    ax.scatter(df[df["breakout_up"]]["timestamp"], df[df["breakout_up"]]["msi"], color='lime', label="Breakout ↑", s=20)
+    ax.scatter(df[df["breakout_down"]]["timestamp"], df[df["breakout_down"]]["msi"], color='red', label="Breakout ↓", s=20)
+    
+    ax.set_title("📊 MSI Volatility Tracker")
+    ax.legend()
+    st.pyplot(fig)
 
 # =================== MAIN APP FUNCTIONALITY ========================
 # =================== FLOATING ADD ROUND UI ========================
@@ -1024,45 +1037,39 @@ if not df.empty:
     # Display metrics
     with col_hud:
         st.metric("Rounds Recorded", len(df))
-        if resonance_forecast_vals is not None:
-            with st.expander("🧬 Next Round Prediction", expanded=True):
-                next_pred = "↑ UP" if resonance_forecast_vals[0] > 0 else "↓ DOWN"
-                st.metric("Next Round Prediction", next_pred, 
-                      delta=f"Confidence: {abs(resonance_forecast_vals[0]):.2f}")
-        if wave_label is not None and wave_pct is not None:
-            st.metric("Dominant Cycle Length", f"{dominant_cycle} rounds")
-            st.metric("Wave Position", f"Round {current_round_position} of {dominant_cycle}")
-            st.metric("Wave Phase", f"{wave_label} ({wave_pct:.1f}%)") 
+        
     
     # Plot MSI Chart
     plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times)
     
     # === SHOW MORLET PANEL FOR LARGER DATASETS ===
     if len(df) >= 20:
-        st.markdown("## 🌊 Morlet Wavelet Burst Tracker")
-        scores = df["score"].fillna(0).values
-        coeffs, power, freqs, scales = morlet_wavelet_power(scores)
-    
-        fig, ax = plt.subplots(figsize=(12, 6))
-        t = np.arange(power.shape[1])  # Time axis
-    
-        im = ax.imshow(
-            power, extent=[t[0], t[-1], scales[-1], scales[0]],
-            aspect='auto', cmap='plasma'
-        )
-        ax.set_title("Morlet Power Map (Time × Scale)")
-        ax.set_ylabel("Wavelet Scale (lower = faster)")
-        ax.set_xlabel("Round Index")
-        fig.colorbar(im, ax=ax, label="Power")
-    
-        st.pyplot(fig)
-    
-        # Optional: Phase tracking signal
-        mean_energy = np.mean(power, axis=0)
-        st.line_chart(mean_energy, height=200)
-        st.caption("Average Burst Energy Across Scales (watch for peaks)")
+        with st.expander("🌀 Quantum String Resonance Analyzer", expanded=False):
+            
+            st.markdown("## 🌊 Morlet Wavelet Burst Tracker")
+            scores = df["score"].fillna(0).values
+            coeffs, power, freqs, scales = morlet_wavelet_power(scores)
+        
+            fig, ax = plt.subplots(figsize=(12, 6))
+            t = np.arange(power.shape[1])  # Time axis
+        
+            im = ax.imshow(
+                power, extent=[t[0], t[-1], scales[-1], scales[0]],
+                aspect='auto', cmap='plasma'
+            )
+            ax.set_title("Morlet Power Map (Time × Scale)")
+            ax.set_ylabel("Wavelet Scale (lower = faster)")
+            ax.set_xlabel("Round Index")
+            fig.colorbar(im, ax=ax, label="Power")
+        
+            st.pyplot(fig)
+        
+            # Optional: Phase tracking signal
+            mean_energy = np.mean(power, axis=0)
+            st.line_chart(mean_energy, height=200)
+            st.caption("Average Burst Energy Across Scales (watch for peaks)")
 
-        morlet_phase_panel(df, scores_col="score")
+        
 
         st.markdown("### 🧬 Fractal Nonlinear Resonance Engine (FNR)")
 
@@ -1115,6 +1122,9 @@ if not df.empty:
     if show_thre: 
         with st.expander("🔬 True Harmonic Resonance Engine (THRE)", expanded=False):
             (df, latest_rds, latest_delta) = thre_panel(df)
+            # Display fast entry mode if enabled
+            if FAST_ENTRY_MODE:
+                fast_entry_mode_ui(PINK_THRESHOLD)
     # === LIVE PROBABILITY PANEL ===
             if len(df) >= 20:
                 st.markdown("### 🎯 Surge Probability Engine (THRE + FNR Fusion)")
@@ -1244,7 +1254,7 @@ if not df.empty:
     # === BOLLINGER BANDS STATS ===
     with st.expander("💹 Bollinger Bands Stats", expanded=False):
         st.subheader("💹 Bollinger Bands Stats")
-        if upper_slope is not None and len(upper_slope) > 0:
+        if upper_slope is not None:
             st.metric("Upper Slope", f"{upper_slope[0]}%")
             st.metric("Upper Acceleration", f"{upper_accel[0]}%")
             st.metric("Lower Slope", f"{lower_slope[0]}%")
