@@ -209,6 +209,48 @@ def compute_rsi(series, period=14):
     avg_loss = loss.rolling(period).mean()
     rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
+    
+@st.cache_data 
+def compute_supertrend(df, period=10, multiplier=2.0, source="msi"):
+        df = df.copy()
+        src = df[source]
+        hl2 = src  # substitute for high+low/2
+    
+        # True range approximation
+        df['prev_close'] = src.shift(1)
+        df['tr'] = abs(src - df['prev_close'])
+        df['atr'] = df['tr'].rolling(window=period).mean()
+    
+        # Bands
+        df['upper_band'] = hl2 - multiplier * df['atr']
+        df['lower_band'] = hl2 + multiplier * df['atr']
+    
+        # Initialize trend
+        trend = [1]  # start with uptrend
+    
+        for i in range(1, len(df)):
+            curr = df.iloc[i]
+            prev = df.iloc[i - 1]
+    
+            upper_band = max(curr['upper_band'], prev['upper_band']) if prev['prev_close'] > prev['upper_band'] else curr['upper_band']
+            lower_band = min(curr['lower_band'], prev['lower_band']) if prev['prev_close'] < prev['lower_band'] else curr['lower_band']
+    
+            if trend[-1] == -1 and curr['prev_close'] > lower_band:
+                trend.append(1)
+            elif trend[-1] == 1 and curr['prev_close'] < upper_band:
+                trend.append(-1)
+            else:
+                trend.append(trend[-1])
+    
+            df.at[df.index[i], 'upper_band'] = upper_band
+            df.at[df.index[i], 'lower_band'] = lower_band
+    
+        df["trend"] = trend
+        df["supertrend"] = np.where(df["trend"] == 1, df["upper_band"], df["lower_band"])
+        df["buy_signal"] = (df["trend"] == 1) & (pd.Series(trend).shift(1) == -1)
+        df["sell_signal"] = (df["trend"] == -1) & (pd.Series(trend).shift(1) == 1)
+    
+        return df
 
 @st.cache_data
 def multi_harmonic_resonance_analysis(df, num_harmonics=5):
@@ -806,47 +848,8 @@ def analyze_data(data, pink_threshold, window_size):
     df["senkou_b"] = ((high_52 + low_52) / 2).shift(26)
     
     df["chikou"] = df["msi"].shift(-26)
+    df = compute_supertrend(df, period=10, multiplier=2.0, source="msi")
     
-    def compute_supertrend(df, period=10, multiplier=3.0, source="msi"):
-        df = df.copy()
-        src = df[source]
-        hl2 = src  # substitute for high+low/2
-    
-        # True range approximation
-        df['prev_close'] = src.shift(1)
-        df['tr'] = abs(src - df['prev_close'])
-        df['atr'] = df['tr'].rolling(window=period).mean()
-    
-        # Bands
-        df['upper_band'] = hl2 - multiplier * df['atr']
-        df['lower_band'] = hl2 + multiplier * df['atr']
-    
-        # Initialize trend
-        trend = [1]  # start with uptrend
-    
-        for i in range(1, len(df)):
-            curr = df.iloc[i]
-            prev = df.iloc[i - 1]
-    
-            upper_band = max(curr['upper_band'], prev['upper_band']) if prev['prev_close'] > prev['upper_band'] else curr['upper_band']
-            lower_band = min(curr['lower_band'], prev['lower_band']) if prev['prev_close'] < prev['lower_band'] else curr['lower_band']
-    
-            if trend[-1] == -1 and curr['prev_close'] > lower_band:
-                trend.append(1)
-            elif trend[-1] == 1 and curr['prev_close'] < upper_band:
-                trend.append(-1)
-            else:
-                trend.append(trend[-1])
-    
-            df.at[df.index[i], 'upper_band'] = upper_band
-            df.at[df.index[i], 'lower_band'] = lower_band
-    
-        df["trend"] = trend
-        df["supertrend"] = np.where(df["trend"] == 1, df["upper_band"], df["lower_band"])
-        df["buy_signal"] = (df["trend"] == 1) & (pd.Series(trend).shift(1) == -1)
-        df["sell_signal"] = (df["trend"] == -1) & (pd.Series(trend).shift(1) == 1)
-    
-        return df
     
     # Prepare and safely round/format outputs, avoiding NoneType formatting
     def safe_round(val, precision=4):
@@ -1132,7 +1135,7 @@ if not df.empty:
      micro_pct, micro_phase_label, micro_freq, dominant_freq, phase, gamma_amplitude, 
      micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
      resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE)
-    df = compute_supertrend(df, period=10, multiplier=2.0, source="msi")
+    
     
     # Check if we completed a cycle
     if dominant_cycle and current_round_position == 0 and 'last_position' in st.session_state:
