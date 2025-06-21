@@ -999,7 +999,7 @@ def analyze_data(data, pink_threshold, window_size):
             micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
             resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals)
 
-df = compute_supertrend(df, period=10, multiplier=2.0, source="msi")
+
 # =================== MSI CHART PLOTTING ========================
 def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times):
     if len(df) < 2:
@@ -1123,6 +1123,7 @@ df = pd.DataFrame(st.session_state.roundsc)
 
 # Main App Logic
 if not df.empty:
+    
     # Run analysis
     (df, latest_msi, window_size, recent_df, msi_score, msi_color, latest_tpi, 
      upper_slope, lower_slope, upper_accel, lower_accel, bandwidth, bandwidth_delta, 
@@ -1131,6 +1132,7 @@ if not df.empty:
      micro_pct, micro_phase_label, micro_freq, dominant_freq, phase, gamma_amplitude, 
      micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
      resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE)
+    df = compute_supertrend(df, period=10, multiplier=2.0, source="msi")
     
     # Check if we completed a cycle
     if dominant_cycle and current_round_position == 0 and 'last_position' in st.session_state:
