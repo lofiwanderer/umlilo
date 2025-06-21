@@ -996,10 +996,9 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     
     ax.fill_between(df["timestamp"], df["senkou_a"], df["senkou_b"],
                     where=(df["senkou_a"] < df["senkou_b"]),
-                    interpolate=True, color='pink', alpha=0.2, label="Kumo (Bearish)")
+                    interpolate=True, color='red', alpha=0.2, label="Kumo (Bearish)")
     
-    # Optional: Chikou Span
-    ax.plot(df["timestamp"], df["chikou"], label="Chikou Span", color='purple', linestyle=':')
+    
     
     ax.set_title("📊 MSI Volatility Tracker")
     ax.legend()
