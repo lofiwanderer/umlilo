@@ -807,6 +807,47 @@ def analyze_data(data, pink_threshold, window_size):
     
     df["chikou"] = df["msi"].shift(-26)
     
+    def compute_supertrend(df, period=10, multiplier=3.0, source="msi"):
+        df = df.copy()
+        src = df[source]
+        hl2 = src  # substitute for high+low/2
+    
+        # True range approximation
+        df['prev_close'] = src.shift(1)
+        df['tr'] = abs(src - df['prev_close'])
+        df['atr'] = df['tr'].rolling(window=period).mean()
+    
+        # Bands
+        df['upper_band'] = hl2 - multiplier * df['atr']
+        df['lower_band'] = hl2 + multiplier * df['atr']
+    
+        # Initialize trend
+        trend = [1]  # start with uptrend
+    
+        for i in range(1, len(df)):
+            curr = df.iloc[i]
+            prev = df.iloc[i - 1]
+    
+            upper_band = max(curr['upper_band'], prev['upper_band']) if prev['prev_close'] > prev['upper_band'] else curr['upper_band']
+            lower_band = min(curr['lower_band'], prev['lower_band']) if prev['prev_close'] < prev['lower_band'] else curr['lower_band']
+    
+            if trend[-1] == -1 and curr['prev_close'] > lower_band:
+                trend.append(1)
+            elif trend[-1] == 1 and curr['prev_close'] < upper_band:
+                trend.append(-1)
+            else:
+                trend.append(trend[-1])
+    
+            df.at[df.index[i], 'upper_band'] = upper_band
+            df.at[df.index[i], 'lower_band'] = lower_band
+    
+        df["trend"] = trend
+        df["supertrend"] = np.where(df["trend"] == 1, df["upper_band"], df["lower_band"])
+        df["buy_signal"] = (df["trend"] == 1) & (pd.Series(trend).shift(1) == -1)
+        df["sell_signal"] = (df["trend"] == -1) & (pd.Series(trend).shift(1) == 1)
+    
+        return df
+    
     # Prepare and safely round/format outputs, avoiding NoneType formatting
     def safe_round(val, precision=4):
         return round(val, precision) if pd.notnull(val) else None
@@ -958,6 +999,7 @@ def analyze_data(data, pink_threshold, window_size):
             micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
             resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals)
 
+df = compute_supertrend(df, period=10, multiplier=2.0, source="msi")
 # =================== MSI CHART PLOTTING ========================
 def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times):
     if len(df) < 2:
@@ -998,6 +1040,13 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
                     where=(df["senkou_a"] < df["senkou_b"]),
                     interpolate=True, color='red', alpha=0.2, label="Kumo (Bearish)")
     
+    # === SuperTrend Line Overlay ===
+    ax.plot(df["timestamp"], df["supertrend"], color='lime' if df["trend"].iloc[-1] == 1 else 'red', linewidth=2, label="SuperTrend")
+    
+    # Buy/Sell markers
+    ax.scatter(df[df["buy_signal"]]["timestamp"], df[df["buy_signal"]]["msi"], marker="^", color="green", label="Buy Signal")
+    ax.scatter(df[df["sell_signal"]]["timestamp"], df[df["sell_signal"]]["msi"], marker="v", color="red", label="Sell Signal")
+        
     
     
     ax.set_title("📊 MSI Volatility Tracker")
