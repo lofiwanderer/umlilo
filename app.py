@@ -786,9 +786,26 @@ def analyze_data(data, pink_threshold, window_size):
     
     df["rsi_mid"]   = df["rsi"].rolling(14).mean()
     df["rsi_std"]   = df["rsi"].rolling(14).std()
-    df["rsi_upper"] = df["rsi_mid"] + 2 * df["rsi_std"]
-    df["rsi_lower"] = df["rsi_mid"] - 2 * df["rsi_std"]
+    df["rsi_upper"] = df["rsi_mid"] + 1.2 * df["rsi_std"]
+    df["rsi_lower"] = df["rsi_mid"] - 1.2 * df["rsi_std"]
     df["rsi_signal"] = df["rsi"].ewm(span=7, adjust=False).mean()
+    
+    # === Ichimoku Cloud on MSI ===
+    high_9  = df["msi"].rolling(window=9).max()
+    low_9   = df["msi"].rolling(window=9).min()
+    df["tenkan"] = (high_9 + low_9) / 2
+    
+    high_26 = df["msi"].rolling(window=26).max()
+    low_26  = df["msi"].rolling(window=26).min()
+    df["kijun"] = (high_26 + low_26) / 2
+    
+    df["senkou_a"] = ((df["tenkan"] + df["kijun"]) / 2).shift(26)
+    
+    high_52 = df["msi"].rolling(window=52).max()
+    low_52  = df["msi"].rolling(window=52).min()
+    df["senkou_b"] = ((high_52 + low_52) / 2).shift(26)
+    
+    df["chikou"] = df["msi"].shift(-26)
     
     # Prepare and safely round/format outputs, avoiding NoneType formatting
     def safe_round(val, precision=4):
@@ -967,6 +984,22 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     # Highlight breakouts
     ax.scatter(df[df["breakout_up"]]["timestamp"], df[df["breakout_up"]]["msi"], color='lime', label="Breakout ↑", s=20)
     ax.scatter(df[df["breakout_down"]]["timestamp"], df[df["breakout_down"]]["msi"], color='red', label="Breakout ↓", s=20)
+
+    # === Ichimoku Cloud Overlay ===
+    ax.plot(df["timestamp"], df["tenkan"], label="Tenkan-Sen", color='blue', linestyle='-')
+    ax.plot(df["timestamp"], df["kijun"], label="Kijun-Sen", color='orange', linestyle='-')
+    
+    # Cloud fill (Senkou A and B)
+    ax.fill_between(df["timestamp"], df["senkou_a"], df["senkou_b"],
+                    where=(df["senkou_a"] >= df["senkou_b"]),
+                    interpolate=True, color='lightgreen', alpha=0.2, label="Kumo (Bullish)")
+    
+    ax.fill_between(df["timestamp"], df["senkou_a"], df["senkou_b"],
+                    where=(df["senkou_a"] < df["senkou_b"]),
+                    interpolate=True, color='pink', alpha=0.2, label="Kumo (Bearish)")
+    
+    # Optional: Chikou Span
+    ax.plot(df["timestamp"], df["chikou"], label="Chikou Span", color='purple', linestyle=':')
     
     ax.set_title("📊 MSI Volatility Tracker")
     ax.legend()
