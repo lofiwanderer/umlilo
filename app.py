@@ -47,6 +47,10 @@ with st.sidebar:
     WINDOW_SIZE = st.slider("MSI Window Size", 5, 100, 20)
     PINK_THRESHOLD = st.number_input("Pink Threshold", value=10.0)
     STRICT_RTT = st.checkbox("Strict RTT Mode", value=False)
+    st.header("📉 Indicator Visibility")
+
+    show_supertrend = st.checkbox("🟢 Show SuperTrend", value=True)
+    show_ichimoku   = st.checkbox("☁️ Show Ichimoku (Tenkan/Kijun)", value=True)
 
     st.header("📊 PANEL TOGGLES")
     FAST_ENTRY_MODE = st.checkbox("⚡ Fast Entry Mode", value=False)
@@ -1031,21 +1035,25 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     ax.scatter(df[df["breakout_down"]]["timestamp"], df[df["breakout_down"]]["msi"], color='red', label="Breakout ↓", s=20)
 
     # === Ichimoku Cloud Overlay ===
-    ax.plot(df["timestamp"], df["tenkan"], label="Tenkan-Sen", color='blue', linestyle='-')
-    ax.plot(df["timestamp"], df["kijun"], label="Kijun-Sen", color='orange', linestyle='-')
-    
-    # Cloud fill (Senkou A and B)
-    ax.fill_between(df["timestamp"], df["senkou_a"], df["senkou_b"],
-                    where=(df["senkou_a"] >= df["senkou_b"]),
-                    interpolate=True, color='lightgreen', alpha=0.2, label="Kumo (Bullish)")
-    
-    ax.fill_between(df["timestamp"], df["senkou_a"], df["senkou_b"],
-                    where=(df["senkou_a"] < df["senkou_b"]),
-                    interpolate=True, color='red', alpha=0.2, label="Kumo (Bearish)")
+    if show_ichimoku:
+        
+        ax.plot(df["timestamp"], df["tenkan"], label="Tenkan-Sen", color='blue', linestyle='-')
+        ax.plot(df["timestamp"], df["kijun"], label="Kijun-Sen", color='orange', linestyle='-')
+        
+        # Cloud fill (Senkou A and B)
+        ax.fill_between(df["timestamp"], df["senkou_a"], df["senkou_b"],
+                        where=(df["senkou_a"] >= df["senkou_b"]),
+                        interpolate=True, color='lightgreen', alpha=0.2, label="Kumo (Bullish)")
+        
+        ax.fill_between(df["timestamp"], df["senkou_a"], df["senkou_b"],
+                        where=(df["senkou_a"] < df["senkou_b"]),
+                        interpolate=True, color='red', alpha=0.2, label="Kumo (Bearish)")
     
     # === SuperTrend Line Overlay ===
-    ax.plot(df["timestamp"], df["supertrend"], color='lime' if df["trend"].iloc[-1] == 1 else 'red', linewidth=2, label="SuperTrend")
-    
+    if show_supertrend:
+        
+        ax.plot(df["timestamp"], df["supertrend"], color='lime' if df["trend"].iloc[-1] == 1 else 'red', linewidth=2, label="SuperTrend")
+        
     # Buy/Sell markers
     ax.scatter(df[df["buy_signal"]]["timestamp"], df[df["buy_signal"]]["msi"], marker="^", color="green", label="Buy Signal")
     ax.scatter(df[df["sell_signal"]]["timestamp"], df[df["sell_signal"]]["msi"], marker="v", color="red", label="Sell Signal")
