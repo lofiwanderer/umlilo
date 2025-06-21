@@ -55,8 +55,7 @@ with st.sidebar:
     st.header("📊 PANEL TOGGLES")
     FAST_ENTRY_MODE = st.checkbox("⚡ Fast Entry Mode", value=False)
     show_thre = st.checkbox("🌀 THRE Panel", value=True)
-    show_cos_panel = st.checkbox("🌀 Cos Phase Panel", value=True)
-    show_rqcf = st.checkbox("🔮 RQCF Panel", value=True)
+    
     show_fpm = st.checkbox("🧬 FPM Panel", value=True)
     show_anchor = st.checkbox("🔗 Fractal Anchor", value=True)
     
@@ -1179,108 +1178,13 @@ if not df.empty:
         ax.legend()
         st.pyplot(fig)
     
-    # === SHOW MORLET PANEL FOR LARGER DATASETS ===
-    if len(df) >= 20:
-        with st.expander("🌀 Quantum String Resonance Analyzer", expanded=False):
-            
-            st.markdown("## 🌊 Morlet Wavelet Burst Tracker")
-            scores = df["score"].fillna(0).values
-            coeffs, power, freqs, scales = morlet_wavelet_power(scores)
-        
-            fig, ax = plt.subplots(figsize=(12, 6))
-            t = np.arange(power.shape[1])  # Time axis
-        
-            im = ax.imshow(
-                power, extent=[t[0], t[-1], scales[-1], scales[0]],
-                aspect='auto', cmap='plasma'
-            )
-            ax.set_title("Morlet Power Map (Time × Scale)")
-            ax.set_ylabel("Wavelet Scale (lower = faster)")
-            ax.set_xlabel("Round Index")
-            fig.colorbar(im, ax=ax, label="Power")
-        
-            st.pyplot(fig)
-        
-            # Optional: Phase tracking signal
-            mean_energy = np.mean(power, axis=0)
-            st.line_chart(mean_energy, height=200)
-            st.caption("Average Burst Energy Across Scales (watch for peaks)")
+    
 
         
 
-            st.markdown("### 🧬 Fractal Nonlinear Resonance Engine (FNR)")
-    
-            fnr_metrics = compute_fnr_index_from_morlet(power, scales)
             
-            if fnr_metrics:
-                col1, col2, col3 = st.columns(3)
-                col1.metric("🔀 FNR Index", fnr_metrics["FNR_index"])
-                col2.metric("📐 Cosine Phase", fnr_metrics["Phase_cosine_similarity"])
-                col3.metric("🧭 Alignment Type", fnr_metrics["alignment"])
-            
-                if fnr_metrics["alignment"] == "Constructive":
-                    st.success("💥 Constructive Interference — True Surge Field Detected")
-                elif fnr_metrics["alignment"] == "Destructive":
-                    st.error("🌪 Destructive Phase — Collapse Pressure Likely")
-                else:
-                    st.info("🧘 Neutral Field — Moderate Risk Zone")
-            else:
-                st.warning("Not enough wavelet data to compute FNR")
-    
-            if "fnr_index_log" not in st.session_state:
-                
-                st.session_state.fnr_index_log = []
-            
-            if fnr_metrics and fnr_metrics["FNR_index"] is not None:
-                st.session_state.fnr_index_log.append({
-                    "timestamp": datetime.now(),
-                    "value": fnr_metrics["FNR_index"]
-                })
-            
-            # === FNR Field Alignment Graph ===
-            st.markdown("### 🔀 FNR Index Alignment Graph")
-            
-            if len(st.session_state.fnr_index_log) > 2:
-                fnr_df = pd.DataFrame(st.session_state.fnr_index_log)
-                fig, ax = plt.subplots(figsize=(10, 3))
-                ax.plot(fnr_df["timestamp"], fnr_df["value"], label="FNR Index", color='blue')
-                ax.axhline(0, linestyle='--', color='gray', alpha=0.7)
-                ax.axhline(0.3, linestyle='--', color='green', label="Constructive Threshold")
-                ax.axhline(-0.3, linestyle='--', color='red', label="Destructive Threshold")
-                ax.set_title("FNR Index Field Alignment Over Time")
-                ax.legend()
-                plot_slot = st.empty()
-                with plot_slot.container():
-                    st.pyplot(fig)
-            else:
-                st.info("FNR index graph will appear after a few rounds.")
 
     # === QUANTUM STRING DASHBOARD ===
-    if show_cos_panel and not FAST_ENTRY_MODE:
-        with st.expander("🌀 Quantum String Resonance Analyzer", expanded=False):
-            st.subheader("🧵 Multi-Harmonic Resonance Matrix")
-            
-            if resonance_matrix is not None:
-                # Colorful resonance grid
-                fig, ax = plt.subplots()
-                cax = ax.matshow(resonance_matrix, cmap='viridis')
-                fig.colorbar(cax, label='Resonance Strength')
-                ax.set_xticks(range(len(resonance_matrix)))
-                ax.set_yticks(range(len(resonance_matrix)))
-                ax.set_xticklabels([f'H{i+1}' for i in range(len(resonance_matrix))])
-                ax.set_yticklabels([f'H{i+1}' for i in range(len(resonance_matrix))])
-                st.pyplot(fig)
-                
-                # Show quantum metrics
-                string_metrics_panel(tension, entropy, resonance_score)
-                
-                # Forecast chart
-                st.subheader("🔮 Resonance Forecast")
-                if resonance_forecast_vals is not None:
-                    st.line_chart(pd.DataFrame({
-                        'Forecast': resonance_forecast_vals,
-                        'Confidence': [x * 0.7 for x in resonance_forecast_vals]
-                    }))
     
     # === SHOW THRE PANEL IF ENABLED ===
     if show_thre: 
@@ -1327,32 +1231,10 @@ if not df.empty:
              
     
     # === SHOW COSINE PHASE PANEL IF ENABLED ===
-    if show_cos_panel and not FAST_ENTRY_MODE: 
-        with st.expander("🌀 Cosine Phase Alignment Panel", expanded=False):
-            cos_phase_panel(df, dominant_freq, micro_freq, phase, micro_phase)
     
-    # === SHOW HARMONIC ROUND PREDICTOR ===
-    if len(df) >= 20:
-        with st.expander("🔮 Harmonic Round Predictor", expanded=False):
-            classification, action, energy_index = classify_next_round(
-                resonance_forecast_vals, tension, entropy, resonance_score
-            )
-            st.metric("Next Round Prediction", classification)
-            st.metric("Suggested Action", action)
-            st.metric("Resonance Energy Index", round(energy_index, 4))
-            col1, col2, col3 = st.columns(3)
-            with col1: st.metric("🎯 Coherence", f"{resonance_score:.4f}")
-            with col2: st.metric("🎸 Tension", f"{tension:.4f}")
-            with col3: st.metric("📊 Entropy", f"{entropy:.4f}")
     
     # === SHOW RQCF PANEL IF ENABLED ===
-    if show_rqcf and not FAST_ENTRY_MODE:
-        with st.expander("🔮 RQCF Panel: Recursive Quantum Chain Forecast", expanded=False):
-            chains = run_rqcf(df["score"].fillna(0).values)
-            for chain in chains:
-                st.markdown(f"**{chain['branch']}**")
-                for i, (val, label) in enumerate(chain["forecast"]):
-                    st.markdown(f"- Step {i+1}: `{label}` → `{val}`")
+    
     
     # === SHOW FPM PANEL IF ENABLED ===
     if show_fpm: 
@@ -1377,34 +1259,7 @@ if not df.empty:
         st.info("⚖️ Mixed Zone — Scout Cautiously")
     
     # === WAVE ANALYSIS PANEL ===
-    with st.expander("🔊 Wave Analysis", expanded=False):
-        st.subheader("📡 Harmonic Phase Tracker")
-        if wave_label is not None and wave_pct is not None:
-            st.metric("Dominant Cycle Length", f"{dominant_cycle} rounds")
-            st.metric("Wave Position", f"Round {current_round_position} of {dominant_cycle}")
-            st.metric("Wave Phase", f"{wave_label} ({wave_pct:.1f}%)")
-            st.metric("EIS", eis)
-            st.metric("Dominant Slope", f"{dom_slope:.3f}")
-            st.metric("Micro Slope", f"{micro_slope:.3f}")
-            st.metric("Completed Cycles", st.session_state.completed_cycles)
-            st.info(f"ℹ️ Wave Interference: {interference}")
-        else:
-            st.metric("Wave Phase", "N/A")
     
-        st.subheader("📉 Micro Harmonic Phase Tracker")
-        if micro_phase_label != "N/A":
-            st.metric("Micro Cycle Length", f"{micro_cycle_len} rounds")
-            st.metric("Micro Wave Position", f"Round {micro_position} of {micro_cycle_len}")
-            st.metric("Micro Wave Phase", f"{micro_phase_label} ({micro_pct:.1f}%)")
-        else:
-            st.info("Micro Wave Phase: N/A — Not enough data")
-    
-        if micro_amplitude > 0:
-            st.metric("Micro Frequency", f"{micro_freq:.4f}")
-            st.metric("Micro Amplitude", f"{micro_amplitude:.4f}")
-            st.progress(min(1.0, micro_amplitude / gamma_amplitude) if gamma_amplitude > 0 else 0)
-        else:
-            st.warning("Micro wave not detected in current data")
     
     # === BOLLINGER BANDS STATS ===
     with st.expander("💹 Bollinger Bands Stats", expanded=False):
