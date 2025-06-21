@@ -199,6 +199,16 @@ def rrqi(df, window=30):
     pinks = len(recent[recent['type'] == 'Pink'])
     quality = (purples + 2*pinks - blues) / window
     return round(quality, 2)
+    
+@st.cache_data    
+def compute_rsi(series, period=14):
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.rolling(period).mean()
+    avg_loss = loss.rolling(period).mean()
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
 
 @st.cache_data
 def multi_harmonic_resonance_analysis(df, num_harmonics=5):
@@ -771,6 +781,14 @@ def analyze_data(data, pink_threshold, window_size):
     
     # Pull latest values from the last row
     latest = df.iloc[-1] if not df.empty else pd.Series()
+
+    df["rsi"] = compute_rsi(df["score"], period=14)
+    
+    df["rsi_mid"]   = df["rsi"].rolling(14).mean()
+    df["rsi_std"]   = df["rsi"].rolling(14).std()
+    df["rsi_upper"] = df["rsi_mid"] + 2 * df["rsi_std"]
+    df["rsi_lower"] = df["rsi_mid"] - 2 * df["rsi_std"]
+    df["rsi_signal"] = df["rsi"].ewm(span=7, adjust=False).mean()
     
     # Prepare and safely round/format outputs, avoiding NoneType formatting
     def safe_round(val, precision=4):
@@ -1049,6 +1067,23 @@ if not df.empty:
     
     # Plot MSI Chart
     plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times)
+
+    with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
+        fig, ax = plt.subplots(figsize=(10, 4))
+        
+        ax.plot(df["timestamp"], df["rsi"], label="RSI", color='white', linewidth=1.5)
+        ax.plot(df["timestamp"], df["rsi_signal"], label="Signal Line", color='orange', linestyle='--')
+        ax.plot(df["timestamp"], df["rsi_upper"], color='green', linestyle='--', alpha=0.5, label="RSI Upper Band")
+        ax.plot(df["timestamp"], df["rsi_lower"], color='red', linestyle='--', alpha=0.5, label="RSI Lower Band")
+        ax.fill_between(df["timestamp"], df["rsi_lower"], df["rsi_upper"], color='purple', alpha=0.1)
+        
+        ax.axhline(50, color='gray', linestyle=':')  # Neutral RSI zone
+        ax.axhline(70, color='green', linestyle=':')  # Overbought
+        ax.axhline(30, color='red', linestyle=':')    # Oversold
+        
+        ax.set_title("🧠 Trader’s Dynamic Index (RSI BB System)")
+        ax.legend()
+        st.pyplot(fig)
     
     # === SHOW MORLET PANEL FOR LARGER DATASETS ===
     if len(df) >= 20:
@@ -1079,78 +1114,79 @@ if not df.empty:
 
         
 
-        st.markdown("### 🧬 Fractal Nonlinear Resonance Engine (FNR)")
-
-        fnr_metrics = compute_fnr_index_from_morlet(power, scales)
-        
-        if fnr_metrics:
-            col1, col2, col3 = st.columns(3)
-            col1.metric("🔀 FNR Index", fnr_metrics["FNR_index"])
-            col2.metric("📐 Cosine Phase", fnr_metrics["Phase_cosine_similarity"])
-            col3.metric("🧭 Alignment Type", fnr_metrics["alignment"])
-        
-            if fnr_metrics["alignment"] == "Constructive":
-                st.success("💥 Constructive Interference — True Surge Field Detected")
-            elif fnr_metrics["alignment"] == "Destructive":
-                st.error("🌪 Destructive Phase — Collapse Pressure Likely")
-            else:
-                st.info("🧘 Neutral Field — Moderate Risk Zone")
-        else:
-            st.warning("Not enough wavelet data to compute FNR")
-
-        if "fnr_index_log" not in st.session_state:
+            st.markdown("### 🧬 Fractal Nonlinear Resonance Engine (FNR)")
+    
+            fnr_metrics = compute_fnr_index_from_morlet(power, scales)
             
-            st.session_state.fnr_index_log = []
-        
-        if fnr_metrics and fnr_metrics["FNR_index"] is not None:
-            st.session_state.fnr_index_log.append({
-                "timestamp": datetime.now(),
-                "value": fnr_metrics["FNR_index"]
-            })
-        
-        # === FNR Field Alignment Graph ===
-        st.markdown("### 🔀 FNR Index Alignment Graph")
-        
-        if len(st.session_state.fnr_index_log) > 2:
-            fnr_df = pd.DataFrame(st.session_state.fnr_index_log)
-            fig, ax = plt.subplots(figsize=(10, 3))
-            ax.plot(fnr_df["timestamp"], fnr_df["value"], label="FNR Index", color='blue')
-            ax.axhline(0, linestyle='--', color='gray', alpha=0.7)
-            ax.axhline(0.3, linestyle='--', color='green', label="Constructive Threshold")
-            ax.axhline(-0.3, linestyle='--', color='red', label="Destructive Threshold")
-            ax.set_title("FNR Index Field Alignment Over Time")
-            ax.legend()
-            plot_slot = st.empty()
-            with plot_slot.container():
-                st.pyplot(fig)
-        else:
-            st.info("FNR index graph will appear after a few rounds.")
+            if fnr_metrics:
+                col1, col2, col3 = st.columns(3)
+                col1.metric("🔀 FNR Index", fnr_metrics["FNR_index"])
+                col2.metric("📐 Cosine Phase", fnr_metrics["Phase_cosine_similarity"])
+                col3.metric("🧭 Alignment Type", fnr_metrics["alignment"])
+            
+                if fnr_metrics["alignment"] == "Constructive":
+                    st.success("💥 Constructive Interference — True Surge Field Detected")
+                elif fnr_metrics["alignment"] == "Destructive":
+                    st.error("🌪 Destructive Phase — Collapse Pressure Likely")
+                else:
+                    st.info("🧘 Neutral Field — Moderate Risk Zone")
+            else:
+                st.warning("Not enough wavelet data to compute FNR")
+    
+            if "fnr_index_log" not in st.session_state:
+                
+                st.session_state.fnr_index_log = []
+            
+            if fnr_metrics and fnr_metrics["FNR_index"] is not None:
+                st.session_state.fnr_index_log.append({
+                    "timestamp": datetime.now(),
+                    "value": fnr_metrics["FNR_index"]
+                })
+            
+            # === FNR Field Alignment Graph ===
+            st.markdown("### 🔀 FNR Index Alignment Graph")
+            
+            if len(st.session_state.fnr_index_log) > 2:
+                fnr_df = pd.DataFrame(st.session_state.fnr_index_log)
+                fig, ax = plt.subplots(figsize=(10, 3))
+                ax.plot(fnr_df["timestamp"], fnr_df["value"], label="FNR Index", color='blue')
+                ax.axhline(0, linestyle='--', color='gray', alpha=0.7)
+                ax.axhline(0.3, linestyle='--', color='green', label="Constructive Threshold")
+                ax.axhline(-0.3, linestyle='--', color='red', label="Destructive Threshold")
+                ax.set_title("FNR Index Field Alignment Over Time")
+                ax.legend()
+                plot_slot = st.empty()
+                with plot_slot.container():
+                    st.pyplot(fig)
+            else:
+                st.info("FNR index graph will appear after a few rounds.")
 
     # === QUANTUM STRING DASHBOARD ===
-    with st.expander("🌀 Quantum String Resonance Analyzer", expanded=False):
-        st.subheader("🧵 Multi-Harmonic Resonance Matrix")
-        
-        if resonance_matrix is not None:
-            # Colorful resonance grid
-            fig, ax = plt.subplots()
-            cax = ax.matshow(resonance_matrix, cmap='viridis')
-            fig.colorbar(cax, label='Resonance Strength')
-            ax.set_xticks(range(len(resonance_matrix)))
-            ax.set_yticks(range(len(resonance_matrix)))
-            ax.set_xticklabels([f'H{i+1}' for i in range(len(resonance_matrix))])
-            ax.set_yticklabels([f'H{i+1}' for i in range(len(resonance_matrix))])
-            st.pyplot(fig)
+    if show_cos_panel and not FAST_ENTRY_MODE:
+        with st.expander("🌀 Quantum String Resonance Analyzer", expanded=False):
+            st.subheader("🧵 Multi-Harmonic Resonance Matrix")
             
-            # Show quantum metrics
-            string_metrics_panel(tension, entropy, resonance_score)
-            
-            # Forecast chart
-            st.subheader("🔮 Resonance Forecast")
-            if resonance_forecast_vals is not None:
-                st.line_chart(pd.DataFrame({
-                    'Forecast': resonance_forecast_vals,
-                    'Confidence': [x * 0.7 for x in resonance_forecast_vals]
-                }))
+            if resonance_matrix is not None:
+                # Colorful resonance grid
+                fig, ax = plt.subplots()
+                cax = ax.matshow(resonance_matrix, cmap='viridis')
+                fig.colorbar(cax, label='Resonance Strength')
+                ax.set_xticks(range(len(resonance_matrix)))
+                ax.set_yticks(range(len(resonance_matrix)))
+                ax.set_xticklabels([f'H{i+1}' for i in range(len(resonance_matrix))])
+                ax.set_yticklabels([f'H{i+1}' for i in range(len(resonance_matrix))])
+                st.pyplot(fig)
+                
+                # Show quantum metrics
+                string_metrics_panel(tension, entropy, resonance_score)
+                
+                # Forecast chart
+                st.subheader("🔮 Resonance Forecast")
+                if resonance_forecast_vals is not None:
+                    st.line_chart(pd.DataFrame({
+                        'Forecast': resonance_forecast_vals,
+                        'Confidence': [x * 0.7 for x in resonance_forecast_vals]
+                    }))
     
     # === SHOW THRE PANEL IF ENABLED ===
     if show_thre: 
@@ -1197,7 +1233,7 @@ if not df.empty:
              
     
     # === SHOW COSINE PHASE PANEL IF ENABLED ===
-    if show_cos_panel: 
+    if show_cos_panel and not FAST_ENTRY_MODE: 
         with st.expander("🌀 Cosine Phase Alignment Panel", expanded=False):
             cos_phase_panel(df, dominant_freq, micro_freq, phase, micro_phase)
     
@@ -1235,15 +1271,7 @@ if not df.empty:
             fractal_anchor_visualizer(df)
     
     # === DECISION HUD PANEL ===
-    decision_hud_panel(
-        dominant_phase=wave_label or "N/A",
-        dominant_pct=wave_pct or 0,
-        micro_phase=micro_phase_label or "N/A",
-        micro_pct=micro_pct or 0,
-        resonance_score=resonance_score if 'resonance_score' in locals() else None,
-        fractal_match_type=st.session_state.get("last_fractal_match"),
-        anchor_forecast_type=st.session_state.get("last_anchor_type")
-    )
+    
     
     # === RRQI STATUS ===
     st.metric("🧠 RRQI", rrqi_val, delta="Last 30 rounds")
