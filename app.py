@@ -15,8 +15,8 @@ from scipy.signal import hilbert
 import math
 from sklearn.metrics.pairwise import cosine_similarity
 from matplotlib import gridspec
-import morlet_phase_enhancement
-from morlet_phase_enhancement import morlet_phase_panel
+#import morlet_phase_enhancement
+#from morlet_phase_enhancement import morlet_phase_panel
 
 # ======================= CONFIG ==========================
 st.set_page_config(page_title="CYA Quantum Tracker", layout="wide")
@@ -1164,13 +1164,13 @@ if not df.empty:
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
         fig, ax = plt.subplots(figsize=(10, 4))
         
-        ax.plot(df["timestamp"], df["rsi"], label="RSI", color='white', linewidth=1.5)
+        ax.plot(df["timestamp"], df["rsi"], label="RSI", color='black', linewidth=1.5)
         ax.plot(df["timestamp"], df["rsi_signal"], label="Signal Line", color='orange', linestyle='--')
         ax.plot(df["timestamp"], df["rsi_upper"], color='green', linestyle='--', alpha=0.5, label="RSI Upper Band")
         ax.plot(df["timestamp"], df["rsi_lower"], color='red', linestyle='--', alpha=0.5, label="RSI Lower Band")
         ax.fill_between(df["timestamp"], df["rsi_lower"], df["rsi_upper"], color='purple', alpha=0.1)
         
-        ax.axhline(50, color='gray', linestyle=':')  # Neutral RSI zone
+        ax.axhline(50, color='black', linestyle=':')  # Neutral RSI zone
         ax.axhline(70, color='green', linestyle=':')  # Overbought
         ax.axhline(30, color='red', linestyle=':')    # Oversold
         
