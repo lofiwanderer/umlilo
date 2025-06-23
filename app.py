@@ -443,7 +443,7 @@ def thre_panel(df):
     
     return (df, latest_rds, latest_delta)
     
- @st.cache_data   
+@st.cache_data   
 def compute_surge_probability(thre_val, delta_slope, fnr_index):
     # Normalize inputs
     thre_score = np.clip((thre_val + 2) / 4, 0, 1)          # maps -2→1 to 0→1
