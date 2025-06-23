@@ -344,73 +344,7 @@ def run_rqcf(scores, steps=3, top_n=5):
     return forecast_chains
 
 # =================== UI COMPONENTS ========================
-def decision_hud_panel(dominant_phase, dominant_pct, micro_phase, micro_pct,
-                       resonance_score, fractal_match_type=None, anchor_forecast_type=None):
-    score = 0
-    reasons = []
-    
-    if dominant_phase in ["Ascent Phase", "Peak Phase"]:
-        score += 1
-        reasons.append("✅ Dominant in profit zone")
-    if micro_phase == dominant_phase:
-        score += 1
-        reasons.append("✅ Micro matches Dominant")
-    if resonance_score is not None:
-        if resonance_score > 0.7:
-            score += 1
-            reasons.append("✅ Coherence High")
-        elif resonance_score < 0.4:
-            score -= 1
-            reasons.append("⚠️ Coherence Low")
-    if fractal_match_type == "Pink":
-        score += 2
-        reasons.append("🔥 Fractal Pulse → Pink")
-    elif fractal_match_type == "Purple":
-        score += 1
-        reasons.append("🟣 Fractal Pulse → Purple")
-    elif fractal_match_type == "Blue":
-        score -= 1
-        reasons.append("🔵 Fractal Pulse → Blue")
-    if anchor_forecast_type == "Pink":
-        score += 2
-        reasons.append("💥 Fractal Anchor → Pink")
-    elif anchor_forecast_type == "Purple":
-        score += 1
-        reasons.append("🟪 Fractal Anchor → Purple")
-    elif anchor_forecast_type == "Blue":
-        score -= 1
-        reasons.append("🧊 Fractal Anchor → Blue")
-    
-    if score >= 4:
-        banner_color = "🟢 ENTRY CONFIRMED"
-        status = "💥 High Probability Surge"
-    elif score >= 2:
-        banner_color = "🟡 SCOUT ZONE"
-        status = "🧘‍♂️ Wait for Confirmation"
-    else:
-        banner_color = "🔴 HOLD FIRE"
-        status = "⚠️ Likely Trap or Blue Run"
-    
-    with st.container():
-        st.markdown("---")
-        st.markdown("### 🎯 **Real-Time Entry Signal HUD**")
-        st.markdown(f"**{banner_color}** — {status}")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Dominant Phase", f"{dominant_phase} ({dominant_pct:.1f}%)")
-            st.metric("Microwave Phase", f"{micro_phase} ({micro_pct:.1f}%)")
-        with col2:
-            st.metric("Fractal Pulse Match", fractal_match_type or "N/A")
-            st.metric("Anchor Forecast", anchor_forecast_type or "N/A")
-        with col3:
-            if resonance_score is not None:
-                st.metric("Resonance Score", f"{resonance_score:.2f}")
-            else:
-                st.metric("Resonance", "N/A")
-            st.metric("Signal Score", f"{score} pts")
-        with st.expander("🧠 Signal Breakdown"):
-            for reason in reasons: st.markdown(f"- {reason}")
-        st.markdown("---")
+
 
 def string_metrics_panel(tension, entropy, resonance_score):
     col1, col2, col3 = st.columns(3)
@@ -509,6 +443,7 @@ def thre_panel(df):
     
     return (df, latest_rds, latest_delta)
     
+ @st.cache_data   
 def compute_surge_probability(thre_val, delta_slope, fnr_index):
     # Normalize inputs
     thre_score = np.clip((thre_val + 2) / 4, 0, 1)          # maps -2→1 to 0→1
@@ -523,68 +458,8 @@ def compute_surge_probability(thre_val, delta_slope, fnr_index):
         "slope_component": round(slope_score, 4)
     }
 
-def cos_phase_panel(df, dom_freq, micro_freq, dom_phase, micro_phase):
-    st.subheader("🌀 Cosine Phase Alignment Panel")
-    if df is None or len(df) < 20:
-        st.warning("Need at least 20 rounds to compute Phase alignment.")
-        return
-        
-    scores = df["score"].fillna(0).values
-    N = len(scores)
-    timestamps = df["timestamp"]
 
-    if N >= 20 and dom_freq > 0 and micro_freq > 0:
-        # Compute current waveforms
-        t = np.arange(N)
-        dom_wave = np.sin(2 * np.pi * dom_freq * t + dom_phase)
-        micro_wave = np.sin(2 * np.pi * micro_freq * t + micro_phase)
 
-        phase_diff = 2 * np.pi * (dom_freq - micro_freq) * np.arange(N) + (dom_phase - micro_phase)
-        alignment_score = np.cos(phase_diff)
-        smoothed_score = pd.Series(alignment_score).rolling(5, min_periods=1).mean()
-
-        # Forecast alignment (next 10 rounds)
-        forecast_len = 10
-        future_t = np.arange(N, N + forecast_len)
-        future_align = np.cos(2 * np.pi * (dom_freq - micro_freq) * future_t + (dom_phase - micro_phase))
-        forecast_times = [timestamps.iloc[-1] + pd.Timedelta(seconds=5 * i) for i in range(forecast_len)]
-
-        # === Plotting ===
-        fig, ax = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
-
-        # Past wave alignment
-        ax[0].plot(timestamps, dom_wave, label="Dominant Wave", color='blue')
-        ax[0].plot(timestamps, micro_wave, label="Micro Wave", color='green', linestyle='dashdot')
-        ax[0].set_title("Dominant vs Micro Harmonics")
-        ax[0].legend()
-
-        # Cosine phase alignment tracker
-        ax[1].plot(timestamps, alignment_score, label="Cos(Δϕ)", color='purple')
-        ax[1].plot(timestamps, smoothed_score, linestyle='--', label="Cos(Δϕ)Smooth", color='purple')
-
-        ax[1].axhline(0.5, linestyle='--', color='gray')
-        ax[1].axhline(-0.5, linestyle='--', color='gray')
-        ax[1].set_title("Cosine Phase Alignment Oscillator")
-        ax[1].legend()
-
-        plot_slot = st.empty()
-        with plot_slot.container():
-            st.pyplot(fig)
-
-        # === Decision HUD ===
-        st.subheader("🎯 Phase Decision HUD")
-        recent_avg = np.mean(alignment_score[-5:])
-        st.metric("Avg Alignment (Last 5)", round(recent_avg, 3))
-
-        if recent_avg > 0.7:
-            st.success("ENTRY SIGNAL: Strong Constructive Interference")
-        elif recent_avg < -0.7:
-            st.error("NO ENTRY: Strong Destructive Interference")
-        else:
-            st.warning("NEUTRAL FIELD: Proceed with Caution")
-
-    else:
-        st.info("⛔ Not enough data or wave definition to compute phase alignment.")
 
 def fpm_panel(df, msi_col="msi", score_col="score", window_sizes=[5, 8, 13]):
     st.subheader("🧬 Fractal Pulse Matcher Panel (FPM)")
@@ -667,7 +542,8 @@ def fpm_panel(df, msi_col="msi", score_col="score", window_sizes=[5, 8, 13]):
                 st.session_state.last_fractal_match = "Purple"
         else:
             st.session_state.last_fractal_match = None
-
+            
+@st.cache_data
 def fractal_anchor_visualizer(df, msi_col="msi", score_col="score", window=8):
     st.subheader("🔗 Fractal Anchoring Visualizer")
 
@@ -1190,41 +1066,6 @@ if not df.empty:
     if show_thre: 
         with st.expander("🔬 True Harmonic Resonance Engine (THRE)", expanded=False):
             (df, latest_rds, latest_delta) = thre_panel(df)
-            # Display fast entry mode if enabled
-            
-    # === LIVE PROBABILITY PANEL ===
-            if len(df) >= 20:
-                st.markdown("### 🎯 Surge Probability Engine (THRE + FNR Fusion)")
-                if fnr_metrics and latest_rds is not None and latest_delta is not None :
-                    
-                     
-                    surge_prob, components = compute_surge_probability(
-                    thre_val=latest_rds,
-                    delta_slope=latest_delta,
-                    fnr_index=fnr_metrics["FNR_index"]
-                    )
-                    surge_score = surge_prob  # now it's just a number like 0.84
-
-                    col1, col2 = st.columns([1, 2])
-                    col1.metric("🔮 Surge Probability", f"{int(surge_score * 100)}%")
-
-                    col2.progress(surge_prob)
-        
-                    st.markdown("Component Breakdown")
-                    st.write(f"**THRE Signal**: {components['thre_component']}")
-                    st.write(f"**FNR Alignment**: {components['fnr_component']}")
-                    st.write(f"**THRE Δ Slope**: {components['slope_component']}")
-        
-                     # Optional guidance output
-                    if surge_prob >= 0.8:
-                        st.success("💖 Pink Entry Confirmed — Surge Stack is Aligned")
-                    elif surge_prob >= 0.6:
-                        st.info("🟣 Purple Entry Likely — Some Constructive Field Detected")
-                    elif surge_prob <= 0.3:
-                        st.warning("🔵 Risk of Collapse — Weak Field Detected")
-                    else:
-                        st.info("⚪ Neutral Field — Entry Requires Caution")
-            
             
        
         
