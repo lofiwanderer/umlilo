@@ -1,17 +1,12 @@
-
 import streamlit as st
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def plot_thre_fused_tdi(df, thre_vals, rsi_period=13, signal_period=2):
-    if len(df) < rsi_period + signal_period:
-        st.warning("Not enough data for TDI + THRE analysis.")
-        return
+def plot_thre_fused_tdi(df, thre_vals, rsi_period=13, signal_period=2, bb_range=5):
+    prices = df["multiplier"].values
 
-    prices = df['multiplier'].values
-
-    # === TDI Construction ===
+    # Step 1: RSI Calculation
     delta = np.diff(prices, prepend=prices[0])
     gain = np.where(delta > 0, delta, 0)
     loss = np.where(delta < 0, -delta, 0)
@@ -21,51 +16,81 @@ def plot_thre_fused_tdi(df, thre_vals, rsi_period=13, signal_period=2):
 
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
-
     rsi_signal = rsi.rolling(signal_period).mean()
-    upper_band = rsi_signal + 5
-    lower_band = rsi_signal - 5
+    upper_band = rsi_signal + bb_range
+    lower_band = rsi_signal - bb_range
 
-    # === THRE Entry/Exit Logic ===
+    # Step 2: THRE slope (inflection detector)
+    thre_vals = pd.Series(thre_vals).fillna(method='ffill').fillna(0)
+    thre_slope = np.gradient(thre_vals)
+
+    # Step 3: Signal Logic
     entry_arrows = []
     exit_arrows = []
+    reversal_arrows = []
 
-    for i in range(len(thre_vals)):
-        if i < signal_period or i >= len(rsi):
+    for i in range(len(prices)):
+        if i < 2 or i >= len(rsi) or i >= len(thre_vals):
             entry_arrows.append(None)
             exit_arrows.append(None)
+            reversal_arrows.append(None)
             continue
 
-        thre_val = thre_vals[i]
-        is_rsi_cross = rsi.iloc[i] > rsi_signal.iloc[i] and rsi.iloc[i - 1] <= rsi_signal.iloc[i - 1]
-        is_rsi_drop = rsi.iloc[i] < rsi_signal.iloc[i] and rsi.iloc[i - 1] >= rsi_signal.iloc[i - 1]
+        # Values for current step
+        rsi_now = rsi.iloc[i]
+        rsi_prev = rsi.iloc[i - 1]
+        signal_now = rsi_signal.iloc[i]
+        signal_prev = rsi_signal.iloc[i - 1]
+        thre_now = thre_vals.iloc[i]
+        thre_prev = thre_vals.iloc[i - 1]
+        slope_now = thre_slope[i]
 
-        if thre_val > 1.5 and is_rsi_cross:
-            entry_arrows.append(rsi.iloc[i])
+        # ENTRY: RSI crosses above signal + THRE > 1.2 + THRE rising
+        if rsi_prev <= signal_prev and rsi_now > signal_now and thre_now > 1.2 and slope_now > 0:
+            entry_arrows.append(rsi_now)
         else:
             entry_arrows.append(None)
 
-        if thre_val < -1.2 and is_rsi_drop:
-            exit_arrows.append(rsi.iloc[i])
+        # EXIT: RSI crosses below signal + THRE < -1.2 + THRE falling
+        if rsi_prev >= signal_prev and rsi_now < signal_now and thre_now < -1.2 and slope_now < 0:
+            exit_arrows.append(rsi_now)
         else:
             exit_arrows.append(None)
 
-    # === Plotting ===
+        # REVERSAL (Bottom bounce): RSI at/below lower band + THRE rising or >1.5
+        if rsi_now <= lower_band.iloc[i] and (thre_now > 1.5 or slope_now > 0):
+            reversal_arrows.append(('🟢', rsi_now))  # bounce up
+        # REVERSAL (Top pullback): RSI at/above upper band + THRE falling or <1.5
+        elif rsi_now >= upper_band.iloc[i] and (thre_now < 1.5 or slope_now < 0):
+            reversal_arrows.append(('🔴', rsi_now))  # bounce down
+        else:
+            reversal_arrows.append(None)
+
+    # Step 4: Plotting
     fig, ax = plt.subplots(figsize=(12, 6))
     ax.plot(rsi, label='RSI', color='cyan')
-    ax.plot(rsi_signal, label='RSI Signal', color='orange', linestyle='--')
+    ax.plot(rsi_signal, label='Signal', color='orange', linestyle='--')
     ax.plot(upper_band, color='gray', linestyle=':', label='Upper Band')
     ax.plot(lower_band, color='gray', linestyle=':', label='Lower Band')
 
-    for i in range(len(entry_arrows)):
-        if entry_arrows[i] is not None:
-            ax.annotate('↑', (i, entry_arrows[i]), color='lime', fontsize=12, ha='center', va='bottom')
+    # Entry Arrows 🔼
+    for i, val in enumerate(entry_arrows):
+        if val is not None:
+            ax.annotate('🔼', (i, val), color='lime', fontsize=14, ha='center', va='bottom')
 
-    for i in range(len(exit_arrows)):
-        if exit_arrows[i] is not None:
-            ax.annotate('↓', (i, exit_arrows[i]), color='red', fontsize=12, ha='center', va='top')
+    # Exit Arrows 🔽
+    for i, val in enumerate(exit_arrows):
+        if val is not None:
+            ax.annotate('🔽', (i, val), color='red', fontsize=14, ha='center', va='top')
 
-    ax.set_title("🔬 THRE-Fused TDI System")
+    # Reversal Arrows (🟢/🔴)
+    for i, signal in enumerate(reversal_arrows):
+        if signal is not None:
+            arrow, val = signal
+            ax.annotate(arrow, (i, val), color='white', fontsize=16, ha='center', va='center')
+
+    ax.set_title("🎯 THRE-Fused TDI System with Reversal + Inflection Detection")
     ax.set_ylabel("RSI")
+    ax.set_ylim(0, 100)
     ax.legend()
     st.pyplot(fig)
