@@ -27,7 +27,10 @@ def plot_thre_fused_tdi(df, thre_vals, period=14, signal_period=2):
 
     # Step 2: THRE slope (inflection detector)
     thre_vals = pd.Series(thre_vals).fillna(method='ffill').fillna(0)
-    thre_slope = np.gradient(thre_vals)
+    if len(thre_vals) >= 3:
+        thre_slope = thre_vals.diff().fillna(0)
+    else:
+        thre_slope = pd.Series([0] * len(thre_vals))  # flat slope if too short
 
     # Step 3: Signal Logic
     entry_arrows = []
