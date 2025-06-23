@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 def plot_thre_fused_tdi(df, thre_vals, period=14, signal_period=2):
-    prices = df["multiplier"].values
+    prices = pd.Series(df["multiplier"].values)
 
     # Step 1: RSI Calculation
     delta = prices.diff()
