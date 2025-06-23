@@ -1,8 +1,13 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import scipy
+import scipy.stats as stats
+import sklearn
+import pywt
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+import plotly.express as px
 from datetime import datetime
 from scipy.fft import rfft, rfftfreq
 from scipy.signal import find_peaks, peak_widths
@@ -10,291 +15,947 @@ from scipy.signal import hilbert
 import math
 from sklearn.metrics.pairwise import cosine_similarity
 from matplotlib import gridspec
-import time
+#from thre_fused_tdi_module import plot_thre_fused_tdi
+#import morlet_phase_enhancement
+#from morlet_phase_enhancement import morlet_phase_panel
 
 # ======================= CONFIG ==========================
-st.set_page_config(page_title="Aviator Crash Predictor", layout="wide")
-st.title("🎯 Aviator Crash Predictor: TDI+THRE Enhanced")
+st.set_page_config(page_title="CYA Quantum Tracker", layout="wide")
+st.title("🔥 CYA MOMENTUM TRACKER: Phase 1 + 2 + 3 + 4")
+
+# Create a container for the floating add round button
+floating_container = st.empty()
+latest_rds = None
+latest_delta = None
 
 # ================ SESSION STATE INIT =====================
-if "rounds" not in st.session_state:
-    st.session_state.rounds = []
+if "roundsc" not in st.session_state:
+    st.session_state.roundsc = []
+if "ga_pattern" not in st.session_state:
+    st.session_state.ga_pattern = None
 if "forecast_msi" not in st.session_state:
     st.session_state.forecast_msi = []
+if "completed_cycles" not in st.session_state:
+    st.session_state.completed_cycles = 0
+if "last_position" not in st.session_state:
+    st.session_state.last_position = 0
 if "current_mult" not in st.session_state:
     st.session_state.current_mult = 2.0
 
 # ================ CONFIGURATION SIDEBAR ==================
 with st.sidebar:
-    st.header("⚙️ Configuration Parameters")
-    WINDOW_SIZE = st.slider("RSI Window Size", 5, 100, 14)
+    st.header("⚙️ QUANTUM PARAMETERS")
+    WINDOW_SIZE = st.slider("MSI Window Size", 5, 100, 20)
     PINK_THRESHOLD = st.number_input("Pink Threshold", value=10.0)
-    SIGNAL_PERIOD = st.slider("Signal Line Period", 3, 20, 9)
-    THRE_SENSITIVITY = st.slider("THRE Sensitivity", 0.1, 2.0, 1.0, 0.1)
-    
+    STRICT_RTT = st.checkbox("Strict RTT Mode", value=False)
     st.header("📉 Indicator Visibility")
-    show_tdi_arrows = st.checkbox("🎯 Show TDI+THRE Arrows", value=True)
+
     show_supertrend = st.checkbox("🟢 Show SuperTrend", value=True)
-    show_ichimoku = st.checkbox("☁️ Show Ichimoku", value=True)
-    
-    st.header("📊 Panel Toggles")
-    FAST_ENTRY_MODE = st.checkbox("⚡ Fast Entry Mode", value=True)
+    show_ichimoku   = st.checkbox("☁️ Show Ichimoku (Tenkan/Kijun)", value=True)
+
+    st.header("📊 PANEL TOGGLES")
+    FAST_ENTRY_MODE = st.checkbox("⚡ Fast Entry Mode", value=False)
     show_thre = st.checkbox("🌀 THRE Panel", value=True)
-    show_details = st.checkbox("🔍 Show Detailed Metrics", value=False)
+    
+    show_fpm = st.checkbox("🧬 FPM Panel", value=True)
+    show_anchor = st.checkbox("🔗 Fractal Anchor", value=True)
     
     if st.button("🔄 Full Reset", help="Clear all historical data"):
-        st.session_state.rounds = []
+        st.session_state.roundsc = []
         st.rerun()
+        
+    # Clear cached functions
+    if st.button("🧹 Clear Cache", help="Force harmonic + MSI recalculation"):
+        st.cache_data.clear()  # Streamlit's built-in cache clearer
+        st.success("Cache cleared — recalculations will run fresh.")
 
-
-# =================== CORE FUNCTIONS ========================
-def compute_rsi(series, period=14):
-    """Compute RSI with optimized performance"""
-    delta = series.diff().dropna()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    
-    avg_gain = gain.rolling(window=period).mean()
-    avg_loss = loss.rolling(window=period).mean()
-    
-    rs = avg_gain / avg_loss.replace(0, 1e-9)  # Prevent division by zero
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
-
-def compute_thre(scores, sensitivity=1.0):
-    """Compute THRE (True Harmonic Resonance Engine) with optimized performance"""
-    if len(scores) < 10:
-        return np.zeros(len(scores)), np.zeros(len(scores))
-    
-    # Apply FFT to get frequency components
-    yf = rfft(scores - np.mean(scores))
-    xf = rfftfreq(len(scores), 1)
-    mask = (xf > 0) & (xf < 0.5)  # Focus on meaningful frequencies
-    
-    if not any(mask):
-        return np.zeros(len(scores)), np.zeros(len(scores))
-    
-    # Extract relevant frequencies and amplitudes
-    freqs = xf[mask]
-    amps = np.abs(yf[mask]) * sensitivity
-    phases = np.angle(yf[mask])
-    
-    # Generate harmonic matrix
-    harmonic_matrix = np.zeros((len(scores), len(freqs)))
-    for i, (f, p) in enumerate(zip(freqs, phases)):
-        harmonic_matrix[:, i] = np.sin(2 * np.pi * f * np.arange(len(scores)) + p)
-    
-    # Create composite signal and normalize
-    if amps.size > 0:
-        composite_signal = (harmonic_matrix * amps).sum(axis=1)
-        std = np.std(composite_signal)
-        if std > 0:
-            normalized_signal = (composite_signal - np.mean(composite_signal)) / std
-            smooth_signal = pd.Series(normalized_signal).rolling(3, min_periods=1).mean()
-            signal_slope = np.gradient(smooth_signal)
-            return smooth_signal.values, signal_slope
-    
-    return np.zeros(len(scores)), np.zeros(len(scores))
-
-def compute_bollinger_bands(series, window, num_std=2):
-    """Compute Bollinger Bands with optimized performance"""
+# =================== ADVANCED HELPER FUNCTIONS ========================
+@st.cache_data
+def bollinger_bands(series, window, num_std=2):
     rolling_mean = series.rolling(window).mean()
     rolling_std = series.rolling(window).std()
-    upper_band = rolling_mean + (rolling_std * num_std)
-    lower_band = rolling_mean - (rolling_std * num_std)
+    upper_band = rolling_mean + num_std * rolling_std
+    lower_band = rolling_mean - num_std * rolling_std
     return rolling_mean, upper_band, lower_band
 
-def generate_tdi_thre_signals(df):
-    """Generate TDI+THRE fusion signals"""
-    if len(df) < 15:
+@st.cache_data
+def detect_dominant_cycle(scores):
+    N = len(scores)
+    if N < 20:
+        return None
+    T = 1
+    yf = rfft(scores - np.mean(scores))
+    xf = rfftfreq(N, T)
+    dominant_freq = xf[np.argmax(np.abs(yf[1:])) + 1]
+    if dominant_freq == 0:
+        return None
+    return round(1 / dominant_freq)
+
+@st.cache_data
+def get_phase_label(position, cycle_length):
+    pct = (position / cycle_length) * 100
+    if pct <= 16:
+        return "Birth Phase", pct
+    elif pct <= 33:
+        return "Ascent Phase", pct
+    elif pct <= 50:
+        return "Peak Phase", pct
+    elif pct <= 67:
+        return "Post-Peak", pct
+    elif pct <= 84:
+        return "Falling Phase", pct
+    else:
+        return "End Phase", pct
+
+@st.cache_data
+def morlet_wavelet_power(scores, wavelet='cmor', max_scale=64):
+    scales = np.arange(1, max_scale)
+    
+    # Compute CWT
+    coeffs, freqs = pywt.cwt(scores, scales, wavelet)
+    power = np.abs(coeffs) ** 2
+    
+    return coeffs, power, freqs, scales
+    
+@st.cache_data
+def classify_morlet_bursts(mean_energy, power_threshold=None, min_width=3):
+    if power_threshold is None:
+        power_threshold = np.mean(mean_energy) + np.std(mean_energy)
+
+    # Detect peaks
+    peaks, props = find_peaks(mean_energy, height=power_threshold)
+
+    # Measure widths
+    widths, h_eval, left_ips, right_ips = peak_widths(mean_energy, peaks, rel_height=0.5)
+
+    classifications = []
+    for i, peak in enumerate(peaks):
+        width = widths[i]
+        label = "💥 SURGE PHASE" if width >= min_width else "⚠️ FAKE BURST"
+        classifications.append({
+            "index": peak,
+            "width": round(width, 2),
+            "strength": round(props['peak_heights'][i], 2),
+            "label": label
+        })
+    
+    return classifications
+    
+@st.cache_data
+def compute_fnr_index_from_morlet(power_matrix, scales):
+    if power_matrix.shape[0] < 10:
+        return None
+
+    # Extract high-scale (macro) and low-scale (micro) energy patterns
+    micro_band = power_matrix[2:6, :]     # e.g., scales 3–6
+    macro_band = power_matrix[-6:-2, :]   # e.g., top 4 macro scales
+
+    micro_wave = np.mean(micro_band, axis=0)
+    macro_wave = np.mean(macro_band, axis=0)
+
+    # Normalize both
+    micro_wave -= np.mean(micro_wave)
+    macro_wave -= np.mean(macro_wave)
+    micro_wave /= (np.std(micro_wave) + 1e-9)
+    macro_wave /= (np.std(macro_wave) + 1e-9)
+
+    # Product method (constructive > 0, destructive < 0)
+    interaction_wave = micro_wave * macro_wave
+    fnr_index = np.mean(interaction_wave)
+
+    # Cosine similarity (phase match strength)
+    cos_sim = cosine_similarity(micro_wave.reshape(1, -1), macro_wave.reshape(1, -1))[0][0]
+
+    return {
+        "FNR_index": round(fnr_index, 4),
+        "Phase_cosine_similarity": round(cos_sim, 4),
+        "alignment": "Constructive" if fnr_index > 0.2 else "Destructive" if fnr_index < -0.2 else "Neutral"
+    }
+    
+@st.cache_data
+def calculate_purple_pressure(df, window=10):
+    recent = df.tail(window)
+    purple_scores = recent[recent['type'] == 'Purple']['score']
+    if len(purple_scores) == 0:
+        return 0
+    return purple_scores.sum() / window
+
+@st.cache_data
+def calculate_blue_decay(df, window=10):
+    recent = df.tail(window)
+    blue_scores = recent[recent['type'] == 'Blue']['multiplier']
+    if len(blue_scores) == 0:
+        return 0
+    decay = np.mean([2.0 - b for b in blue_scores])  # The lower the blue, the higher the decay
+    return decay * (len(blue_scores) / window)
+
+@st.cache_data
+def compute_tpi(df, window=10):
+    pressure = calculate_purple_pressure(df, window)
+    decay = calculate_blue_decay(df, window)
+    return round(pressure - decay, 2)
+
+@st.cache_data
+def rrqi(df, window=30):
+    recent = df.tail(window)
+    blues = len(recent[recent['type'] == 'Blue'])
+    purples = len(recent[recent['type'] == 'Purple'])
+    pinks = len(recent[recent['type'] == 'Pink'])
+    quality = (purples + 2*pinks - blues) / window
+    return round(quality, 2)
+    
+@st.cache_data    
+def compute_rsi(series, period=14):
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.rolling(period).mean()
+    avg_loss = loss.rolling(period).mean()
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
+    
+@st.cache_data 
+def compute_supertrend(df, period=10, multiplier=2.0, source="msi"):
+        df = df.copy()
+        src = df[source]
+        hl2 = src  # substitute for high+low/2
+    
+        # True range approximation
+        df['prev_close'] = src.shift(1)
+        df['tr'] = abs(src - df['prev_close'])
+        df['atr'] = df['tr'].rolling(window=period).mean()
+    
+        # Bands
+        df['upper_band'] = hl2 - multiplier * df['atr']
+        df['lower_band'] = hl2 + multiplier * df['atr']
+    
+        # Initialize trend
+        trend = [1]  # start with uptrend
+    
+        for i in range(1, len(df)):
+            curr = df.iloc[i]
+            prev = df.iloc[i - 1]
+    
+            upper_band = max(curr['upper_band'], prev['upper_band']) if prev['prev_close'] > prev['upper_band'] else curr['upper_band']
+            lower_band = min(curr['lower_band'], prev['lower_band']) if prev['prev_close'] < prev['lower_band'] else curr['lower_band']
+    
+            if trend[-1] == -1 and curr['prev_close'] > lower_band:
+                trend.append(1)
+            elif trend[-1] == 1 and curr['prev_close'] < upper_band:
+                trend.append(-1)
+            else:
+                trend.append(trend[-1])
+    
+            df.at[df.index[i], 'upper_band'] = upper_band
+            df.at[df.index[i], 'lower_band'] = lower_band
+    
+        df["trend"] = trend
+        df["supertrend"] = np.where(df["trend"] == 1, df["upper_band"], df["lower_band"])
+        df["buy_signal"] = (df["trend"] == 1) & (pd.Series(trend).shift(1) == -1)
+        df["sell_signal"] = (df["trend"] == -1) & (pd.Series(trend).shift(1) == 1)
+    
         return df
+
+@st.cache_data
+def multi_harmonic_resonance_analysis(df, num_harmonics=5):
+    scores = df["score"].fillna(0).values
+    N = len(scores)
+    yf = rfft(scores - np.mean(scores))
+    xf = rfftfreq(N, 1)
+    amplitudes = np.abs(yf)
+    top_indices = amplitudes.argsort()[-num_harmonics:][::-1] if len(amplitudes) >= num_harmonics else amplitudes.argsort()
+    resonance_matrix = np.zeros((num_harmonics, num_harmonics))
+    harmonic_waves = []
     
-    # Make a copy to avoid modifying the original
-    df = df.copy()
+    for i, idx in enumerate(top_indices):
+        if i < len(xf) and i < len(yf):
+            freq = xf[idx]
+            phase = np.angle(yf[idx])
+            wave = np.sin(2 * np.pi * freq * np.arange(N) + phase)
+            harmonic_waves.append(wave)
+            for j, jdx in enumerate(top_indices):
+                if i != j and j < len(yf):
+                    phase_diff = np.abs(phase - np.angle(yf[jdx]))
+                    resonance_matrix[i,j] = np.cos(phase_diff) * min(amplitudes[idx], amplitudes[jdx])
+
+    resonance_score = np.sum(resonance_matrix) / (num_harmonics * (num_harmonics - 1)) if num_harmonics > 1 else 0
+    tension = np.var(amplitudes[top_indices]) if len(top_indices) > 0 else 0
+    harmonic_entropy = stats.entropy(amplitudes[top_indices] / np.sum(amplitudes[top_indices])) if len(top_indices) > 0 and np.sum(amplitudes[top_indices]) > 0 else 0
+    return harmonic_waves, resonance_matrix, resonance_score, tension, harmonic_entropy
+
+@st.cache_data
+def resonance_forecast(harmonic_waves, resonance_matrix, steps=10):
+    if not harmonic_waves: return np.zeros(steps)
+    forecast = np.zeros(steps)
+    num_harmonics = len(harmonic_waves)
     
-    # Initialize signal columns
-    df['entry_signal'] = False
-    df['exit_signal'] = False
-    df['bounce_signal'] = False
+    for step in range(steps):
+        step_value = 0
+        for i in range(num_harmonics):
+            wave = harmonic_waves[i]
+            if len(wave) > 1:
+                diff = np.diff(wave[1:])
+                freq = 1 / (np.argmax(diff) + 1) if np.any(diff) else 1
+                next_val = wave[-1] * np.cos(2 * np.pi * freq * 1)
+                influence = np.sum(resonance_matrix[i]) / (num_harmonics - 1) if num_harmonics > 1 else 0
+                step_value += next_val * (1 + influence)
+                harmonic_waves[i] = np.append(wave, step_value)
+        forecast[step] = step_value / num_harmonics
+    return forecast
+
+@st.cache_data
+def run_rqcf(scores, steps=3, top_n=5):
+    if len(scores) < 10: return []
     
-    # Generate entry signals (RSI cross + THRE support + slope confirmation)
-    df['entry_signal'] = ((df['rsi'] > df['rsi_signal']) &  # RSI crosses above signal
-                         (df['rsi'].shift(1) <= df['rsi_signal'].shift(1)) &  # Confirmed cross
-                         (df['thre_value'] > 0) &  # THRE support
-                         (df['thre_slope'] > 0))  # Positive slope
+    N = len(scores)
+    yf = rfft(scores - np.mean(scores))
+    xf = rfftfreq(N, 1)
+    amplitudes = np.abs(yf)
+    top_indices = amplitudes.argsort()[-top_n:][::-1] if len(amplitudes) >= top_n else amplitudes.argsort()
+    harmonic_data = []
     
-    # Generate exit signals (RSI rejection + THRE collapse)
-    df['exit_signal'] = ((df['rsi'] < df['rsi_signal']) &  # RSI crosses below signal
-                        (df['rsi'].shift(1) >= df['rsi_signal'].shift(1)) &  # Confirmed cross
-                        ((df['thre_value'] < 0) | (df['thre_slope'] < 0)))  # THRE negative or falling
-    
-    # Generate bounce signals (RSI bounce from band edge + THRE inflection)
-    df['bounce_signal'] = ((df['rsi'] < df['rsi_lower']) &  # RSI below lower band
-                          (df['rsi'].shift(1) < df['rsi_lower'].shift(1)) &  # Was below
-                          (df['rsi'] > df['rsi'].shift(1)) &  # Starting to rise
-                          (df['thre_slope'] > df['thre_slope'].shift(1)))  # THRE slope improving
-    
-    # Filter signals based on volatility conditions
-    volatility = df['rsi_upper'] - df['rsi_lower']
-    avg_volatility = volatility.rolling(10).mean()
-    
-    # In high volatility, make signals more selective
-    high_vol_mask = volatility > avg_volatility * 1.5
-    df.loc[high_vol_mask, 'entry_signal'] = df.loc[high_vol_mask, 'entry_signal'] & (df.loc[high_vol_mask, 'thre_value'] > 0.8)
-    
-    # In low volatility, make bounce signals more sensitive
-    low_vol_mask = volatility < avg_volatility * 0.5
-    enhanced_bounce = ((df['rsi'] < 40) & 
-                      (df['rsi'] > df['rsi'].shift(1)) & 
-                      (df['thre_slope'] > 0))
-    df.loc[low_vol_mask, 'bounce_signal'] = df.loc[low_vol_mask, 'bounce_signal'] | enhanced_bounce[low_vol_mask]
-    
-    # Calculate signal strength based on THRE value and slope
-    df['signal_strength'] = np.abs(df['thre_value']) * (np.abs(df['thre_slope']) + 0.1)
-    
-    return df
+    for idx in top_indices:
+        if idx < len(xf) and idx < len(yf) and idx < len(amplitudes):
+            freq = xf[idx]
+            phase = np.angle(yf[idx])
+            amp = amplitudes[idx]
+            wave = np.sin(2 * np.pi * freq * np.arange(N) + phase)
+            harmonic_data.append((freq, phase, amp, wave))
+
+    forecast_chains = []
+    for branch_id in range(3):
+        chain = []
+        sim_scores = list(scores)
+        for step in range(steps):
+            wave_sum = np.zeros(1)
+            for freq, phase, amp, _ in harmonic_data:
+                t = len(sim_scores)
+                value = amp * np.sin(2 * np.pi * freq * t + phase)
+                wave_sum += value
+            score_estimate = wave_sum[0] / max(1, len(harmonic_data))
+            sim_scores.append(score_estimate)
+            label = '💖 Pink Spike' if score_estimate >= 1.5 else \
+                    '🟣 Purple Stable' if score_estimate >= 0.5 else \
+                    '🔵 Blue Pullback' if score_estimate < 0 else '⚪ Neutral Drift'
+            chain.append((round(score_estimate, 3), label))
+            for i in range(len(harmonic_data)):
+                freq, phase, amp, wave = harmonic_data[i]
+                harmonic_data[i] = (freq, phase + np.random.uniform(-0.1, 0.1), amp, wave)
+        forecast_chains.append({"branch": f"Branch {chr(65 + branch_id)}", "forecast": chain})
+    return forecast_chains
+
+# =================== UI COMPONENTS ========================
 
 
-def compute_supertrend(df, period=10, multiplier=2.0):
-    """Compute SuperTrend indicator"""
+def string_metrics_panel(tension, entropy, resonance_score):
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("String Tension", f"{tension:.4f}", 
+                 help="Variance in harmonic amplitudes - higher tension indicates unstable state")
+    
+    with col2:
+        st.metric("Harmonic Entropy", f"{entropy:.4f}",
+                 help="Information entropy of harmonic distribution - lower entropy predicts stability")
+    
+    with col3:
+        st.metric("Resonance Coherence", f"{resonance_score:.4f}",
+                 help="Phase alignment between harmonics - higher coherence predicts constructive interference")
+
+def classify_next_round(forecast, tension, entropy, resonance_score):
+    if forecast is None or len(forecast) == 0:
+        return "❓ Unknown", "⚠️ No forecast", 0
+    
+    energy_index = np.tanh(forecast[0])
+    classification = "❓ Unknown"
+    
+    if energy_index > 0.8 and tension < 0.2 and entropy < 1.5:
+        classification = "💖 Pink Surge Expected"
+    elif energy_index > 0.4:
+        classification = "🟣 Probable Purple Round"
+    elif -0.4 <= energy_index <= 0.4:
+        classification = "⚪ Neutral Drift Zone"
+    elif energy_index < -0.8 and tension < 0.15:
+        classification = "⚠️ Collapse Risk (Blue Train)"
+    elif energy_index < -0.4:
+        classification = "🔵 Likely Blue / Pullback"
+
+    if resonance_score > 0.7:
+        if energy_index > 0.8: action = "🔫 Sniper Entry — Surge Incoming"
+        elif energy_index < -0.8: action = "❌ Abort Entry — Blue Collapse"
+        else: action = "🧭 Cautious Scout — Mild Fluctuation"
+    else:
+        action = "⚠️ Unstable Harmonics — Avoid Entry"
+
+    return classification, action, energy_index
+
+def thre_panel(df):
+    st.subheader("🔬 True Harmonic Resonance Engine (THRE)")
+    if len(df) < 20: 
+        st.warning("Need at least 20 rounds to compute THRE.")
+        return df, None, None, []
+        
+    scores = df["score"].fillna(0).values
+    N = len(scores)
+    T = 1
+    yf = rfft(scores - np.mean(scores))
+    xf = rfftfreq(N, T)
+    mask = (xf > 0) & (xf < 0.5)
+    freqs = xf[mask]
+    amps = np.abs(yf[mask])
+    phases = np.angle(yf[mask])
+    harmonic_matrix = np.zeros((N, len(freqs)))
+    
+    for i, (f, p) in enumerate(zip(freqs, phases)):
+        harmonic_matrix[:, i] = np.sin(2 * np.pi * f * np.arange(N) + p)
+    
+    composite_signal = (harmonic_matrix * amps).sum(axis=1) if amps.size > 0 else np.zeros(N)
+    normalized_signal = (composite_signal - np.mean(composite_signal)) / np.std(composite_signal) if np.std(composite_signal) > 0 else np.zeros(N)
+    smooth_rds = pd.Series(normalized_signal).rolling(3, min_periods=1).mean()
+    rds_delta = np.gradient(smooth_rds)
+    
+    fig, ax = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
+    ax[0].plot(df["timestamp"], smooth_rds, label="THRE Resonance", color='cyan')
+    ax[0].axhline(1.5, linestyle='--', color='green', alpha=0.5)
+    ax[0].axhline(0.5, linestyle='--', color='blue', alpha=0.3)
+    ax[0].axhline(-0.5, linestyle='--', color='orange', alpha=0.3)
+    ax[0].axhline(-1.5, linestyle='--', color='red', alpha=0.5)
+    ax[0].set_title("Composite Harmonic Resonance Strength")
+    ax[0].legend()
+    
+    ax[1].plot(df["timestamp"], rds_delta, label="Δ Resonance Slope", color='purple')
+    ax[1].axhline(0, linestyle=':', color='gray')
+    ax[1].set_title("RDS Inflection Detector")
+    ax[1].legend()
+    
+    st.pyplot(fig)
+    
+    latest_rds = smooth_rds.iloc[-1] if len(smooth_rds) > 0 else 0
+    latest_delta = rds_delta[-1] if len(rds_delta) > 0 else 0
+    
+    st.metric("🧠 Resonance Strength", f"{latest_rds:.3f}")
+    st.metric("📉 Δ Slope", f"{latest_delta:.3f}")
+    
+    if latest_rds > 1.5: st.success("💥 High Constructive Stack — Pink Burst Risk ↑")
+    elif latest_rds > 0.5: st.info("🟣 Purple Zone — Harmonically Supported")
+    elif latest_rds < -1.5: st.error("🌪️ Collapse Zone — Blue Train Likely")
+    elif latest_rds < -0.5: st.warning("⚠️ Destructive Micro-Waves — High Risk")
+    else: st.info("⚖️ Neutral Zone — Mid-Range Expected")
+    
+    return (df, latest_rds, latest_delta, smooth_rds)
+    
+@st.cache_data   
+def compute_surge_probability(thre_val, delta_slope, fnr_index):
+    # Normalize inputs
+    thre_score = np.clip((thre_val + 2) / 4, 0, 1)          # maps -2→1 to 0→1
+    slope_score = np.clip((delta_slope + 1) / 2, 0, 1)       # maps -1→1 to 0→1
+    fnr_score = np.clip((fnr_index + 1) / 2, 0, 1)           # maps -1→1 to 0→1
+
+    # Weighted blend (adjustable)
+    surge_prob = 0.5 * thre_score + 0.3 * fnr_score + 0.2 * slope_score
+    return round(surge_prob, 4), {
+        "thre_component": round(thre_score, 4),
+        "fnr_component": round(fnr_score, 4),
+        "slope_component": round(slope_score, 4)
+    }
+
+
+
+
+def fpm_panel(df, msi_col="msi", score_col="score", window_sizes=[5, 8, 13]):
+    st.subheader("🧬 Fractal Pulse Matcher Panel (FPM)")
+
+    if len(df) < max(window_sizes) + 5:
+        st.warning("Not enough historical rounds to match fractal sequences.")
+        return
+
     df = df.copy()
-    
-    # Use MSI as price substitute if available, otherwise use 'score'
-    src = df['msi'] if 'msi' in df.columns else df['score']
-    
-    # Calculate ATR approximation
-    df['prev_close'] = src.shift(1)
-    df['tr'] = abs(src - df['prev_close'])
-    df['atr'] = df['tr'].rolling(window=period).mean()
-    
-    # Calculate bands
-    df['upper_band_st'] = src - (multiplier * df['atr'])
-    df['lower_band_st'] = src + (multiplier * df['atr'])
-    
-    # Initialize trend
-    trend = [1]  # Start with uptrend
-    
-    # Calculate SuperTrend
-    for i in range(1, len(df)):
-        curr = df.iloc[i]
-        prev = df.iloc[i-1]
-        
-        upper_band = max(curr['upper_band_st'], prev['upper_band_st']) if prev['prev_close'] > prev['upper_band_st'] else curr['upper_band_st']
-        lower_band = min(curr['lower_band_st'], prev['lower_band_st']) if prev['prev_close'] < prev['lower_band_st'] else curr['lower_band_st']
-        
-        if trend[-1] == -1 and curr['prev_close'] > lower_band:
-            trend.append(1)
-        elif trend[-1] == 1 and curr['prev_close'] < upper_band:
-            trend.append(-1)
+    df["round_type"] = df["score"].apply(lambda s: "P" if s == 2 else ("p" if s == 1 else "B"))
+
+    for win in window_sizes:
+        current_seq = df.tail(win).reset_index(drop=True)
+
+        # Encode current pattern
+        current_pattern = current_seq["round_type"].tolist()
+        current_slope = np.gradient(current_seq[msi_col].fillna(0).values)
+        current_fft = np.abs(rfft(current_slope)) if len(current_slope) > 0 else np.array([])
+
+        best_match = None
+        best_score = -np.inf
+        matched_seq = None
+        next_outcome = None
+
+        # Slide through history
+        for i in range(0, len(df) - win - 3):
+            hist_seq = df.iloc[i:i+win]
+            hist_pattern = hist_seq["round_type"].tolist()
+            hist_slope = np.gradient(hist_seq[msi_col].fillna(0).values)
+            hist_fft = np.abs(rfft(hist_slope)) if len(hist_slope) > 0 else np.array([])
+
+            # Compare slope shape using cosine similarity if both FFTs have data
+            sim_score = 0
+            if len(current_fft) > 0 and len(hist_fft) > 0:
+                # Check if the lengths match; if not, use the smaller length for both
+                min_len = min(len(current_fft), len(hist_fft))
+                if min_len > 0:
+                    sim_score = cosine_similarity([current_fft[:min_len]], [hist_fft[:min_len]])[0][0]
+
+            # Compare round pattern similarity
+            pattern_match = sum([a == b for a, b in zip(current_pattern, hist_pattern)]) / win
+
+            # Combined matching score
+            total_score = 0.6 * sim_score + 0.4 * pattern_match
+
+            if total_score > best_score:
+                best_score = total_score
+                best_match = hist_pattern
+                matched_seq = hist_seq
+                # Look at what happened next
+                if i + win + 3 <= len(df):
+                    next_seq = df.iloc[i+win:i+win+3]
+                    next_outcome = next_seq["round_type"].tolist() if len(next_seq) > 0 else []
+
+        # === Display Results ===
+        st.markdown(f"Fractal Match: Last {win} Rounds")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown(f"**Current Pattern (Last {win}):**")
+            st.text(" ".join(current_pattern))
+            st.markdown(f"**MSI Slope:** {np.round(current_slope, 2)}")
+
+        with col2:
+            st.markdown(f"**Best Historical Match:**")
+            st.text(" ".join(best_match) if best_match else "N/A")
+            st.markdown(f"**Match Score:** {best_score:.3f}")
+
+        if next_outcome and len(next_outcome) > 0:
+            st.success(f"📡 Projected Next Rounds: {' '.join(next_outcome)}")
+            # Simple forecast classifier
+            if next_outcome.count("P") + next_outcome.count("p") >= 2:
+                st.markdown("🔮 Forecast: **💥 Surge Mirror**")
+                st.session_state.last_fractal_match = "Pink"
+            elif next_outcome.count("B") >= 2:
+                st.markdown("⚠️ Forecast: **Blue Reversal / Collapse**")
+                st.session_state.last_fractal_match = "Blue"
+            else:
+                st.markdown("🧘 Forecast: **Stable / Mixed Pulse**")
+                st.session_state.last_fractal_match = "Purple"
         else:
-            trend.append(trend[-1])
-        
-        df.at[df.index[i], 'upper_band_st'] = upper_band
-        df.at[df.index[i], 'lower_band_st'] = lower_band
-    
-    df["trend"] = trend
-    df["supertrend"] = np.where(df["trend"] == 1, df["upper_band_st"], df["lower_band_st"])
-    df["buy_signal"] = (df["trend"] == 1) & (pd.Series(trend).shift(1) == -1)
-    df["sell_signal"] = (df["trend"] == -1) & (pd.Series(trend).shift(1) == 1)
-    
-    return df
+            st.session_state.last_fractal_match = None
+            
+@st.cache_data
+def fractal_anchor_visualizer(df, msi_col="msi", score_col="score", window=8):
+    st.subheader("🔗 Fractal Anchoring Visualizer")
 
-def compute_ichimoku(df):
-    """Compute Ichimoku Cloud indicator"""
+    if len(df) < window + 10:
+        st.warning("Insufficient data for visual fractal anchoring.")
+        return
+
     df = df.copy()
-    
-    # Use MSI as price substitute
-    src = df['msi'] if 'msi' in df.columns else df['score']
-    
-    # Tenkan-sen (Conversion Line): (9-period high + 9-period low) / 2
-    high_9 = src.rolling(window=9).max()
-    low_9 = src.rolling(window=9).min()
-    df["tenkan"] = (high_9 + low_9) / 2
-    
-    # Kijun-sen (Base Line): (26-period high + 26-period low) / 2
-    high_26 = src.rolling(window=26).max()
-    low_26 = src.rolling(window=26).min()
-    df["kijun"] = (high_26 + low_26) / 2
-    
-    # Senkou Span A (Leading Span A): (Tenkan-sen + Kijun-sen) / 2 (Projected 26 periods forward)
-    df["senkou_a"] = ((df["tenkan"] + df["kijun"]) / 2).shift(26)
-    
-    # Senkou Span B (Leading Span B): (52-period high + 52-period low) / 2 (Projected 26 periods forward)
-    high_52 = src.rolling(window=52).max()
-    low_52 = src.rolling(window=52).min()
-    df["senkou_b"] = ((high_52 + low_52) / 2).shift(26)
-    
-    # Chikou Span (Lagging Span): Current closing price projected 26 periods backward
-    df["chikou"] = src.shift(-26)
-    
-    return df
+    df["type"] = df["score"].apply(lambda s: "P" if s == 2 else ("p" if s == 1 else "B"))
 
-def analyze_data(data, pink_threshold=10.0, window_size=14, signal_period=9, thre_sensitivity=1.0):
-    """Process data and compute all indicators"""
-    if data.empty:
-        return None, 0
-    
-    start_time = time.time()
-    
-    # Create a copy to avoid modifying the original
+    # Encode recent fragment
+    recent_seq = df.tail(window)
+    recent_vec = recent_seq[msi_col].fillna(0).values
+    recent_types = recent_seq["type"].tolist()
+
+    best_score = -np.inf
+    best_start = None
+    best_future_types = []
+
+    for i in range(len(df) - window - 3):
+        hist_seq = df.iloc[i:i+window]
+        hist_vec = hist_seq[msi_col].fillna(0).values
+        hist_types = hist_seq["type"].tolist()
+
+        if len(hist_vec) != window:
+            continue
+
+        # Cosine similarity between shapes
+        sim_score = 0
+        if len(recent_vec) > 0 and len(hist_vec) > 0:
+            sim_score = cosine_similarity([recent_vec], [hist_vec])[0][0]
+
+        type_match = sum([a == b for a, b in zip(hist_types, recent_types)]) / window
+        total_score = 0.6 * sim_score + 0.4 * type_match
+
+        if total_score > best_score:
+            best_score = total_score
+            best_start = i
+            if i + window + 3 <= len(df):
+                best_future_types = df.iloc[i+window:i+window+3]["type"].tolist()
+
+    if best_start is None:
+        st.warning("No matching historical pattern found.")
+        return
+
+    # === Prepare plot ===
+    fig = plt.figure(figsize=(10, 4))
+    gs = gridspec.GridSpec(1, 1)
+    ax = fig.add_subplot(gs[0])
+
+    # Historical pattern
+    hist_fragment = df.iloc[best_start:best_start+window]
+    hist_times = np.arange(-window, 0)
+    hist_vals = hist_fragment[msi_col].fillna(0).values
+    hist_types = hist_fragment["type"].tolist()
+    ax.plot(hist_times, hist_vals, color='gray', linewidth=2, label='Matched Past')
+
+    # Current pattern
+    curr_vals = recent_seq[msi_col].fillna(0).values
+    ax.plot(hist_times, curr_vals, color='blue', linewidth=2, linestyle='--', label='Current')
+
+    # Forecast next steps
+    if best_start + window + 3 <= len(df):
+        proj_seq = df.iloc[best_start + window : best_start + window + 3]
+        proj_vals = proj_seq[msi_col].fillna(0).values
+        proj_times = np.arange(1, len(proj_vals)+1)
+        ax.plot(proj_times, proj_vals, color='green', linewidth=2, label='Projected Next')
+
+        # Round type markers
+        for t, y in zip(proj_times, proj_vals):
+            ax.scatter(t, y, s=100, alpha=0.7,
+                       c='purple' if y > 0 else 'red',
+                       edgecolors='black', label='Forecast Round' if t == 1 else "")
+
+    # Decorate plot
+    ax.axhline(0, linestyle='--', color='black', alpha=0.5)
+    ax.set_xticks(list(hist_times) + list(proj_times) if 'proj_times' in locals() else list(hist_times))
+    ax.set_title("📡 Visual Fractal Anchor")
+    ax.set_xlabel("Relative Time (Rounds)")
+    ax.set_ylabel("MSI Value")
+    ax.legend()
+    plot_slot = st.empty()
+    with plot_slot.container():
+        st.pyplot(fig)
+
+    # Echo Signal Summary
+    st.metric("🧬 Fractal Match Score", f"{best_score:.3f}")
+    if best_future_types:
+        st.success(f"📈 Forecasted Round Types: {' '.join(best_future_types)}")
+        if best_future_types.count("P") + best_future_types.count("p") >= 2:
+            st.info("🔮 Forecast: Surge Mirror Likely")
+            st.session_state.last_anchor_type = "Pink"
+        elif best_future_types.count("B") >= 2:
+            st.warning("⚠️ Blue Collapse Forecast")
+            st.session_state.last_anchor_type = "Blue"
+        else:
+            st.info("🧘 Mixed or Neutral Pattern Incoming")
+            st.session_state.last_anchor_type = "Purple"
+    else:
+        st.session_state.last_anchor_type = "N/A"
+
+# =================== DATA ANALYSIS ========================
+@st.cache_data(show_spinner=False)
+def analyze_data(data, pink_threshold, window_size):
     df = data.copy()
-    
-    # Ensure timestamp column is datetime
     df["timestamp"] = pd.to_datetime(df["timestamp"])
-    
-    # Calculate type based on multiplier
     df["type"] = df["multiplier"].apply(lambda x: "Pink" if x >= pink_threshold else ("Purple" if x >= 2 else "Blue"))
-    
-    # Calculate score for MSI
-    df["score"] = df["multiplier"].apply(lambda x: 2 if x >= pink_threshold else (1 if x >= 2 else -1))
-    
-    # Calculate MSI (Momentum Score Index)
     df["msi"] = df["score"].rolling(window_size).sum()
     df["momentum"] = df["score"].cumsum()
     
-    # Calculate Bollinger Bands on MSI
-    df["bb_mid"], df["bb_upper"], df["bb_lower"] = compute_bollinger_bands(df["msi"], window_size)
+    # Define latest_msi safely
+    latest_msi = df["msi"].iloc[-1] if not df["msi"].isna().all() else 0
+    latest_tpi = compute_tpi(df, window=window_size)
     
-    # Calculate RSI
-    df["rsi"] = compute_rsi(df["score"], period=window_size)
     
-    # Calculate RSI Bands and Signal
-    df["rsi_mid"] = df["rsi"].rolling(window_size).mean()
-    df["rsi_std"] = df["rsi"].rolling(window_size).std()
+    df["bb_mid"]   = df["msi"].rolling(WINDOW_SIZE).mean()
+    df["bb_std"]   = df["msi"].rolling(WINDOW_SIZE).std()
+    df["bb_upper"] = df["bb_mid"] + 2 * df["bb_std"]
+    df["bb_lower"] = df["bb_mid"] - 2 * df["bb_std"]
+    df["bandwidth"] = df["bb_upper"] - df["bb_lower"]
+    
+    # === Detect Squeeze Zones (Low Volatility)
+    squeeze_threshold = df["bandwidth"].rolling(10).quantile(0.25)
+    df["squeeze_flag"] = df["bandwidth"] < squeeze_threshold
+    
+    # === Directional Breakout Detector
+    df["breakout_up"]   = df["msi"] > df["bb_upper"]
+    df["breakout_down"] = df["msi"] < df["bb_lower"]
+    
+    # === Slope & Acceleration
+    df["msi_slope"]  = df["msi"].diff()
+    df["msi_accel"]  = df["msi_slope"].diff()
+
+    # MSI CALCULATION (Momentum Score Index)
+    window_size = min(window_size, len(df))
+    recent_df = df.tail(window_size)
+    msi_score = recent_df['score'].mean() if not recent_df.empty else 0
+    msi_color = 'green' if msi_score > 0.5 else ('yellow' if msi_score > 0 else 'red')
+
+    # Multi-window BBs on MSI
+    df["bb_mid_20"], df["bb_upper_20"], df["bb_lower_20"] = bollinger_bands(df["msi"], 20, 2)
+    df["bb_mid_10"], df["bb_upper_10"], df["bb_lower_10"] = bollinger_bands(df["msi"], 10, 1.5)
+    df["bb_mid_40"], df["bb_upper_40"], df["bb_lower_40"] = bollinger_bands(df["msi"], 40, 2.5)
+    df['bandwidth'] = df["bb_upper_10"] - df["bb_lower_10"]  # Width of the band
+    
+    # Compute slope (1st derivative) for upper/lower bands
+    df['upper_slope'] = df["bb_upper_10"].diff()
+    df['lower_slope'] = df["bb_lower_10"].diff()
+    
+    # Compute acceleration (2nd derivative) for upper/lower bands
+    df['upper_accel'] = df['upper_slope'].diff()
+    df['lower_accel'] = df['lower_slope'].diff()
+    
+    # How fast the band is expanding or shrinking
+    df['bandwidth_delta'] = df['bandwidth'].diff()
+    
+    # Pull latest values from the last row
+    latest = df.iloc[-1] if not df.empty else pd.Series()
+
+    df["rsi"] = compute_rsi(df["score"], period=14)
+    
+    df["rsi_mid"]   = df["rsi"].rolling(14).mean()
+    df["rsi_std"]   = df["rsi"].rolling(14).std()
     df["rsi_upper"] = df["rsi_mid"] + 1.2 * df["rsi_std"]
     df["rsi_lower"] = df["rsi_mid"] - 1.2 * df["rsi_std"]
-    df["rsi_signal"] = df["rsi"].ewm(span=signal_period, adjust=False).mean()
+    df["rsi_signal"] = df["rsi"].ewm(span=7, adjust=False).mean()
     
-    # Calculate THRE values
-    thre_value, thre_slope = compute_thre(df["score"].values, sensitivity=thre_sensitivity)
-    df["thre_value"] = thre_value
-    df["thre_slope"] = thre_slope
+    # === Ichimoku Cloud on MSI ===
+    high_9  = df["msi"].rolling(window=9).max()
+    low_9   = df["msi"].rolling(window=9).min()
+    df["tenkan"] = (high_9 + low_9) / 2
     
-    # Generate TDI+THRE signals
-    df = generate_tdi_thre_signals(df)
+    high_26 = df["msi"].rolling(window=26).max()
+    low_26  = df["msi"].rolling(window=26).min()
+    df["kijun"] = (high_26 + low_26) / 2
     
-    # Calculate SuperTrend
-    df = compute_supertrend(df)
+    df["senkou_a"] = ((df["tenkan"] + df["kijun"]) / 2).shift(26)
     
-    # Calculate Ichimoku Cloud
-    df = compute_ichimoku(df)
+    high_52 = df["msi"].rolling(window=52).max()
+    low_52  = df["msi"].rolling(window=52).min()
+    df["senkou_b"] = ((high_52 + low_52) / 2).shift(26)
     
-    # Calculate processing time
-    processing_time = time.time() - start_time
+    df["chikou"] = df["msi"].shift(-26)
+    df = compute_supertrend(df, period=10, multiplier=2.0, source="msi")
     
-    return df, processing_time
+    
+    # Prepare and safely round/format outputs, avoiding NoneType formatting
+    def safe_round(val, precision=4):
+        return round(val, precision) if pd.notnull(val) else None
+    
+    # Initialize variables
+    upper_slope = (0, )
+    lower_slope = (0, )
+    upper_accel = (0, )
+    lower_accel = (0, )
+    bandwidth = (0, )
+    bandwidth_delta = (0, )
+        
+    if len(df["score"].fillna(0).values) > 20:
+        if upper_slope is not None:
+            upper_slope = safe_round(latest.get('upper_slope')) if 'upper_slope' in latest else 0 
+            lower_slope = safe_round(latest.get('lower_slope')) if 'lower_slope' in latest else 0
+            upper_accel = safe_round(latest.get('upper_accel')) if 'upper_accel' in latest else 0
+            lower_accel = safe_round(latest.get('lower_accel')) if 'lower_accel' in latest else 0
+            bandwidth = safe_round(latest.get('bandwidth')) if 'bandwidth' in latest else 0
+            bandwidth_delta = safe_round(latest.get('bandwidth_delta')) * 100 if 'bandwidth_delta' in latest else 0
+                
+        
+    
+    df["bb_squeeze"] = df["bb_upper_10"] - df["bb_lower_10"]
+    df["bb_squeeze_flag"] = df["bb_squeeze"] < df["bb_squeeze"].rolling(5).quantile(0.25)
+    
+    # Harmonic Cycle Estimation
+    scores = df["score"].fillna(0).values
+    N = len(scores)
+    T = 1
+    
+    # Initialize variables with safe defaults
+    dominant_cycle = None
+    current_round_position = None
+    harmonic_wave = []
+    micro_wave = np.zeros(N)
+    harmonic_forecast = []
+    forecast_times = []
+    wave_label = None
+    wave_pct = None
+    dom_slope = 0
+    micro_slope = 0
+    eis = 0
+    interference = "N/A"
+    micro_pct = None
+    micro_phase_label = "N/A"
+    micro_freq = 0
+    dominant_freq = 0
+    phase = []
+    micro_phase = []
+    micro_cycle_len = None
+    micro_position = None
+    micro_amplitude = 0
+    gamma_amplitude = 0
+    yf = None
+    xf = None
+    harmonic_waves = None
+    resonance_matrix = None
+    resonance_score = None
+    tension = None
+    entropy = None
+    resonance_forecast_vals = None
+    
+    # Harmonic Analysis
+    if N > 0:  # Ensure we have data
+        yf = rfft(scores - np.mean(scores))
+        xf = rfftfreq(N, T)
+        
+        # Always detect dominant cycle first
+        dominant_cycle = detect_dominant_cycle(scores)
+        
+        if dominant_cycle:
+            current_round_position = len(scores) % dominant_cycle
+            wave_label, wave_pct = get_phase_label(current_round_position, dominant_cycle)
+            
+            # Recompute FFT for wave fitting
+            idx_max = np.argmax(np.abs(yf[1:])) + 1 if len(yf) > 1 else 0
+            dominant_freq = xf[idx_max] if idx_max < len(xf) else 0
+            
+            # Harmonic wave fit + forecast
+            phase = np.angle(yf[idx_max]) if idx_max < len(yf) else 0
+            
+            # Harmonic Fit (Past)
+            x_past = np.arange(N)  # Safe, aligned x for past
+            harmonic_wave = np.sin(2 * np.pi * dominant_freq * x_past + phase)
+            dom_slope = np.polyfit(np.arange(N), harmonic_wave, 1)[0] if N > 1 else 0
+            
+            # Harmonic Forecast (Future)
+            forecast_len = 5
+            future_x = np.arange(N, N + forecast_len)
+            harmonic_forecast = np.sin(2 * np.pi * dominant_freq * future_x + phase)
+            forecast_times = [df["timestamp"].iloc[-1] + pd.Timedelta(seconds=5 * i) for i in range(forecast_len)]
+            
+            # Secondary harmonic (micro-wave) in 8–12 range
+            # Micro Wave Detection
+            if N > 1 and len(xf) > 1:
+                mask_micro = (xf > 0.08) & (xf < 0.15)
+                if np.any(mask_micro) and len(np.where(mask_micro)[0]) > 0:
+                    micro_indices = np.where(mask_micro)[0]
+                    if len(micro_indices) > 0 and len(yf) > max(micro_indices):
+                        micro_idx = micro_indices[np.argmax(np.abs(yf[micro_indices]))]
+                        micro_freq = xf[micro_idx]
+                        micro_phase = np.angle(yf[micro_idx])
+                        micro_wave = np.sin(2 * np.pi * micro_freq * np.arange(N) + micro_phase)
+                        micro_slope = np.polyfit(np.arange(N), micro_wave, 1)[0] if N > 1 else 0
+                        
+                        micro_amplitudes = np.abs(yf[micro_indices])
+                        micro_amplitude = np.max(micro_amplitudes) if len(micro_amplitudes) > 0 else 0
+                        
+                        micro_cycle_len = round(1 / micro_freq) if micro_freq else None
+                        micro_position = (N - 1) % micro_cycle_len + 1 if micro_cycle_len else None
+                        micro_phase_label, micro_pct = get_phase_label(micro_position, micro_cycle_len) if micro_cycle_len else ("N/A", None)
+            
+            # Energy Integrity Score (EIS)
+            blues = len(df[df["score"] < 0])
+            purples = len(df[(df["score"] == 1.0) | (df["score"] == 1.5)])
+            pinks = len(df[df["score"] >= 2.0])
+            eis = (purples * 1 + pinks * 2) - blues
+            
+            # Alignment test
+            if dom_slope > 0 and micro_slope > 0:
+                interference = "Constructive (Aligned)"
+            elif dom_slope * micro_slope < 0:
+                interference = "Destructive (Conflict)"
+            else:
+                interference = "Neutral or Unclear"
+            
+            # Channel Bounds (1-STD deviation)
+            amplitude = np.std(scores)
+            upper_channel = harmonic_forecast + amplitude
+            lower_channel = harmonic_forecast - amplitude
+            
+            gamma_amplitude = np.max(np.abs(yf)) if len(yf) > 0 else 0
+    
+    # Run resonance analysis if we have enough data
+    if N >= 10:  # Need at least 10 rounds
+        # Run super-powered harmonic scan
+        harmonic_waves, resonance_matrix, resonance_score, tension, entropy = multi_harmonic_resonance_analysis(df)
+        
+        # Predict next 5 rounds
+        resonance_forecast_vals = resonance_forecast(harmonic_waves, resonance_matrix) if harmonic_waves else None
+    
+    # Return all computed values
+    return (df, latest_msi, window_size, recent_df, msi_score, msi_color, latest_tpi, 
+            upper_slope, lower_slope, upper_accel, lower_accel, bandwidth, bandwidth_delta, 
+            dominant_cycle, current_round_position, wave_label, wave_pct, dom_slope, micro_slope, 
+            eis, interference, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, 
+            micro_pct, micro_phase_label, micro_freq, dominant_freq, phase, gamma_amplitude, 
+            micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
+            resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals)
 
 
-# =================== UI COMPONENTS ========================
+# =================== MSI CHART PLOTTING ========================
+def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times):
+    if len(df) < 2:
+        st.warning("Need at least 2 rounds to plot MSI chart.")
+        return
+        
+    # MSI with Bollinger Bands
+    st.subheader("MSI with Bollinger Bands")
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(df["timestamp"], df["msi"], label="MSI", color='black')
+    
+    # BB lines
+    ax.plot(df["timestamp"], df["bb_upper"], linestyle='--', color='green')
+    ax.plot(df["timestamp"], df["bb_lower"], linestyle='--', color='red')
+    ax.fill_between(df["timestamp"], df["bb_lower"], df["bb_upper"], color='gray', alpha=0.1)
+    ax.plot(df["timestamp"], df["bb_upper_10"], color='#0AEFFF', linestyle='--', label="upperBB", alpha=1.0)
+    ax.plot(df["timestamp"], df["bb_lower_10"], color='#0AEFFF', linestyle='--', alpha=1.0)
+   
+    ax.axhline(0, color='gray', linestyle=':')
+    
+    # Highlight squeeze
+    ax.scatter(df[df["squeeze_flag"]]["timestamp"], df[df["squeeze_flag"]]["msi"], color='purple', label="Squeeze", s=20)
+    
+    # Highlight breakouts
+    ax.scatter(df[df["breakout_up"]]["timestamp"], df[df["breakout_up"]]["msi"], color='lime', label="Breakout ↑", s=20)
+    ax.scatter(df[df["breakout_down"]]["timestamp"], df[df["breakout_down"]]["msi"], color='red', label="Breakout ↓", s=20)
+
+    # === Ichimoku Cloud Overlay ===
+    if show_ichimoku:
+        
+        ax.plot(df["timestamp"], df["tenkan"], label="Tenkan-Sen", color='blue', linestyle='-')
+        ax.plot(df["timestamp"], df["kijun"], label="Kijun-Sen", color='orange', linestyle='-')
+        
+        # Cloud fill (Senkou A and B)
+        ax.fill_between(df["timestamp"], df["senkou_a"], df["senkou_b"],
+                        where=(df["senkou_a"] >= df["senkou_b"]),
+                        interpolate=True, color='lightgreen', alpha=0.2, label="Kumo (Bullish)")
+        
+        ax.fill_between(df["timestamp"], df["senkou_a"], df["senkou_b"],
+                        where=(df["senkou_a"] < df["senkou_b"]),
+                        interpolate=True, color='red', alpha=0.2, label="Kumo (Bearish)")
+    
+    # === SuperTrend Line Overlay ===
+    if show_supertrend:
+        
+        ax.plot(df["timestamp"], df["supertrend"], color='lime' if df["trend"].iloc[-1] == 1 else 'red', linewidth=2, label="SuperTrend")
+        
+    # Buy/Sell markers
+    ax.scatter(df[df["buy_signal"]]["timestamp"], df[df["buy_signal"]]["msi"], marker="^", color="green", label="Buy Signal")
+    ax.scatter(df[df["sell_signal"]]["timestamp"], df[df["sell_signal"]]["msi"], marker="v", color="red", label="Sell Signal")
+        
+    
+    
+    ax.set_title("📊 MSI Volatility Tracker")
+    ax.legend()
+    plot_slot = st.empty()
+    with plot_slot.container():
+        st.pyplot(fig)
+            
+
+# =================== MAIN APP FUNCTIONALITY ========================
+# =================== FLOATING ADD ROUND UI ========================
+
+
+# Fast entry mode UI - simplified UI for mobile/quick decisions
 def fast_entry_mode_ui(pink_threshold):
-    """Fast entry mode UI component"""
     st.markdown("### ⚡ FAST ENTRY MODE")
     st.markdown("Quick enter rounds for rapid decision making")
     
     cols = st.columns(3)
     with cols[0]:
         if st.button("➕ Blue (1.5x)", use_container_width=True):
-            st.session_state.rounds.append({
+            st.session_state.roundsc.append({
                 "timestamp": datetime.now(),
                 "multiplier": 1.5,
                 "score": -1
@@ -303,7 +964,7 @@ def fast_entry_mode_ui(pink_threshold):
     
     with cols[1]:
         if st.button("➕ Purple (2x)", use_container_width=True):
-            st.session_state.rounds.append({
+            st.session_state.roundsc.append({
                 "timestamp": datetime.now(),
                 "multiplier": 2.0,
                 "score": 1
@@ -312,259 +973,12 @@ def fast_entry_mode_ui(pink_threshold):
     
     with cols[2]:
         if st.button(f"➕ Pink ({pink_threshold}x)", use_container_width=True):
-            st.session_state.rounds.append({
+            st.session_state.roundsc.append({
                 "timestamp": datetime.now(),
                 "multiplier": pink_threshold,
                 "score": 2
             })
             st.rerun()
-
-def thre_panel(df, thre_sensitivity):
-    """THRE panel component"""
-    st.subheader("🔬 True Harmonic Resonance Engine (THRE)")
-    if len(df) < 10: 
-        st.warning("Need at least 10 rounds to compute THRE.")
-        return
-    
-    # Extract THRE values and slopes
-    thre_value = df["thre_value"].values
-    thre_slope = df["thre_slope"].values
-    
-    # Create a two-panel plot for THRE
-    fig, ax = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
-    
-    # Plot THRE Value
-    ax[0].plot(df["timestamp"], thre_value, label="THRE Resonance", color='cyan')
-    ax[0].axhline(1.5, linestyle='--', color='green', alpha=0.5)
-    ax[0].axhline(0.5, linestyle='--', color='blue', alpha=0.3)
-    ax[0].axhline(-0.5, linestyle='--', color='orange', alpha=0.3)
-    ax[0].axhline(-1.5, linestyle='--', color='red', alpha=0.5)
-    ax[0].set_title("Composite Harmonic Resonance Strength")
-    ax[0].legend()
-    
-    # Plot THRE Slope
-    ax[1].plot(df["timestamp"], thre_slope, label="Δ Resonance Slope", color='purple')
-    ax[1].axhline(0, linestyle=':', color='gray')
-    ax[1].set_title("THRE Inflection Detector")
-    ax[1].legend()
-    
-    st.pyplot(fig)
-    
-    # Get latest values
-    latest_value = thre_value[-1] if len(thre_value) > 0 else 0
-    latest_slope = thre_slope[-1] if len(thre_slope) > 0 else 0
-    
-    # Display metrics
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("🧠 Resonance Strength", f"{latest_value:.3f}")
-    with col2:
-        st.metric("📉 Δ Slope", f"{latest_slope:.3f}")
-    
-    # Interpretation
-    if latest_value > 1.5:
-        st.success("💥 High Constructive Stack — Pink Burst Risk ↑")
-    elif latest_value > 0.5:
-        st.info("🟣 Purple Zone — Harmonically Supported")
-    elif latest_value < -1.5:
-        st.error("🌪️ Collapse Zone — Blue Train Likely")
-    elif latest_value < -0.5:
-        st.warning("⚠️ Destructive Micro-Waves — High Risk")
-    else:
-        st.info("⚖️ Neutral Zone — Mid-Range Expected")
-
-def plot_tdi_thre(df):
-    """Plot TDI with THRE-powered arrows"""
-    if len(df) < 5:
-        st.warning("Need at least 5 rounds to plot TDI.")
-        return
-    
-    # Create figure
-    fig, ax = plt.subplots(figsize=(10, 4))
-    
-    # Plot RSI and Signal Line
-    ax.plot(df["timestamp"], df["rsi"], label="RSI", color='black', linewidth=1.5)
-    ax.plot(df["timestamp"], df["rsi_signal"], label="Signal Line", color='orange', linestyle='--')
-    
-    # Plot RSI Bands
-    ax.plot(df["timestamp"], df["rsi_upper"], color='green', linestyle='--', alpha=0.5, label="RSI Upper Band")
-    ax.plot(df["timestamp"], df["rsi_lower"], color='red', linestyle='--', alpha=0.5, label="RSI Lower Band")
-    ax.fill_between(df["timestamp"], df["rsi_lower"], df["rsi_upper"], color='purple', alpha=0.1)
-    
-    # Plot reference lines
-    ax.axhline(50, color='black', linestyle=':')
-    ax.axhline(70, color='green', linestyle=':')
-    ax.axhline(30, color='red', linestyle=':')
-    
-    # Plot THRE-powered arrows if enabled
-    if show_tdi_arrows:
-        # Create signal columns if they don't exist
-        if 'entry_signal' not in df.columns:
-            # Define your entry signal logic here
-            df['entry_signal'] = ((df['rsi'] > df['rsi_signal']) &  # RSI crosses above signal
-                         (df['rsi'].shift(1) <= df['rsi_signal'].shift(1)) &  # Confirmed cross
-                         (df['thre_value'] > 0) &  # THRE support
-                         (df['thre_slope'] > 0))  # Positive slope
-
-        # Entry signals (green triangles)
-        entry_points = df[df['entry_signal']]
-        for idx, row in entry_points.iterrows():
-            # Size arrow based on signal strength
-            signal_size = min(150, max(50, 75 * abs(row['signal_strength'])))
-            ax.scatter(row['timestamp'], row['rsi'], marker='^', s=signal_size, 
-                      color='lime', edgecolor='darkgreen', linewidth=1, 
-                      alpha=0.8, zorder=5, label='_nolegend_')
-            
-        if 'exit_signal' not in df.columns:
-            df['exit_signal'] = ((df['rsi'] < df['rsi_signal']) &  # RSI crosses below signal
-                        (df['rsi'].shift(1) >= df['rsi_signal'].shift(1)) &  # Confirmed cross
-                        ((df['thre_value'] < 0) | (df['thre_slope'] < 0)))  # THRE negative or falling
-            
-        # Exit signals (red triangles)
-        exit_points = df[df['exit_signal']]
-        for idx, row in exit_points.iterrows():
-            signal_size = min(150, max(50, 75 * abs(row['signal_strength'])))
-            ax.scatter(row['timestamp'], row['rsi'], marker='v', s=signal_size, 
-                      color='red', edgecolor='darkred', linewidth=1, 
-                      alpha=0.8, zorder=5, label='_nolegend_')
-            
-        if 'bounce_signal' not in df.columns:
-            df['bounce_signal'] = ((df['rsi'] < df['rsi_lower']) &  # RSI below lower band
-                          (df['rsi'].shift(1) < df['rsi_lower'].shift(1)) &  # Was below
-                          (df['rsi'] > df['rsi'].shift(1)) &  # Starting to rise
-                          (df['thre_slope'] > df['thre_slope'].shift(1)))  # THRE slope improving
-            
-        # Bounce signals (blue diamonds)
-        bounce_points = df[df['bounce_signal']]
-        for idx, row in bounce_points.iterrows():
-            signal_size = min(150, max(50, 75 * abs(row['signal_strength'])))
-            ax.scatter(row['timestamp'], row['rsi'], marker='D', s=signal_size, 
-                      color='cyan', edgecolor='blue', linewidth=1, 
-                      alpha=0.8, zorder=5, label='_nolegend_')
-    
-    # Add legend with custom markers
-    if show_tdi_arrows:
-        # Check if any signals exist
-        signals_exist = any([
-            'entry_signal' in df.columns and not df['entry_signal'].empty,
-            'exit_signal' in df.columns and not df['exit_signal'].empty,
-            'bounce_signal' in df.columns and not df['bounce_signal'].empty
-        ])
-        
-        if signals_exist:
-            from matplotlib.lines import Line2D
-            custom_lines = [
-                Line2D([0], [0], marker='^', color='w', markerfacecolor='lime', markersize=10),
-                Line2D([0], [0], marker='v', color='w', markerfacecolor='red', markersize=10),
-                Line2D([0], [0], marker='D', color='w', markerfacecolor='cyan', markersize=10)
-            ]
-            custom_labels = ['Entry Signal', 'Exit Signal', 'Reversal/Bounce']
-            
-            # Add all legends
-            handles, labels = ax.get_legend_handles_labels()
-            ax.legend(handles + custom_lines, labels + custom_labels)
-    
-    if not show_tdi_arrows or not signals_exist:
-        ax.legend()
-    
-    ax.set_title("🧠 TDI+THRE Fusion Panel")
-    ax.set_xlabel("Time")
-    ax.set_ylabel("RSI Value")
-    
-    st.pyplot(fig)
-
-
-def plot_msi_chart(df):
-    """Plot MSI chart with indicators"""
-    if len(df) < 2:
-        st.warning("Need at least 2 rounds to plot MSI chart.")
-        return
-    
-    # Create figure
-    fig, ax = plt.subplots(figsize=(10, 5))
-    
-    # Plot MSI line
-    ax.plot(df["timestamp"], df["msi"], label="MSI", color='black')
-    
-    # Plot Bollinger Bands
-    ax.plot(df["timestamp"], df["bb_upper"], linestyle='--', color='green')
-    ax.plot(df["timestamp"], df["bb_lower"], linestyle='--', color='red')
-    ax.fill_between(df["timestamp"], df["bb_lower"], df["bb_upper"], color='gray', alpha=0.1)
-    
-    # Plot reference line
-    ax.axhline(0, color='gray', linestyle=':')
-    
-    # Plot Ichimoku if enabled
-    if show_ichimoku:
-        # Plot Tenkan and Kijun lines
-        ax.plot(df["timestamp"], df["tenkan"], label="Tenkan-Sen", color='blue', linestyle='-')
-        ax.plot(df["timestamp"], df["kijun"], label="Kijun-Sen", color='orange', linestyle='-')
-        
-        # Plot Cloud fill
-        mask = ~df["senkou_a"].isna() & ~df["senkou_b"].isna()
-        if mask.any():
-            ax.fill_between(df["timestamp"][mask], 
-                          df["senkou_a"][mask], df["senkou_b"][mask],
-                          where=(df["senkou_a"][mask] >= df["senkou_b"][mask]),
-                          interpolate=True, color='lightgreen', alpha=0.2, label="Kumo (Bullish)")
-            
-            ax.fill_between(df["timestamp"][mask], 
-                          df["senkou_a"][mask], df["senkou_b"][mask],
-                          where=(df["senkou_a"][mask] < df["senkou_b"][mask]),
-                          interpolate=True, color='red', alpha=0.2, label="Kumo (Bearish)")
-    
-    # Plot SuperTrend if enabled
-    if show_supertrend:
-        latest_trend = df["trend"].iloc[-1] if not df.empty else 1
-        trend_color = 'lime' if latest_trend == 1 else 'red'
-        ax.plot(df["timestamp"], df["supertrend"], color=trend_color, linewidth=2, label="SuperTrend")
-        
-        # Plot buy/sell markers
-        buy_signals = df[df["buy_signal"]]
-        sell_signals = df[df["sell_signal"]]
-        
-        ax.scatter(buy_signals["timestamp"], buy_signals["msi"], 
-                 marker="^", s=100, color="green", label="Buy Signal")
-        ax.scatter(sell_signals["timestamp"], sell_signals["msi"], 
-                 marker="v", s=100, color="red", label="Sell Signal")
-    
-    ax.set_title("📊 MSI Volatility Tracker")
-    ax.legend()
-    
-    st.pyplot(fig)
-
-def signal_statistics(df):
-    """Display signal statistics"""
-    if len(df) < 10:
-        st.warning("Need more data for signal statistics.")
-        return
-    
-    # Count signals
-    entry_count = df['entry_signal'].sum()
-    exit_count = df['exit_signal'].sum()
-    bounce_count = df['bounce_signal'].sum()
-    
-    # Calculate signal density (signals per round)
-    total_rounds = len(df)
-    signal_density = (entry_count + exit_count + bounce_count) / total_rounds
-    
-    # Calculate accuracy metrics if we have outcome data
-    # (This is a placeholder - in a real system you'd track outcomes)
-    accuracy = 0.0
-    if 'signal_correct' in df.columns:
-        accuracy = df['signal_correct'].mean()
-    
-    # Display metrics
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Entry Signals", f"{int(entry_count)}")
-        st.metric("Signal Density", f"{signal_density:.2f} per round")
-    with col2:
-        st.metric("Exit Signals", f"{int(exit_count)}")
-        if 'signal_correct' in df.columns:
-            st.metric("Signal Accuracy", f"{accuracy:.1%}")
-    with col3:
-        st.metric("Bounce Signals", f"{int(bounce_count)}")
 
 # =================== MAIN APP CODE ========================
 # Round Entry form
@@ -580,7 +994,7 @@ with col_entry:
     st.info(f"This will be recorded as a {round_type} round with score {score_value}")
     
     if st.button("➕ Add Round", use_container_width=True):
-        st.session_state.rounds.append({
+        st.session_state.roundsc.append({
             "timestamp": datetime.now(),
             "multiplier": mult,
             "score": score_value
@@ -592,50 +1006,180 @@ if FAST_ENTRY_MODE:
     fast_entry_mode_ui(PINK_THRESHOLD)
 
 # Convert rounds to DataFrame
-df = pd.DataFrame(st.session_state.rounds)
+df = pd.DataFrame(st.session_state.roundsc)
 
 # Main App Logic
 if not df.empty:
-    # Run analysis
-    processed_df, processing_time = analyze_data(
-        df, 
-        pink_threshold=PINK_THRESHOLD, 
-        window_size=WINDOW_SIZE,
-        signal_period=SIGNAL_PERIOD,
-        thre_sensitivity=THRE_SENSITIVITY
-    )
     
-    # Performance metrics
+    # Run analysis
+    (df, latest_msi, window_size, recent_df, msi_score, msi_color, latest_tpi, 
+     upper_slope, lower_slope, upper_accel, lower_accel, bandwidth, bandwidth_delta, 
+     dominant_cycle, current_round_position, wave_label, wave_pct, dom_slope, micro_slope, 
+     eis, interference, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, 
+     micro_pct, micro_phase_label, micro_freq, dominant_freq, phase, gamma_amplitude, 
+     micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
+     resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE)
+    
+    
+    # Check if we completed a cycle
+    if dominant_cycle and current_round_position == 0 and 'last_position' in st.session_state:
+        if st.session_state.last_position > 0:  # We completed a cycle
+            st.session_state.completed_cycles += 1
+    st.session_state.last_position = current_round_position if current_round_position is not None else 0
+    
+    # Calculate RRQI
+    rrqi_val = rrqi(df, 30)
+    
+    # Display metrics
     with col_hud:
         st.metric("Rounds Recorded", len(df))
-        st.metric("Processing Time", f"{processing_time*1000:.1f} ms")
         
-        # Calculate latest metrics
-        if len(processed_df) > 0:
-            latest_thre = processed_df["thre_value"].iloc[-1]
-            latest_slope = processed_df["thre_slope"].iloc[-1]
-            st.metric("THRE Value", f"{latest_thre:.2f}", delta=f"{latest_slope:.2f}")
     
     # Plot MSI Chart
-    plot_msi_chart(processed_df)
+    plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times)
+
+    with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
+        fig, ax = plt.subplots(figsize=(10, 4))
+        rsi = df["rsi"]
+        signal = df["rsi_signal"]
+        upper_band = df["rsi_upper"]
+        lower_band = df["rsi_lower"]
+        timestamps = df["timestamp"]
+        recs_margin = 1.5
+        
+        ax.plot(df["timestamp"], df["rsi"], label="RSI", color='black', linewidth=1.5)
+        ax.plot(df["timestamp"], df["rsi_signal"], label="Signal Line", color='orange', linestyle='--')
+        ax.plot(df["timestamp"], df["rsi_upper"], color='green', linestyle='--', alpha=0.5, label="RSI Upper Band")
+        ax.plot(df["timestamp"], df["rsi_lower"], color='red', linestyle='--', alpha=0.5, label="RSI Lower Band")
+        ax.fill_between(df["timestamp"], df["rsi_lower"], df["rsi_upper"], color='purple', alpha=0.1)
+        
+        ax.axhline(50, color='black', linestyle=':')  # Neutral RSI zone
+        ax.axhline(70, color='green', linestyle=':')  # Overbought
+        ax.axhline(30, color='red', linestyle=':')    # Oversold
+
+        # === RECS Detection Logic (Band Edge Labeling) ===
+        rec_labels = [None] * len(df)
     
-    # Plot TDI+THRE Panel
-    with st.expander("📈 TDI Panel with THRE-Powered Arrows", expanded=True):
-        plot_tdi_thre(processed_df)
-        if show_details:
-            signal_statistics(processed_df)
+        for i in range(len(rsi) - 2):
+            if pd.isna(rsi[i]) or pd.isna(signal[i]): continue
     
-    # Show THRE Panel if enabled
-    if show_thre:
+            rsi_now = rsi[i]
+            rsi_next = rsi[i + 1]
+            rsi_next2 = rsi[i + 2]
+            slope = rsi[i] - rsi[i - 1] if i > 0 else 0
+            ub = upper_band[i]
+            lb = lower_band[i]
+    
+            # 🔴 Burst
+            if rsi_now >= ub - recs_margin:
+                if rsi_next > rsi_now and rsi_next2 > rsi_next:
+                    rec_labels[i] = "🔴 Burst"
+    
+            # 🟢 Bounceback
+            elif rsi_now <= lb + recs_margin:
+                if rsi_next > rsi_now and slope < 0:
+                    rec_labels[i] = "🟢 Bounce"
+    
+            # 🟡 Fakeout
+            elif rsi_now >= ub - recs_margin:
+                if rsi_next < rsi_now and rsi_next2 >= ub - recs_margin:
+                    rec_labels[i] = "🟡 Fakeout"
+            elif rsi_now <= lb + recs_margin:
+                if rsi_next > rsi_now and rsi_next2 <= lb + recs_margin:
+                    rec_labels[i] = "🟡 Fakeout"
+    
+        # === Plot RECS Labels ===
+        for i, label in enumerate(rec_labels):
+            if label:
+                ax.annotate(label, (timestamps[i], rsi[i]),
+                            textcoords="offset points",
+                            xytext=(0, -10),
+                            ha='center', fontsize=11, fontweight='bold')
+        
+        ax.set_title("🧠 Trader’s Dynamic Index (RSI BB System)")
+        ax.legend()
+        st.pyplot(fig)
+    
+    
+
+        
+
+            
+
+    # === QUANTUM STRING DASHBOARD ===
+    
+    # === SHOW THRE PANEL IF ENABLED ===
+    if show_thre: 
         with st.expander("🔬 True Harmonic Resonance Engine (THRE)", expanded=False):
-            thre_panel(processed_df, THRE_SENSITIVITY)
+            (df, latest_rds, latest_delta, smooth_rds) = thre_panel(df)
+            
+       
+        
+             
     
-    # Recent rounds log
+    # === SHOW COSINE PHASE PANEL IF ENABLED ===
+    
+    
+    # === SHOW RQCF PANEL IF ENABLED ===
+    
+    
+    # === SHOW FPM PANEL IF ENABLED ===
+    if show_fpm: 
+        with st.expander("🧬 Fractal Pulse Matcher Panel (FPM)", expanded=False):
+            fpm_panel(df)
+    
+    # === SHOW FRACTAL ANCHOR IF ENABLED ===
+    if show_anchor: 
+        with st.expander("🔗 Fractal Anchoring Visualizer", expanded=False):
+            fractal_anchor_visualizer(df)
+    
+    # === DECISION HUD PANEL ===
+    
+    
+    # === RRQI STATUS ===
+    st.metric("🧠 RRQI", rrqi_val, delta="Last 30 rounds")
+    if rrqi_val >= 0.3:
+        st.success("🔥 Happy Hour Detected — Tactical Entry Zone")
+    elif rrqi_val <= -0.2:
+        st.error("⚠️ Dead Zone — Avoid Aggressive Entries")
+    else:
+        st.info("⚖️ Mixed Zone — Scout Cautiously")
+    
+    # === WAVE ANALYSIS PANEL ===
+    
+    
+    # === BOLLINGER BANDS STATS ===
+    with st.expander("💹 Bollinger Bands Stats", expanded=False):
+        st.subheader("💹 Bollinger Bands Stats")
+        if upper_slope is not None:
+            st.metric("Upper Slope", f"{upper_slope}%")
+            st.metric("Upper Acceleration", f"{upper_accel}%")
+            st.metric("Lower Slope", f"{lower_slope}%")
+            st.metric("Lower Acceleration", f"{lower_accel}%")
+            st.metric("Bandwidth", f"{bandwidth} Scale (0-20)")
+            st.metric("Bandwidth Delta", f"{bandwidth_delta}% shift from last round")
+        else:
+            st.info("Not enough data for Bollinger Band metrics")
+    
+    # === TPI INTERPRETATION HUD ===
+    st.metric("TPI", f"{latest_tpi}", delta="Trend Pressure")
+    if latest_msi >= 3:
+        if latest_tpi > 0.5:
+            st.success("🔥 Valid Surge — Pressure Confirmed")
+        elif latest_tpi < -0.5:
+            st.warning("⚠️ Hollow Surge — Likely Trap")
+        else:
+            st.info("🧐 Weak Surge — Monitor Closely")
+    else:
+        st.info("Trend too soft — TPI not evaluated.")
+    
+    # === LOG/EDIT ROUNDS ===
     with st.expander("📄 Review / Edit Recent Rounds", expanded=False):
         edited = st.data_editor(df.tail(30), use_container_width=True, num_rows="dynamic")
         if st.button("✅ Commit Edits"):
-            st.session_state.rounds = edited.to_dict('records')
+            st.session_state.roundsc = edited.to_dict('records')
             st.rerun()
 
 else:
     st.info("Enter at least 1 round to begin analysis.")
+
