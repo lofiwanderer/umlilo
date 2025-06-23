@@ -8,7 +8,7 @@ def plot_thre_fused_tdi(df, thre_vals, period=14, signal_period=2):
 
     # Step 1: RSI Calculation
     delta = series.diff()
-    gain = delta.clip(lower=0))
+    gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
 
     avg_gain = gain.rolling(period).mean()
