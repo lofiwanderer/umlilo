@@ -15,6 +15,7 @@ from scipy.signal import hilbert
 import math
 from sklearn.metrics.pairwise import cosine_similarity
 from matplotlib import gridspec
+from thre_fused_tdi_module import plot_thre_fused_tdi
 #import morlet_phase_enhancement
 #from morlet_phase_enhancement import morlet_phase_panel
 
@@ -1070,7 +1071,7 @@ if not df.empty:
        
         
              
-    
+    plot_thre_fused_tdi(df, thre_vals=your_smooth_rds_array)
     # === SHOW COSINE PHASE PANEL IF ENABLED ===
     
     
