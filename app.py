@@ -1057,34 +1057,7 @@ if not df.empty:
         ax.axhline(70, color='green', linestyle=':')  # Overbought
         ax.axhline(30, color='red', linestyle=':')    # Oversold
 
-        # === Inline RSI Inflection + Energy State Prediction ===
-        slope = rsi.diff()
-        inflection = slope.diff()
-        rsi_smooth = rsi.rolling(3, min_periods=1).mean()
-        energy_band = rsi_smooth - rsi_smooth.mean()
-        energy_score = energy_band.rolling(3, min_periods=1).mean()
-    
-        for i in range(2, len(df)):
-            s = slope.iloc[i]
-            d2 = inflection.iloc[i]
-            energy = energy_score.iloc[i]
-    
-            signal_strength = (s * 0.5) + (d2 * 0.3) + (energy * 1.2)
-    
-            if signal_strength > 1.5:
-                label = "💥 UP Surge"
-            elif signal_strength < -1.5:
-                label = "🌪️ Collapse"
-            elif signal_strength > 0:
-                label = "🟢 Mild Up"
-            elif signal_strength < 0:
-                label = "🔴 Mild Down"
-            else:
-                label = "⚪ Neutral"
-    
-            ax.annotate(label, (timestamps.iloc[i], rsi.iloc[i]),
-                        textcoords="offset points", xytext=(0, 10), fontsize=9,
-                        ha='center', alpha=0.9)
+        
         
         ax.set_title("🧠 Trader’s Dynamic Index (RSI BB System)")
         ax.legend()
