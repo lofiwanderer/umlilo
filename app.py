@@ -1057,44 +1057,34 @@ if not df.empty:
         ax.axhline(70, color='green', linestyle=':')  # Overbought
         ax.axhline(30, color='red', linestyle=':')    # Oversold
 
-        # === RECS Detection Logic (Band Edge Labeling) ===
-        rec_labels = [None] * len(df)
+        # === Inline RSI Inflection + Energy State Prediction ===
+        slope = rsi.diff()
+        inflection = slope.diff()
+        rsi_smooth = rsi.rolling(3, min_periods=1).mean()
+        energy_band = rsi_smooth - rsi_smooth.mean()
+        energy_score = energy_band.rolling(3, min_periods=1).mean()
     
-        for i in range(len(rsi) - 2):
-            if pd.isna(rsi[i]) or pd.isna(signal[i]): continue
+        for i in range(2, len(df)):
+            s = slope.iloc[i]
+            d2 = inflection.iloc[i]
+            energy = energy_score.iloc[i]
     
-            rsi_now = rsi[i]
-            rsi_next = rsi[i + 1]
-            rsi_next2 = rsi[i + 2]
-            slope = rsi[i] - rsi[i - 1] if i > 0 else 0
-            ub = upper_band[i]
-            lb = lower_band[i]
+            signal_strength = (s * 0.5) + (d2 * 0.3) + (energy * 1.2)
     
-            # 🔴 Burst
-            if rsi_now >= ub - recs_margin:
-                if rsi_next > rsi_now and rsi_next2 > rsi_next:
-                    rec_labels[i] = "🔴 Burst"
+            if signal_strength > 1.5:
+                label = "💥 UP Surge"
+            elif signal_strength < -1.5:
+                label = "🌪️ Collapse"
+            elif signal_strength > 0:
+                label = "🟢 Mild Up"
+            elif signal_strength < 0:
+                label = "🔴 Mild Down"
+            else:
+                label = "⚪ Neutral"
     
-            # 🟢 Bounceback
-            elif rsi_now <= lb + recs_margin:
-                if rsi_next > rsi_now and slope < 0:
-                    rec_labels[i] = "🟢 Bounce"
-    
-            # 🟡 Fakeout
-            elif rsi_now >= ub - recs_margin:
-                if rsi_next < rsi_now and rsi_next2 >= ub - recs_margin:
-                    rec_labels[i] = "🟡 Fakeout"
-            elif rsi_now <= lb + recs_margin:
-                if rsi_next > rsi_now and rsi_next2 <= lb + recs_margin:
-                    rec_labels[i] = "🟡 Fakeout"
-    
-        # === Plot RECS Labels ===
-        for i, label in enumerate(rec_labels):
-            if label:
-                ax.annotate(label, (timestamps[i], rsi[i]),
-                            textcoords="offset points",
-                            xytext=(0, -10),
-                            ha='center', fontsize=11, fontweight='bold')
+            ax.annotate(label, (timestamps.iloc[i], rsi.iloc[i]),
+                        textcoords="offset points", xytext=(0, 10), fontsize=9,
+                        ha='center', alpha=0.9)
         
         ax.set_title("🧠 Trader’s Dynamic Index (RSI BB System)")
         ax.legend()
