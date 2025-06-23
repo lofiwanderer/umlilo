@@ -442,7 +442,7 @@ def thre_panel(df):
     elif latest_rds < -0.5: st.warning("⚠️ Destructive Micro-Waves — High Risk")
     else: st.info("⚖️ Neutral Zone — Mid-Range Expected")
     
-    return (df, latest_rds, latest_delta)
+    return (df, latest_rds, latest_delta, smooth_rds)
     
 @st.cache_data   
 def compute_surge_probability(thre_val, delta_slope, fnr_index):
@@ -1066,12 +1066,13 @@ if not df.empty:
     # === SHOW THRE PANEL IF ENABLED ===
     if show_thre: 
         with st.expander("🔬 True Harmonic Resonance Engine (THRE)", expanded=False):
-            (df, latest_rds, latest_delta) = thre_panel(df)
+            (df, latest_rds, latest_delta, smooth_rds) = thre_panel(df)
             
        
         
              
-    plot_thre_fused_tdi(df, thre_vals=latest_rds)
+    thre_vals = smooth_rds[-len(df):].reset_index(drop=True)
+    plot_thre_fused_tdi(df.reset_index(drop=True), thre_vals=thre_vals)
     # === SHOW COSINE PHASE PANEL IF ENABLED ===
     
     
