@@ -404,8 +404,9 @@ def plot_tdi_thre(df):
             df['entry_signal'] = ((df['rsi'] > df['rsi_signal']) &  # RSI crosses above signal
                          (df['rsi'].shift(1) <= df['rsi_signal'].shift(1)) &  # Confirmed cross
                          (df['thre_value'] > 0) &  # THRE support
-                         (df['thre_slope'] > 0))  # Positive slope)
+                         (df['thre_slope'] > 0))  # Positive slope
 
+        # Entry signals (green triangles)
         entry_points = df[df['entry_signal']]
         for idx, row in entry_points.iterrows():
             # Size arrow based on signal strength
@@ -442,19 +443,28 @@ def plot_tdi_thre(df):
                       alpha=0.8, zorder=5, label='_nolegend_')
     
     # Add legend with custom markers
-    if show_tdi_arrows and not df[['entry_signal', 'exit_signal', 'bounce_signal']].empty.all().all():
-        from matplotlib.lines import Line2D
-        custom_lines = [
-            Line2D([0], [0], marker='^', color='w', markerfacecolor='lime', markersize=10),
-            Line2D([0], [0], marker='v', color='w', markerfacecolor='red', markersize=10),
-            Line2D([0], [0], marker='D', color='w', markerfacecolor='cyan', markersize=10)
-        ]
-        custom_labels = ['Entry Signal', 'Exit Signal', 'Reversal/Bounce']
+    if show_tdi_arrows:
+        # Check if any signals exist
+        signals_exist = any([
+            'entry_signal' in df.columns and not df['entry_signal'].empty,
+            'exit_signal' in df.columns and not df['exit_signal'].empty,
+            'bounce_signal' in df.columns and not df['bounce_signal'].empty
+        ])
         
-        # Add all legends
-        handles, labels = ax.get_legend_handles_labels()
-        ax.legend(handles + custom_lines, labels + custom_labels)
-    else:
+        if signals_exist:
+            from matplotlib.lines import Line2D
+            custom_lines = [
+                Line2D([0], [0], marker='^', color='w', markerfacecolor='lime', markersize=10),
+                Line2D([0], [0], marker='v', color='w', markerfacecolor='red', markersize=10),
+                Line2D([0], [0], marker='D', color='w', markerfacecolor='cyan', markersize=10)
+            ]
+            custom_labels = ['Entry Signal', 'Exit Signal', 'Reversal/Bounce']
+            
+            # Add all legends
+            handles, labels = ax.get_legend_handles_labels()
+            ax.legend(handles + custom_lines, labels + custom_labels)
+    
+    if not show_tdi_arrows or not signals_exist:
         ax.legend()
     
     ax.set_title("🧠 TDI+THRE Fusion Panel")
