@@ -398,7 +398,14 @@ def plot_tdi_thre(df):
     
     # Plot THRE-powered arrows if enabled
     if show_tdi_arrows:
-        # Entry signals (green triangles)
+        # Create signal columns if they don't exist
+        if 'entry_signal' not in df.columns:
+            # Define your entry signal logic here
+            df['entry_signal'] = ((df['rsi'] > df['rsi_signal']) &  # RSI crosses above signal
+                         (df['rsi'].shift(1) <= df['rsi_signal'].shift(1)) &  # Confirmed cross
+                         (df['thre_value'] > 0) &  # THRE support
+                         (df['thre_slope'] > 0))  # Positive slope)
+
         entry_points = df[df['entry_signal']]
         for idx, row in entry_points.iterrows():
             # Size arrow based on signal strength
@@ -406,7 +413,12 @@ def plot_tdi_thre(df):
             ax.scatter(row['timestamp'], row['rsi'], marker='^', s=signal_size, 
                       color='lime', edgecolor='darkgreen', linewidth=1, 
                       alpha=0.8, zorder=5, label='_nolegend_')
-        
+            
+        if 'exit_signal' not in df.columns:
+            df['exit_signal'] = ((df['rsi'] < df['rsi_signal']) &  # RSI crosses below signal
+                        (df['rsi'].shift(1) >= df['rsi_signal'].shift(1)) &  # Confirmed cross
+                        ((df['thre_value'] < 0) | (df['thre_slope'] < 0)))  # THRE negative or falling
+            
         # Exit signals (red triangles)
         exit_points = df[df['exit_signal']]
         for idx, row in exit_points.iterrows():
@@ -414,7 +426,13 @@ def plot_tdi_thre(df):
             ax.scatter(row['timestamp'], row['rsi'], marker='v', s=signal_size, 
                       color='red', edgecolor='darkred', linewidth=1, 
                       alpha=0.8, zorder=5, label='_nolegend_')
-        
+            
+        if 'bounce_signal' not in df.columns:
+            df['bounce_signal'] = ((df['rsi'] < df['rsi_lower']) &  # RSI below lower band
+                          (df['rsi'].shift(1) < df['rsi_lower'].shift(1)) &  # Was below
+                          (df['rsi'] > df['rsi'].shift(1)) &  # Starting to rise
+                          (df['thre_slope'] > df['thre_slope'].shift(1)))  # THRE slope improving
+            
         # Bounce signals (blue diamonds)
         bounce_points = df[df['bounce_signal']]
         for idx, row in bounce_points.iterrows():
