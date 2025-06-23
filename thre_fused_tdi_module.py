@@ -3,22 +3,27 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def plot_thre_fused_tdi(df, thre_vals, rsi_period=13, signal_period=2, bb_range=5):
+def plot_thre_fused_tdi(df, thre_vals, period=14, signal_period=2):
     prices = df["multiplier"].values
 
     # Step 1: RSI Calculation
-    delta = np.diff(prices, prepend=prices[0])
-    gain = np.where(delta > 0, delta, 0)
-    loss = np.where(delta < 0, -delta, 0)
+    delta = series.diff()
+    gain = delta.clip(lower=0))
+    loss = -delta.clip(upper=0)
 
-    avg_gain = pd.Series(gain).rolling(rsi_period).mean()
-    avg_loss = pd.Series(loss).rolling(rsi_period).mean()
+    avg_gain = gain.rolling(period).mean()
+    avg_loss = loss.rolling(period).mean()
 
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
-    rsi_signal = rsi.rolling(signal_period).mean()
-    upper_band = rsi_signal + bb_range
-    lower_band = rsi_signal - bb_range
+    #rsi_signal = rsi.rolling(signal_period).mean()
+    #upper_band = rsi_signal + bb_range
+    #lower_band = rsi_signal - bb_range
+    rsi_mid   = rsi.rolling(14).mean()
+    rsi_std   = rsi.rolling(14).std()
+    upper_band = rsi_mid + 1.2 * rsi_std
+    lower_band = rsi_mid - 1.2 * rsi_std
+    rsi_signal  = rsi.ewm(span=7, adjust=False).mean()
 
     # Step 2: THRE slope (inflection detector)
     thre_vals = pd.Series(thre_vals).fillna(method='ffill').fillna(0)
@@ -68,10 +73,10 @@ def plot_thre_fused_tdi(df, thre_vals, rsi_period=13, signal_period=2, bb_range=
 
     # Step 4: Plotting
     fig, ax = plt.subplots(figsize=(12, 6))
-    ax.plot(rsi, label='RSI', color='cyan')
-    ax.plot(rsi_signal, label='Signal', color='orange', linestyle='--')
+    ax.plot(rsi, label='RSI', color='black')
+    ax.plot(rsi_signal, label='Signal', color='brown', linestyle='--')
     ax.plot(upper_band, color='gray', linestyle=':', label='Upper Band')
-    ax.plot(lower_band, color='gray', linestyle=':', label='Lower Band')
+    ax.plot(lower_band, color='red', linestyle=':', label='Lower Band')
 
     # Entry Arrows 🔼
     for i, val in enumerate(entry_arrows):
