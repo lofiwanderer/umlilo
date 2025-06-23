@@ -1071,7 +1071,7 @@ if not df.empty:
        
         
              
-    plot_thre_fused_tdi(df, thre_vals=your_smooth_rds_array)
+    plot_thre_fused_tdi(df, thre_vals=latest_rds)
     # === SHOW COSINE PHASE PANEL IF ENABLED ===
     
     
