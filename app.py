@@ -1071,7 +1071,7 @@ if not df.empty:
        
         
              
-    thre_vals = smooth_rds[-len(df):].reset_index(drop=True)
+    thre_vals = pd.Series(smooth_rds)[-len(df):].reset_index(drop=True)
     plot_thre_fused_tdi(df.reset_index(drop=True), thre_vals=thre_vals)
     # === SHOW COSINE PHASE PANEL IF ENABLED ===
     
