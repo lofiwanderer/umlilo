@@ -393,7 +393,7 @@ def thre_panel(df):
     st.subheader("🔬 True Harmonic Resonance Engine (THRE)")
     if len(df) < 20: 
         st.warning("Need at least 20 rounds to compute THRE.")
-        return df, None, None
+        return df, None, None, []
         
     scores = df["score"].fillna(0).values
     N = len(scores)
