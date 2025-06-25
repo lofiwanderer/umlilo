@@ -51,6 +51,18 @@ with st.sidebar:
     WINDOW_SIZE = st.slider("MSI Window Size", 5, 100, 20)
     PINK_THRESHOLD = st.number_input("Pink Threshold", value=10.0)
     STRICT_RTT = st.checkbox("Strict RTT Mode", value=False)
+    selected_window = st.sidebar.selectbox(
+    "Select Fibonacci Analysis Window",
+    options=[3, 5, 8, 13, 21, 34, 55],
+    index=5  # default to 34
+    )
+    for sc in spiral_centers:
+        st.markdown(f"""
+        🌀 **Natural Spiral Detected**
+        - Round Index: `{sc['round_index']}`
+        - Type: **{sc['label']}**
+        - Confirmations: `{sc['confirmations']}`
+        """)
     st.header("📉 Indicator Visibility")
 
     show_supertrend = st.checkbox("🟢 Show SuperTrend", value=True)
@@ -112,46 +124,63 @@ def get_phase_label(position, cycle_length):
 
 
     
-FIB_NUMBERS = [1, 2, 3, 5, 8, 13, 21, 34]  # Fibonacci intervals
+FIB_NUMBERS = [3, 5, 8, 13, 21, 34, 55]
 
-class FibonacciFractalScanner:
-    def __init__(self, round_df, max_window=34):
-        self.df = round_df.tail(max_window).reset_index(drop=True)
-        self.df["round_index"] = self.df.index  # local round time
-        self.patterns = defaultdict(list)
-        self.spiral_centers = []
+class NaturalFibonacciSpiralDetector:
+    def __init__(self, df, window_size=34):
+        self.df = df.tail(window_size).reset_index(drop=True)
+        self.df["round_index"] = self.df.index
+        self.window_size = window_size
+        self.spiral_candidates = []
 
-    def detect_fib_patterns(self):
+    def detect_spirals(self):
+        score_types = [-1, 1, 2]  # Blue, Purple, Pink
         scores = self.df["score"].fillna(0).values
 
-        for target_score in [-1, 1, 2]:  # Blue, Purple, Pink
-            idxs = [i for i, val in enumerate(scores) if val == target_score]
+        for score_type in score_types:
+            idxs = [i for i, val in enumerate(scores) if val == score_type]
 
+            # Check for Fibonacci Gaps within this score type
             for i in range(len(idxs)):
                 for j in range(i + 1, len(idxs)):
                     gap = idxs[j] - idxs[i]
                     if gap in FIB_NUMBERS:
-                        self.patterns[target_score].append((idxs[i], idxs[j], gap))
-
-        return self.patterns
-
-    def find_spiral_centers(self, min_confirmations=2):
-        for score_type, connections in self.patterns.items():
-            if len(connections) >= min_confirmations:
-                centers = [(i + j) // 2 for (i, j, _) in connections]
-                for center_idx in centers:
-                    if center_idx < len(self.df):
-                        self.spiral_centers.append({
-                            "center_index": center_idx,
-                            "round_index": self.df.loc[center_idx, "round_index"],
-                            "timestamp": self.df.loc[center_idx, "timestamp"],
+                        self.spiral_candidates.append({
                             "score_type": score_type,
-                            "label": self.label_score(score_type),
-                            "connections": len(connections)
+                            "start_idx": idxs[i],
+                            "end_idx": idxs[j],
+                            "gap": gap,
+                            "center_idx": (idxs[i] + idxs[j]) // 2
                         })
-        return self.spiral_centers
 
-    def label_score(self, s):
+        return self._select_strongest_spirals()
+
+    def _select_strongest_spirals(self, max_spirals=3):
+        centers = defaultdict(int)
+
+        # Count how often each center index appears
+        for candidate in self.spiral_candidates:
+            centers[candidate["center_idx"]] += 1
+
+        # Sort by frequency (descending)
+        top_centers = sorted(centers.items(), key=lambda x: -x[1])[:max_spirals]
+        spiral_centers = []
+
+        for center_idx, freq in top_centers:
+            ts = self.df.loc[center_idx, "timestamp"]
+            label = self._label_score(self.df.loc[center_idx, "score"])
+            spiral_centers.append({
+                "center_index": center_idx,
+                "round_index": center_idx,
+                "timestamp": ts,
+                "score_type": self.df.loc[center_idx, "score"],
+                "label": label,
+                "confirmations": freq
+            })
+
+        return spiral_centers
+
+    def _label_score(self, s):
         return { -1: "Blue", 1: "Purple", 2: "Pink" }.get(s, "Unknown")
     
     
@@ -879,9 +908,10 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         ax.scatter(df[df["sell_signal"]]["timestamp"], df[df["sell_signal"]]["msi"], marker="v", color="red", label="Sell Signal")
             
     for sc in spiral_centers:
-        ts = pd.to_datetime(sc["timestamp"])  # ← Enforces clean scalar datetime
+        
+        ts = pd.to_datetime(sc["timestamp"])  # ensures scalar timestamp
         color = { "Pink": "magenta", "Purple": "orange", "Blue": "blue" }.get(sc["label"], "gray")
-
+    
         ax.axvline(ts, linestyle='--', color=color, alpha=0.6)
         ax.text(ts, df["msi"].max() * 0.9, f"🌀 {sc['label']}", rotation=90,
                 fontsize=8, ha='center', va='top', color=color)
@@ -970,9 +1000,9 @@ if not df.empty:
      micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
      resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE)
     
-    scanner = FibonacciFractalScanner(df)
-    scanner.detect_fib_patterns()
-    spiral_centers = scanner.find_spiral_centers()
+    spiral_detector = NaturalFibonacciSpiralDetector(df, window_size=selected_window)
+    spiral_centers = spiral_detector.detect_spirals()
+    
     # Check if we completed a cycle
     if dominant_cycle and current_round_position == 0 and 'last_position' in st.session_state:
         if st.session_state.last_position > 0:  # We completed a cycle
