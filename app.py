@@ -114,7 +114,7 @@ def get_phase_label(position, cycle_length):
     
 FIB_NUMBERS = [1, 2, 3, 5, 8, 13, 21, 34]  # Golden structure intervals
 
-@st.cache_data
+
 class FibonacciFractalScanner:
     def __init__(self, round_df, max_window=34):
         self.df = round_df.tail(max_window).reset_index(drop=True)
