@@ -884,7 +884,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         ax.scatter(df[df["sell_signal"]]["timestamp"], df[df["sell_signal"]]["msi"], marker="v", color="red", label="Sell Signal")
             
     for sc in spiral_centers:
-        ts = df["timestamp"].iloc[round_index]
+        ts = df["timestamp"].iloc[df["round_index"]]
         color = { "Pink": "magenta", "Purple": "orange", "Blue": "blue" }.get(sc["label"], "gray")
 
         ax.axvline(ts, linestyle='--', color=color, alpha=0.6)
