@@ -56,13 +56,7 @@ with st.sidebar:
     options=[3, 5, 8, 13, 21, 34, 55],
     index=5  # default to 34
     )
-    for sc in spiral_centers:
-        st.markdown(f"""
-        🌀 **Natural Spiral Detected**
-        - Round Index: `{sc['round_index']}`
-        - Type: **{sc['label']}**
-        - Confirmations: `{sc['confirmations']}`
-        """)
+    
     st.header("📉 Indicator Visibility")
 
     show_supertrend = st.checkbox("🟢 Show SuperTrend", value=True)
@@ -1019,6 +1013,13 @@ if not df.empty:
     
     # Plot MSI Chart
     plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, spiral_centers=spiral_centers)
+    for sc in spiral_centers:
+        st.markdown(f"""
+        🌀 **Natural Spiral Detected**
+        - Round Index: `{sc['round_index']}`
+        - Type: **{sc['label']}**
+        - Confirmations: `{sc['confirmations']}`
+        """)
 
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
         fig, ax = plt.subplots(figsize=(10, 4))
