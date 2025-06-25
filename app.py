@@ -1046,6 +1046,13 @@ if not df.empty:
         - Type: **{sc['label']}**
         - Confirmations: `{sc['confirmations']}`
         """)
+    for e in spiral_echoes:
+        st.markdown(f"""
+        🟡 **Echo from {e['source_label']} Spiral**
+        - Echo Round: `{e['echo_round']}`
+        - Gap: `{e['gap']} rounds`
+        - Timestamp: `{e['timestamp']}`
+        """)
 
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
         fig, ax = plt.subplots(figsize=(10, 4))
