@@ -112,19 +112,19 @@ def get_phase_label(position, cycle_length):
 
 
     
-FIB_NUMBERS = [1, 2, 3, 5, 8, 13, 21, 34]  # Golden structure intervals
-
+FIB_NUMBERS = [1, 2, 3, 5, 8, 13, 21, 34]  # Fibonacci intervals
 
 class FibonacciFractalScanner:
     def __init__(self, round_df, max_window=34):
         self.df = round_df.tail(max_window).reset_index(drop=True)
+        self.df["round_index"] = self.df.index  # local round time
         self.patterns = defaultdict(list)
         self.spiral_centers = []
 
     def detect_fib_patterns(self):
         scores = self.df["score"].fillna(0).values
 
-        for target_score in [-1, 1, 2]:
+        for target_score in [-1, 1, 2]:  # Blue, Purple, Pink
             idxs = [i for i, val in enumerate(scores) if val == target_score]
 
             for i in range(len(idxs)):
@@ -133,27 +133,22 @@ class FibonacciFractalScanner:
                     if gap in FIB_NUMBERS:
                         self.patterns[target_score].append((idxs[i], idxs[j], gap))
 
-
         return self.patterns
 
     def find_spiral_centers(self, min_confirmations=2):
-        # Scan each score type
         for score_type, connections in self.patterns.items():
             if len(connections) >= min_confirmations:
-                # Find midpoint of repeating Fibonacci connections
                 centers = [(i + j) // 2 for (i, j, _) in connections]
                 for center_idx in centers:
-                    ts = self.df.loc[center_idx, "timestamp"]
-                    round_id = self.df.loc[center_idx, "round_index"]
-
-                    self.spiral_centers.append({
-                        "center_index": center_idx,
-                        "round_index": round_id,
-                        "timestamp": ts,
-                        "score_type": score_type,
-                        "connections": len(connections),
-                        "label": self.label_score(score_type)
-                    })
+                    if center_idx < len(self.df):
+                        self.spiral_centers.append({
+                            "center_index": center_idx,
+                            "round_index": self.df.loc[center_idx, "round_index"],
+                            "timestamp": self.df.loc[center_idx, "timestamp"],
+                            "score_type": score_type,
+                            "label": self.label_score(score_type),
+                            "connections": len(connections)
+                        })
         return self.spiral_centers
 
     def label_score(self, s):
@@ -884,7 +879,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         ax.scatter(df[df["sell_signal"]]["timestamp"], df[df["sell_signal"]]["msi"], marker="v", color="red", label="Sell Signal")
             
     for sc in spiral_centers:
-        ts = df["timestamp"].iloc[df["round_index"]]
+        ts = pd.to_datetime(sc["timestamp"])  # ← Enforces clean scalar datetime
         color = { "Pink": "magenta", "Purple": "orange", "Blue": "blue" }.get(sc["label"], "gray")
 
         ax.axvline(ts, linestyle='--', color=color, alpha=0.6)
