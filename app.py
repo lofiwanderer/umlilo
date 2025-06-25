@@ -4,11 +4,14 @@ import numpy as np
 import scipy
 import scipy.stats as stats
 import sklearn
-import pywt
+#import pywt
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
+from datetime import timedelta
+#import collections
+from collections import defaultdict
 from scipy.fft import rfft, rfftfreq
 from scipy.signal import find_peaks, peak_widths
 from scipy.signal import hilbert
@@ -107,70 +110,55 @@ def get_phase_label(position, cycle_length):
     else:
         return "End Phase", pct
 
+
+    
+FIB_NUMBERS = [1, 2, 3, 5, 8, 13, 21, 34]  # Golden structure intervals
+
 @st.cache_data
-def morlet_wavelet_power(scores, wavelet='cmor', max_scale=64):
-    scales = np.arange(1, max_scale)
+class FibonacciFractalScanner:
+    def __init__(self, round_df, max_window=34):
+        self.df = round_df.tail(max_window).reset_index(drop=True)
+        self.patterns = defaultdict(list)
+        self.spiral_centers = []
+
+    def detect_fib_patterns(self):
+        scores = self.df["score"].fillna(0).values
+
+        for target_score in [-1, 1, 2]:
+            idxs = [i for i, val in enumerate(scores) if val == target_score]
+
+            for i in range(len(idxs)):
+                for j in range(i + 1, len(idxs)):
+                    gap = idxs[j] - idxs[i]
+                    if gap in FIB_NUMBERS:
+                        self.patterns[target_score].append((idxs[i], idxs[j], gap))
+
+
+        return self.patterns
+
+    def find_spiral_centers(self, min_confirmations=2):
+        # Scan each score type
+        for score_type, connections in self.patterns.items():
+            if len(connections) >= min_confirmations:
+                # Find midpoint of repeating Fibonacci connections
+                centers = [(i + j) // 2 for (i, j, _) in connections]
+                for center_idx in centers:
+                    ts = self.df.loc[center_idx, "timestamp"]
+                    round_id = self.df.loc[center_idx, "round_index"]
+
+                    self.spiral_centers.append({
+                        "center_index": center_idx,
+                        "round_index": round_id,
+                        "timestamp": ts,
+                        "score_type": score_type,
+                        "connections": len(connections),
+                        "label": self.label_score(score_type)
+                    })
+        return self.spiral_centers
+
+    def label_score(self, s):
+        return { -1: "Blue", 1: "Purple", 2: "Pink" }.get(s, "Unknown")
     
-    # Compute CWT
-    coeffs, freqs = pywt.cwt(scores, scales, wavelet)
-    power = np.abs(coeffs) ** 2
-    
-    return coeffs, power, freqs, scales
-    
-@st.cache_data
-def classify_morlet_bursts(mean_energy, power_threshold=None, min_width=3):
-    if power_threshold is None:
-        power_threshold = np.mean(mean_energy) + np.std(mean_energy)
-
-    # Detect peaks
-    peaks, props = find_peaks(mean_energy, height=power_threshold)
-
-    # Measure widths
-    widths, h_eval, left_ips, right_ips = peak_widths(mean_energy, peaks, rel_height=0.5)
-
-    classifications = []
-    for i, peak in enumerate(peaks):
-        width = widths[i]
-        label = "💥 SURGE PHASE" if width >= min_width else "⚠️ FAKE BURST"
-        classifications.append({
-            "index": peak,
-            "width": round(width, 2),
-            "strength": round(props['peak_heights'][i], 2),
-            "label": label
-        })
-    
-    return classifications
-    
-@st.cache_data
-def compute_fnr_index_from_morlet(power_matrix, scales):
-    if power_matrix.shape[0] < 10:
-        return None
-
-    # Extract high-scale (macro) and low-scale (micro) energy patterns
-    micro_band = power_matrix[2:6, :]     # e.g., scales 3–6
-    macro_band = power_matrix[-6:-2, :]   # e.g., top 4 macro scales
-
-    micro_wave = np.mean(micro_band, axis=0)
-    macro_wave = np.mean(macro_band, axis=0)
-
-    # Normalize both
-    micro_wave -= np.mean(micro_wave)
-    macro_wave -= np.mean(macro_wave)
-    micro_wave /= (np.std(micro_wave) + 1e-9)
-    macro_wave /= (np.std(macro_wave) + 1e-9)
-
-    # Product method (constructive > 0, destructive < 0)
-    interaction_wave = micro_wave * macro_wave
-    fnr_index = np.mean(interaction_wave)
-
-    # Cosine similarity (phase match strength)
-    cos_sim = cosine_similarity(micro_wave.reshape(1, -1), macro_wave.reshape(1, -1))[0][0]
-
-    return {
-        "FNR_index": round(fnr_index, 4),
-        "Phase_cosine_similarity": round(cos_sim, 4),
-        "alignment": "Constructive" if fnr_index > 0.2 else "Destructive" if fnr_index < -0.2 else "Neutral"
-    }
     
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
@@ -303,46 +291,7 @@ def resonance_forecast(harmonic_waves, resonance_matrix, steps=10):
         forecast[step] = step_value / num_harmonics
     return forecast
 
-@st.cache_data
-def run_rqcf(scores, steps=3, top_n=5):
-    if len(scores) < 10: return []
-    
-    N = len(scores)
-    yf = rfft(scores - np.mean(scores))
-    xf = rfftfreq(N, 1)
-    amplitudes = np.abs(yf)
-    top_indices = amplitudes.argsort()[-top_n:][::-1] if len(amplitudes) >= top_n else amplitudes.argsort()
-    harmonic_data = []
-    
-    for idx in top_indices:
-        if idx < len(xf) and idx < len(yf) and idx < len(amplitudes):
-            freq = xf[idx]
-            phase = np.angle(yf[idx])
-            amp = amplitudes[idx]
-            wave = np.sin(2 * np.pi * freq * np.arange(N) + phase)
-            harmonic_data.append((freq, phase, amp, wave))
 
-    forecast_chains = []
-    for branch_id in range(3):
-        chain = []
-        sim_scores = list(scores)
-        for step in range(steps):
-            wave_sum = np.zeros(1)
-            for freq, phase, amp, _ in harmonic_data:
-                t = len(sim_scores)
-                value = amp * np.sin(2 * np.pi * freq * t + phase)
-                wave_sum += value
-            score_estimate = wave_sum[0] / max(1, len(harmonic_data))
-            sim_scores.append(score_estimate)
-            label = '💖 Pink Spike' if score_estimate >= 1.5 else \
-                    '🟣 Purple Stable' if score_estimate >= 0.5 else \
-                    '🔵 Blue Pullback' if score_estimate < 0 else '⚪ Neutral Drift'
-            chain.append((round(score_estimate, 3), label))
-            for i in range(len(harmonic_data)):
-                freq, phase, amp, wave = harmonic_data[i]
-                harmonic_data[i] = (freq, phase + np.random.uniform(-0.1, 0.1), amp, wave)
-        forecast_chains.append({"branch": f"Branch {chr(65 + branch_id)}", "forecast": chain})
-    return forecast_chains
 
 # =================== UI COMPONENTS ========================
 
@@ -654,7 +603,7 @@ def analyze_data(data, pink_threshold, window_size):
     df["type"] = df["multiplier"].apply(lambda x: "Pink" if x >= pink_threshold else ("Purple" if x >= 2 else "Blue"))
     df["msi"] = df["score"].rolling(window_size).sum()
     df["momentum"] = df["score"].cumsum()
-    
+    df["round_index"] = range(len(df))
     # Define latest_msi safely
     latest_msi = df["msi"].iloc[-1] if not df["msi"].isna().all() else 0
     latest_tpi = compute_tpi(df, window=window_size)
@@ -882,9 +831,11 @@ def analyze_data(data, pink_threshold, window_size):
             micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
             resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals)
 
-
+scanner = FibonacciFractalScanner(df)
+scanner.detect_fib_patterns()
+spiral_centers = scanner.find_spiral_centers()
 # =================== MSI CHART PLOTTING ========================
-def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times):
+def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, spiral_centers=[]):
     if len(df) < 2:
         st.warning("Need at least 2 rounds to plot MSI chart.")
         return
@@ -930,11 +881,17 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         
         ax.plot(df["timestamp"], df["supertrend"], color='lime' if df["trend"].iloc[-1] == 1 else 'red', linewidth=2, label="SuperTrend")
         
-    # Buy/Sell markers
-    ax.scatter(df[df["buy_signal"]]["timestamp"], df[df["buy_signal"]]["msi"], marker="^", color="green", label="Buy Signal")
-    ax.scatter(df[df["sell_signal"]]["timestamp"], df[df["sell_signal"]]["msi"], marker="v", color="red", label="Sell Signal")
-        
-    
+        # Buy/Sell markers
+        ax.scatter(df[df["buy_signal"]]["timestamp"], df[df["buy_signal"]]["msi"], marker="^", color="green", label="Buy Signal")
+        ax.scatter(df[df["sell_signal"]]["timestamp"], df[df["sell_signal"]]["msi"], marker="v", color="red", label="Sell Signal")
+            
+    for sc in spiral_centers:
+        ts = df["timestamp"].iloc[round_index]
+        color = { "Pink": "magenta", "Purple": "orange", "Blue": "blue" }.get(sc["label"], "gray")
+
+        ax.axvline(ts, linestyle='--', color=color, alpha=0.6)
+        ax.text(ts, df["msi"].max() * 0.9, f"🌀 {sc['label']}", rotation=90,
+                fontsize=8, ha='center', va='top', color=color)
     
     ax.set_title("📊 MSI Volatility Tracker")
     ax.legend()
@@ -1036,7 +993,7 @@ if not df.empty:
         
     
     # Plot MSI Chart
-    plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times)
+    plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, spiral_centers=spiral_centers)
 
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
         fig, ax = plt.subplots(figsize=(10, 4))
