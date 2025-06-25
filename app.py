@@ -177,7 +177,24 @@ class NaturalFibonacciSpiralDetector:
     def _label_score(self, s):
         return { -1: "Blue", 1: "Purple", 2: "Pink" }.get(s, "Unknown")
     
-    
+def get_spiral_echoes(spiral_centers, df, gaps=[3, 5, 8, 13]):
+    echoes = []
+
+    for sc in spiral_centers:
+        base_idx = sc["round_index"]
+
+        for gap in gaps:
+            echo_idx = base_idx + gap
+            if echo_idx < len(df):
+                echoes.append({
+                    "echo_round": echo_idx,
+                    "source_round": base_idx,
+                    "timestamp": df.loc[echo_idx, "timestamp"],
+                    "source_label": sc["label"],
+                    "gap": gap
+                })
+
+    return echoes    
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
@@ -909,6 +926,13 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         ax.axvline(ts, linestyle='--', color=color, alpha=0.6)
         ax.text(ts, df["msi"].max() * 0.9, f"🌀 {sc['label']}", rotation=90,
                 fontsize=8, ha='center', va='top', color=color)
+
+    for echo in spiral_echoes:
+        ts = pd.to_datetime(echo["timestamp"])
+        label = f"{echo['gap']}-Echo ({echo['source_label']})"
+        ax.axvline(ts, linestyle=':', color="gold", alpha=0.3)
+        ax.text(ts, df["msi"].max() * 0.85, label, rotation=90,
+                fontsize=7, ha='center', va='top', color='gold')
     
     ax.set_title("📊 MSI Volatility Tracker")
     ax.legend()
@@ -996,6 +1020,8 @@ if not df.empty:
     
     spiral_detector = NaturalFibonacciSpiralDetector(df, window_size=selected_window)
     spiral_centers = spiral_detector.detect_spirals()
+
+    spiral_echoes = get_spiral_echoes(spiral_centers, df)
     
     # Check if we completed a cycle
     if dominant_cycle and current_round_position == 0 and 'last_position' in st.session_state:
