@@ -954,7 +954,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     for echo in spiral_echoes:
         ts = pd.to_datetime(echo["timestamp"])
         label = f"{echo['gap']}-Echo ({echo['source_label']})"
-        ax.axvline(ts, linestyle=':', color="gold", alpha=0.3)
+        ax.axvline(ts, linestyle=':', color="maroon", alpha=0.9)
         ax.text(ts, df["msi"].max() * 0.85, label, rotation=90,
                 fontsize=7, ha='center', va='top', color='gold')
 
@@ -962,15 +962,15 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         
 
         # Plot center line and key Fibonacci bands
-        ax.plot(df["timestamp"], df["feb_center"], label="FEB Center", linestyle="--", color="gray", linewidth=1)
+        ax.plot(df["timestamp"], df["feb_center"], label="FEB Center", linestyle="--", color="gray", linewidth=1.5)
         
         # Upper bands
-        ax.plot(df["timestamp"], df["feb_upper_1_618"], label="Upper 1.618x", linestyle=":", color="gold", linewidth=1)
-        ax.plot(df["timestamp"], df["feb_upper_2_618"], label="Upper 2.618x", linestyle=":", color="orange", linewidth=1)
+        ax.plot(df["timestamp"], df["feb_upper_1_618"], label="Upper 1.618x", linestyle=":", color="red", linewidth=1)
+        ax.plot(df["timestamp"], df["feb_upper_2_618"], label="Upper 2.618x", linestyle=":", color="maroon", linewidth=1)
         
         # Lower bands
-        ax.plot(df["timestamp"], df["feb_lower_1_618"], label="Lower 1.618x", linestyle=":", color="gold", linewidth=1)
-        ax.plot(df["timestamp"], df["feb_lower_2_618"], label="Lower 2.618x", linestyle=":", color="red", linewidth=1)
+        ax.plot(df["timestamp"], df["feb_lower_1_618"], label="Lower 1.618x", linestyle=":", color="red", linewidth=1)
+        ax.plot(df["timestamp"], df["feb_lower_2_618"], label="Lower 2.618x", linestyle=":", color="maroon", linewidth=1)
         
         # Optional: Light fill between bands for visualization
         ax.fill_between(df["timestamp"], df["feb_lower_1_618"], df["feb_upper_1_618"],
