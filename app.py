@@ -56,11 +56,18 @@ with st.sidebar:
     options=[3, 5, 8, 13, 21, 34, 55],
     index=5  # default to 34
     )
+    fib_window = st.sidebar.selectbox(
+    "Fibonacci Envelope Window Size",
+    options=[5, 8, 13, 21, 34],
+    index=2  # default to 13
+    )
+
     
     st.header("📉 Indicator Visibility")
 
     show_supertrend = st.checkbox("🟢 Show SuperTrend", value=True)
     show_ichimoku   = st.checkbox("☁️ Show Ichimoku (Tenkan/Kijun)", value=True)
+    show_fibo   = st.checkbox("💫 Show FIB bands", value=True)
 
     st.header("📊 PANEL TOGGLES")
     FAST_ENTRY_MODE = st.checkbox("⚡ Fast Entry Mode", value=False)
@@ -713,6 +720,23 @@ def analyze_data(data, pink_threshold, window_size):
     
     df["chikou"] = df["msi"].shift(-26)
     df = compute_supertrend(df, period=10, multiplier=2.0, source="msi")
+
+    # Core Fibonacci multipliers
+    fib_ratios = [1.0, 1.618, 2.618]
+    
+    # Center line: rolling MSI mean
+    df["feb_center"] = df["msi"].rolling(window=fib_window).mean()
+    df["feb_std"] = df["msi"].rolling(window=fib_window).std()
+    
+    # Upper bands
+    df["feb_upper_1"] = df["feb_center"] + fib_ratios[0] * df["feb_std"]
+    df["feb_upper_1_618"] = df["feb_center"] + fib_ratios[1] * df["feb_std"]
+    df["feb_upper_2_618"] = df["feb_center"] + fib_ratios[2] * df["feb_std"]
+    
+    # Lower bands
+    df["feb_lower_1"] = df["feb_center"] - fib_ratios[0] * df["feb_std"]
+    df["feb_lower_1_618"] = df["feb_center"] - fib_ratios[1] * df["feb_std"]
+    df["feb_lower_2_618"] = df["feb_center"] - fib_ratios[2] * df["feb_std"]
     
     
     # Prepare and safely round/format outputs, avoiding NoneType formatting
@@ -933,6 +957,24 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         ax.axvline(ts, linestyle=':', color="gold", alpha=0.3)
         ax.text(ts, df["msi"].max() * 0.85, label, rotation=90,
                 fontsize=7, ha='center', va='top', color='gold')
+
+    if show_fibo:
+        
+
+        # Plot center line and key Fibonacci bands
+        ax.plot(df["timestamp"], df["feb_center"], label="FEB Center", linestyle="--", color="gray", linewidth=1)
+        
+        # Upper bands
+        ax.plot(df["timestamp"], df["feb_upper_1_618"], label="Upper 1.618x", linestyle=":", color="gold", linewidth=1)
+        ax.plot(df["timestamp"], df["feb_upper_2_618"], label="Upper 2.618x", linestyle=":", color="orange", linewidth=1)
+        
+        # Lower bands
+        ax.plot(df["timestamp"], df["feb_lower_1_618"], label="Lower 1.618x", linestyle=":", color="gold", linewidth=1)
+        ax.plot(df["timestamp"], df["feb_lower_2_618"], label="Lower 2.618x", linestyle=":", color="red", linewidth=1)
+        
+        # Optional: Light fill between bands for visualization
+        ax.fill_between(df["timestamp"], df["feb_lower_1_618"], df["feb_upper_1_618"],
+                        color="gold", alpha=0.05, label="Golden Corridor")
     
     ax.set_title("📊 MSI Volatility Tracker")
     ax.legend()
