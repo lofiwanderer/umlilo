@@ -68,6 +68,7 @@ with st.sidebar:
     show_supertrend = st.checkbox("🟢 Show SuperTrend", value=True)
     show_ichimoku   = st.checkbox("☁️ Show Ichimoku (Tenkan/Kijun)", value=True)
     show_fibo   = st.checkbox("💫 Show FIB bands", value=True)
+    show_bb   = st.checkbox("🌈 Show BB bands", value=True)
 
     st.header("📊 PANEL TOGGLES")
     FAST_ENTRY_MODE = st.checkbox("⚡ Fast Entry Mode", value=False)
@@ -901,14 +902,15 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     st.subheader("MSI with Bollinger Bands")
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.plot(df["timestamp"], df["msi"], label="MSI", color='black')
-    
-    # BB lines
-    ax.plot(df["timestamp"], df["bb_upper"], linestyle='--', color='green')
-    ax.plot(df["timestamp"], df["bb_lower"], linestyle='--', color='red')
-    ax.fill_between(df["timestamp"], df["bb_lower"], df["bb_upper"], color='gray', alpha=0.1)
-    ax.plot(df["timestamp"], df["bb_upper_10"], color='#0AEFFF', linestyle='--', label="upperBB", alpha=1.0)
-    ax.plot(df["timestamp"], df["bb_lower_10"], color='#0AEFFF', linestyle='--', alpha=1.0)
-   
+    if show_bb:
+        
+        # BB lines
+        ax.plot(df["timestamp"], df["bb_upper"], linestyle='--', color='green')
+        ax.plot(df["timestamp"], df["bb_lower"], linestyle='--', color='red')
+        ax.fill_between(df["timestamp"], df["bb_lower"], df["bb_upper"], color='gray', alpha=0.1)
+        ax.plot(df["timestamp"], df["bb_upper_10"], color='#0AEFFF', linestyle='--', label="upperBB", alpha=1.0)
+        ax.plot(df["timestamp"], df["bb_lower_10"], color='#0AEFFF', linestyle='--', alpha=1.0)
+       
     ax.axhline(0, color='gray', linestyle=':')
     
     # Highlight squeeze
