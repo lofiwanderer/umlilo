@@ -956,7 +956,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         label = f"{echo['gap']}-Echo ({echo['source_label']})"
         ax.axvline(ts, linestyle=':', color="maroon", alpha=0.9)
         ax.text(ts, df["msi"].max() * 0.85, label, rotation=90,
-                fontsize=7, ha='center', va='top', color='gold')
+                fontsize=7, ha='center', va='top', color='black')
 
     if show_fibo:
         
@@ -965,12 +965,12 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         ax.plot(df["timestamp"], df["feb_center"], label="FEB Center", linestyle="--", color="gray", linewidth=1.5)
         
         # Upper bands
-        ax.plot(df["timestamp"], df["feb_upper_1_618"], label="Upper 1.618x", linestyle=":", color="red", linewidth=1)
-        ax.plot(df["timestamp"], df["feb_upper_2_618"], label="Upper 2.618x", linestyle=":", color="maroon", linewidth=1)
+        ax.plot(df["timestamp"], df["feb_upper_1_618"], label="Upper 1.618x", linestyle=":", color="gold", linewidth=1.3)
+        ax.plot(df["timestamp"], df["feb_upper_2_618"], label="Upper 2.618x", linestyle=":", color="red", linewidth=1.3)
         
         # Lower bands
-        ax.plot(df["timestamp"], df["feb_lower_1_618"], label="Lower 1.618x", linestyle=":", color="red", linewidth=1)
-        ax.plot(df["timestamp"], df["feb_lower_2_618"], label="Lower 2.618x", linestyle=":", color="maroon", linewidth=1)
+        ax.plot(df["timestamp"], df["feb_lower_1_618"], label="Lower 1.618x", linestyle=":", color="gold", linewidth=1.3)
+        ax.plot(df["timestamp"], df["feb_lower_2_618"], label="Lower 2.618x", linestyle=":", color="red", linewidth=1.3)
         
         # Optional: Light fill between bands for visualization
         ax.fill_between(df["timestamp"], df["feb_lower_1_618"], df["feb_upper_1_618"],
