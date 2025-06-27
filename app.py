@@ -67,7 +67,7 @@ with st.sidebar:
     selected_fib_layers = st.sidebar.multiselect(
         "Choose Fibonacci Gaps (in rounds) for Projection",
         options=fib_layer_options,
-        default=[6, 12, 18, 24, 30]
+        default=[5, 8, 13, 21, 34]
     )
 
     st.sidebar.subheader("MSI Multi-Window Settings")
