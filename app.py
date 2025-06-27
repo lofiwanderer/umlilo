@@ -52,7 +52,7 @@ with st.sidebar:
     PINK_THRESHOLD = st.number_input("Pink Threshold", value=10.0)
     STRICT_RTT = st.checkbox("Strict RTT Mode", value=False)
     selected_window = st.sidebar.selectbox(
-    "Select Fibonacci Analysis Window",
+    "Select Fibonacci spirals Window",
     options=[3, 5, 8, 13, 21, 34, 55],
     index=5  # default to 34
     )
@@ -60,6 +60,24 @@ with st.sidebar:
     "Fibonacci Envelope Window Size",
     options=[5, 8, 13, 21, 34],
     index=2  # default to 13
+    )
+
+    st.sidebar.subheader("FLP Projection Layers")
+    fib_layer_options = [3, 5, 8, 13, 21, 34, 55]
+    selected_fib_layers = st.sidebar.multiselect(
+        "Choose Fibonacci Gaps (in rounds) for Projection",
+        options=fib_layer_options,
+        default=[6, 12, 18, 24, 30]
+    )
+
+    st.sidebar.subheader("MSI Multi-Window Settings")
+
+    default_fib_windows = [5, 8, 13, 21, 34]
+    
+    selected_msi_windows = st.sidebar.multiselect(
+        "Select MSI Window Sizes (Fibonacci)",
+        options=default_fib_windows,
+        default=[13, 21]
     )
 
     
@@ -204,52 +222,29 @@ def get_spiral_echoes(spiral_centers, df, gaps=[3, 5, 8, 13]):
 
     return echoes    
 
-def project_flower_of_life_nodes(spiral_centers, df, fib_layers=[6,12,18,24,30]):
-    pulse_map = defaultdict(list)
+def project_true_forward_flp(spiral_centers, fib_layers=[6, 12, 18, 24, 30], max_rounds=None):
+    """
+    Create a forward projection map from spiral centers using Fibonacci gaps.
+    Returns a list of watchlist targets.
+    """
+
+    watchlist = []
 
     for sc in spiral_centers:
         base_idx = sc["round_index"]
 
-        for layer in fib_layers:
-            target_idx = base_idx + layer
-            if target_idx < len(df):
-                pulse_map[target_idx].append({
+        for gap in fib_layers:
+            target_idx = base_idx + gap
+            if max_rounds is None or target_idx < max_rounds:
+                watchlist.append({
                     "source_round": base_idx,
                     "source_label": sc["label"],
-                    "gap": layer
+                    "gap": gap,
+                    "target_round": target_idx
                 })
 
-    return pulse_map
+    return watchlist
 
-def classify_flower_nodes(pulse_map, df, min_overlap=2):
-    classified_nodes = []
-
-    for target_idx, hits in pulse_map.items():
-        if target_idx >= len(df):
-            continue
-
-        timestamp = df.loc[target_idx, "timestamp"]
-        msi_value = df.loc[target_idx, "msi"]
-        count = len(hits)
-
-        # Decide node type
-        if count >= min_overlap:
-            if msi_value > 0:
-                node_type = "Surge Zone"
-            else:
-                node_type = "Trap Node"
-        else:
-            node_type = "Neutral"
-
-        classified_nodes.append({
-            "round_index": target_idx,
-            "timestamp": timestamp,
-            "hit_count": count,
-            "msi": msi_value,
-            "type": node_type
-        })
-
-    return classified_nodes
     
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
@@ -786,6 +781,7 @@ def analyze_data(data, pink_threshold, window_size):
     df["feb_lower_1"] = df["feb_center"] - fib_ratios[0] * df["feb_std"]
     df["feb_lower_1_618"] = df["feb_center"] - fib_ratios[1] * df["feb_std"]
     df["feb_lower_2_618"] = df["feb_center"] - fib_ratios[2] * df["feb_std"]
+
     
     
     # Prepare and safely round/format outputs, avoiding NoneType formatting
@@ -941,7 +937,7 @@ def analyze_data(data, pink_threshold, window_size):
 
 
 # =================== MSI CHART PLOTTING ========================
-def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, spiral_centers=[]):
+def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, spiral_centers=[], window = selected_msi_windows):
     if len(df) < 2:
         st.warning("Need at least 2 rounds to plot MSI chart.")
         return
@@ -1015,24 +1011,30 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         ax.plot(df["timestamp"], df["feb_center"], label="FEB Center", linestyle="--", color="gray", linewidth=1.5)
         
         # Upper bands
-        ax.plot(df["timestamp"], df["feb_upper_1_618"], label="Upper 1.618x", linestyle=":", color="gold", linewidth=1.3)
-        ax.plot(df["timestamp"], df["feb_upper_2_618"], label="Upper 2.618x", linestyle=":", color="red", linewidth=1.3)
+        ax.plot(df["timestamp"], df["feb_upper_1_618"], label="Upper 1.618x", linestyle=":", color="purple", linewidth=1.3)
+        ax.plot(df["timestamp"], df["feb_upper_2_618"], label="Upper 2.618x", linestyle=":", color="purple", linewidth=1.3)
         
         # Lower bands
-        ax.plot(df["timestamp"], df["feb_lower_1_618"], label="Lower 1.618x", linestyle=":", color="gold", linewidth=1.3)
-        ax.plot(df["timestamp"], df["feb_lower_2_618"], label="Lower 2.618x", linestyle=":", color="red", linewidth=1.3)
+        ax.plot(df["timestamp"], df["feb_lower_1_618"], label="Lower 1.618x", linestyle=":", color="purple", linewidth=1.3)
+        ax.plot(df["timestamp"], df["feb_lower_2_618"], label="Lower 2.618x", linestyle=":", color="purple", linewidth=1.3)
         
         # Optional: Light fill between bands for visualization
         ax.fill_between(df["timestamp"], df["feb_lower_1_618"], df["feb_upper_1_618"],
                         color="gold", alpha=0.05, label="Golden Corridor")
         
-        for node in flower_nodes:
-            ts = pd.to_datetime(node["timestamp"])
-        
-            if node["type"] == "Surge Zone":
-                ax.scatter(ts, df["msi"].max() * 0.8, color="green", s=60, marker='o', label="FLP Surge Zone")
-            elif node["type"] == "Trap Node":
-                ax.scatter(ts, df["msi"].min() * 0.8, color="red", s=60, marker='x', label="FLP Trap Node")
+        for w in true_flp_watchlist:
+            if w["target_round"] < len(df):
+                ts = pd.to_datetime(df.loc[w["target_round"], "timestamp"])
+                ax.axvline(ts, linestyle='--', color='purple', alpha=0.2)
+                ax.text(ts, df["msi"].max() * 0.75, f"FLP +{w['gap']}", rotation=90,
+                        fontsize=7, ha='center', va='top', color='purple')
+                
+        for window in selected_msi_windows:
+            col_name = f"msi_{window}"
+            ax.plot(df["timestamp"], df[col_name],
+                    label=f"MSI {window}",
+                    linewidth=1.5,
+                    alpha=0.8)
 
     
     ax.set_title("📊 MSI Volatility Tracker")
@@ -1119,12 +1121,22 @@ if not df.empty:
      micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
      resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE)
     
+    for window in selected_msi_windows:
+        col_name = f"msi_{window}"
+        df[col_name] = df["score"].rolling(window=window).mean()
+
+    
+    
     spiral_detector = NaturalFibonacciSpiralDetector(df, window_size=selected_window)
     spiral_centers = spiral_detector.detect_spirals()
 
     spiral_echoes = get_spiral_echoes(spiral_centers, df)
-    pulse_map = project_flower_of_life_nodes(spiral_centers, df)
-    flower_nodes = classify_flower_nodes(pulse_map, df)
+    # Assuming df is your main DataFrame
+    max_rounds = len(df)
+    
+    true_flp_watchlist = project_true_forward_flp(spiral_centers, fib_layers=selected_fib_layers, max_rounds=max_rounds)
+
+
 
     
     # Check if we completed a cycle
@@ -1152,12 +1164,11 @@ if not df.empty:
             - Type: **{sc['label']}**
             - Confirmations: `{sc['confirmations']}`
             """)
-        for e in spiral_echoes:
+        for w in true_flp_watchlist:
             st.markdown(f"""
-            🟡 **Echo from {e['source_label']} Spiral**
-            - Echo Round: `{e['echo_round']}`
-            - Gap: `{e['gap']} rounds`
-            - Timestamp: `{e['timestamp']}`
+            🌺 **From Spiral Round {w['source_round']} ({w['source_label']})**
+            - Projects to Round: `{w['target_round']}`
+            - Gap: `{w['gap']} rounds`
             """)
 
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
