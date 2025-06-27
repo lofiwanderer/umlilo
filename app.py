@@ -203,6 +203,54 @@ def get_spiral_echoes(spiral_centers, df, gaps=[3, 5, 8, 13]):
                 })
 
     return echoes    
+
+def project_flower_of_life_nodes(spiral_centers, df, fib_layers=[6,12,18,24,30]):
+    pulse_map = defaultdict(list)
+
+    for sc in spiral_centers:
+        base_idx = sc["round_index"]
+
+        for layer in fib_layers:
+            target_idx = base_idx + layer
+            if target_idx < len(df):
+                pulse_map[target_idx].append({
+                    "source_round": base_idx,
+                    "source_label": sc["label"],
+                    "gap": layer
+                })
+
+    return pulse_map
+
+def classify_flower_nodes(pulse_map, df, min_overlap=2):
+    classified_nodes = []
+
+    for target_idx, hits in pulse_map.items():
+        if target_idx >= len(df):
+            continue
+
+        timestamp = df.loc[target_idx, "timestamp"]
+        msi_value = df.loc[target_idx, "msi"]
+        count = len(hits)
+
+        # Decide node type
+        if count >= min_overlap:
+            if msi_value > 0:
+                node_type = "Surge Zone"
+            else:
+                node_type = "Trap Node"
+        else:
+            node_type = "Neutral"
+
+        classified_nodes.append({
+            "round_index": target_idx,
+            "timestamp": timestamp,
+            "hit_count": count,
+            "msi": msi_value,
+            "type": node_type
+        })
+
+    return classified_nodes
+    
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
@@ -977,6 +1025,15 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         # Optional: Light fill between bands for visualization
         ax.fill_between(df["timestamp"], df["feb_lower_1_618"], df["feb_upper_1_618"],
                         color="gold", alpha=0.05, label="Golden Corridor")
+        
+        for node in flower_nodes:
+            ts = pd.to_datetime(node["timestamp"])
+        
+            if node["type"] == "Surge Zone":
+                ax.scatter(ts, df["msi"].max() * 0.8, color="green", s=60, marker='o', label="FLP Surge Zone")
+            elif node["type"] == "Trap Node":
+                ax.scatter(ts, df["msi"].min() * 0.8, color="red", s=60, marker='x', label="FLP Trap Node")
+
     
     ax.set_title("📊 MSI Volatility Tracker")
     ax.legend()
@@ -1066,6 +1123,9 @@ if not df.empty:
     spiral_centers = spiral_detector.detect_spirals()
 
     spiral_echoes = get_spiral_echoes(spiral_centers, df)
+    pulse_map = project_flower_of_life_nodes(spiral_centers, df)
+    flower_nodes = classify_flower_nodes(pulse_map, df)
+
     
     # Check if we completed a cycle
     if dominant_cycle and current_round_position == 0 and 'last_position' in st.session_state:
@@ -1083,20 +1143,22 @@ if not df.empty:
     
     # Plot MSI Chart
     plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, spiral_centers=spiral_centers)
-    for sc in spiral_centers:
-        st.markdown(f"""
-        🌀 **Natural Spiral Detected**
-        - Round Index: `{sc['round_index']}`
-        - Type: **{sc['label']}**
-        - Confirmations: `{sc['confirmations']}`
-        """)
-    for e in spiral_echoes:
-        st.markdown(f"""
-        🟡 **Echo from {e['source_label']} Spiral**
-        - Echo Round: `{e['echo_round']}`
-        - Gap: `{e['gap']} rounds`
-        - Timestamp: `{e['timestamp']}`
-        """)
+    
+    with st.expander("fibONACCI  spirals", expanded=True):
+        for sc in spiral_centers:
+            st.markdown(f"""
+            🌀 **Natural Spiral Detected**
+            - Round Index: `{sc['round_index']}`
+            - Type: **{sc['label']}**
+            - Confirmations: `{sc['confirmations']}`
+            """)
+        for e in spiral_echoes:
+            st.markdown(f"""
+            🟡 **Echo from {e['source_label']} Spiral**
+            - Echo Round: `{e['echo_round']}`
+            - Gap: `{e['gap']} rounds`
+            - Timestamp: `{e['timestamp']}`
+            """)
 
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
         fig, ax = plt.subplots(figsize=(10, 4))
