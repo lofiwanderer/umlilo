@@ -1123,7 +1123,8 @@ if not df.empty:
     
     for window in selected_msi_windows:
         col_name = f"msi_{window}"
-        df[col_name] = df["score"].rolling(window=window).mean()
+        #df[col_name] = df["score"].rolling(window=window).mean()
+        df[col_name] = df["score"].rolling(window=window).sum()
 
     
     
