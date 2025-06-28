@@ -245,6 +245,18 @@ def project_true_forward_flp(spiral_centers, fib_layers=[6, 12, 18, 24, 30], max
 
     return watchlist
 
+def compute_resonance(row, selected_windows, weights=None):
+    if weights is None:
+        weights = [1] * len(selected_windows)
+    weighted_sum = 0
+    weight_total = sum(weights)
+    
+    for i, window in enumerate(selected_windows):
+        sign_col = f"sign_{window}"
+        weighted_sum += row[sign_col] * weights[i]
+    
+    resonance_score = weighted_sum / weight_total
+    return round(resonance_score, 2) 
     
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
@@ -683,7 +695,7 @@ def fractal_anchor_visualizer(df, msi_col="msi", score_col="score", window=8):
 
 # =================== DATA ANALYSIS ========================
 @st.cache_data(show_spinner=False)
-def analyze_data(data, pink_threshold, window_size):
+def analyze_data(data, pink_threshold, window_size, window = selected_msi_windows):
     df = data.copy()
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df["type"] = df["multiplier"].apply(lambda x: "Pink" if x >= pink_threshold else ("Purple" if x >= 2 else "Blue"))
@@ -781,6 +793,27 @@ def analyze_data(data, pink_threshold, window_size):
     df["feb_lower_1"] = df["feb_center"] - fib_ratios[0] * df["feb_std"]
     df["feb_lower_1_618"] = df["feb_center"] - fib_ratios[1] * df["feb_std"]
     df["feb_lower_2_618"] = df["feb_center"] - fib_ratios[2] * df["feb_std"]
+
+    for window in selected_msi_windows:
+        col_name = f"msi_{window}"
+        #df[col_name] = df["score"].rolling(window=window).mean()
+        df[col_name] = df["score"].rolling(window=window).sum()
+        
+        msi_col = f"msi_{window}"
+        slope_col = f"slope_{window}"
+        df[slope_col] = df[msi_col].diff()
+
+        slope_col = f"slope_{window}"
+        sign_col = f"sign_{window}"
+        df[sign_col] = df[slope_col].apply(
+            lambda x: 1 if x > 0 else (-1 if x < 0 else 0)
+        )
+
+    df["msi_resonance"] = df.apply(
+    lambda row: compute_resonance(row, selected_msi_windows),
+    axis=1
+    )
+
 
     
     
@@ -1035,6 +1068,11 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
                     label=f"MSI {window}",
                     linewidth=1.5,
                     alpha=0.8)
+            
+        ax2 = ax.twinx()
+        ax2.plot(df["timestamp"], df["msi_resonance"], color='purple', linestyle='--', alpha=0.7, label='MSI Resonance')
+        ax2.set_ylabel("Resonance Score", color='purple')
+        ax2.tick_params(axis='y', labelcolor='purple')
 
     
     ax.set_title("📊 MSI Volatility Tracker")
@@ -1121,10 +1159,7 @@ if not df.empty:
      micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
      resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE)
     
-    for window in selected_msi_windows:
-        col_name = f"msi_{window}"
-        #df[col_name] = df["score"].rolling(window=window).mean()
-        df[col_name] = df["score"].rolling(window=window).sum()
+    
 
     
     
@@ -1157,7 +1192,18 @@ if not df.empty:
     # Plot MSI Chart
     plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, spiral_centers=spiral_centers)
     
-    with st.expander("fibONACCI  spirals", expanded=True):
+    with st.expander("fibONACCI  spirals", expanded=False):
+        st.subheader("🌌 MSI Resonance Engine")
+        latest_resonance = df["msi_resonance"].iloc[-1]
+        st.sidebar.metric("Latest Resonance", latest_resonance)
+        
+        if latest_resonance >= 0.6:
+            st.success("✅ Strong Surge Alignment")
+        elif latest_resonance <= -0.6:
+            st.error("❌ Strong Collapse Alignment")
+        else:
+            st.warning("⚠️ Confusion/Trap Risk")
+            
         for sc in spiral_centers:
             st.markdown(f"""
             🌀 **Natural Spiral Detected**
@@ -1165,12 +1211,7 @@ if not df.empty:
             - Type: **{sc['label']}**
             - Confirmations: `{sc['confirmations']}`
             """)
-        for w in true_flp_watchlist:
-            st.markdown(f"""
-            🌺 **From Spiral Round {w['source_round']} ({w['source_label']})**
-            - Projects to Round: `{w['target_round']}`
-            - Gap: `{w['gap']} rounds`
-            """)
+        
 
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
         fig, ax = plt.subplots(figsize=(10, 4))
