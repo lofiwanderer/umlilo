@@ -1031,13 +1031,14 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         ax.axvline(ts, linestyle='--', color=color, alpha=0.6)
         ax.text(ts, df["msi"].max() * 0.9, f"🌀 {sc['label']}", rotation=90,
                 fontsize=8, ha='center', va='top', color=color)
-
-    for echo in spiral_echoes:
-        ts = pd.to_datetime(echo["timestamp"])
-        label = f"{echo['gap']}-Echo ({echo['source_label']})"
-        ax.axvline(ts, linestyle=':', color="maroon", alpha=0.9)
-        ax.text(ts, df["msi"].max() * 0.85, label, rotation=90,
-                fontsize=7, ha='center', va='top', color='black')
+        
+    if show_bb:
+        for echo in spiral_echoes:
+            ts = pd.to_datetime(echo["timestamp"])
+            label = f"{echo['gap']}-Echo ({echo['source_label']})"
+            ax.axvline(ts, linestyle=':', color="maroon", alpha=0.9)
+            ax.text(ts, df["msi"].max() * 0.85, label, rotation=90,
+                    fontsize=7, ha='center', va='top', color='black')
 
     if show_fibo:
         
