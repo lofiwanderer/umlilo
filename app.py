@@ -355,7 +355,7 @@ def compute_supertrend(df, period=10, multiplier=2.0, source="msi"):
     
         return df
     
-@st.cache_data
+
 def detect_multiple_cycles(series, sample_rate=1, top_n=3):
     N = len(series)
     if N < 10:
@@ -391,7 +391,7 @@ def detect_multiple_cycles(series, sample_rate=1, top_n=3):
 
     return cycles
 
-@st.cache_data
+
 def estimate_cycle_phase_position(series, cycle_length):
     N = len(series)
     t = np.arange(N)
@@ -406,7 +406,7 @@ def estimate_cycle_phase_position(series, cycle_length):
     phase_degrees = phase_fraction * 360
     return phase_pos, phase_degrees
     
-@st.cache_data
+
 def label_phase(phase_degrees):
     phase_degrees = phase_degrees % 360
     if 0 <= phase_degrees < 90:
