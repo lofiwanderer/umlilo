@@ -1044,19 +1044,19 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         
 
         # Plot center line and key Fibonacci bands
-        ax.plot(df["timestamp"], df["feb_center"], label="FEB Center", linestyle="--", color="gray", linewidth=1.5)
+        ax.plot(df["timestamp"], df["feb_center"], linestyle="--", color="gray", linewidth=1.5)
         
         # Upper bands
-        ax.plot(df["timestamp"], df["feb_upper_1_618"], label="Upper 1.618x", linestyle=":", color="purple", linewidth=1.3)
-        ax.plot(df["timestamp"], df["feb_upper_2_618"], label="Upper 2.618x", linestyle=":", color="purple", linewidth=1.3)
+        ax.plot(df["timestamp"], df["feb_upper_1_618"], linestyle=":", color="purple", linewidth=1.3)
+        ax.plot(df["timestamp"], df["feb_upper_2_618"], linestyle=":", color="purple", linewidth=1.3)
         
         # Lower bands
-        ax.plot(df["timestamp"], df["feb_lower_1_618"], label="Lower 1.618x", linestyle=":", color="purple", linewidth=1.3)
-        ax.plot(df["timestamp"], df["feb_lower_2_618"], label="Lower 2.618x", linestyle=":", color="purple", linewidth=1.3)
+        ax.plot(df["timestamp"], df["feb_lower_1_618"], linestyle=":", color="purple", linewidth=1.3)
+        ax.plot(df["timestamp"], df["feb_lower_2_618"], linestyle=":", color="purple", linewidth=1.3)
         
         # Optional: Light fill between bands for visualization
         ax.fill_between(df["timestamp"], df["feb_lower_1_618"], df["feb_upper_1_618"],
-                        color="gold", alpha=0.05, label="Golden Corridor")
+                        color="gold", alpha=0.5, )
         
         for w in true_flp_watchlist:
             if w["target_round"] < len(df):
