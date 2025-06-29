@@ -1080,7 +1080,8 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
 
     
     ax.set_title("📊 MSI Volatility Tracker")
-    ax.legend()
+    with st.expander("Legend", expanded=False):
+        ax.legend()
     plot_slot = st.empty()
     with plot_slot.container():
         st.pyplot(fig)
