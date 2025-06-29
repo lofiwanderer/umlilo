@@ -87,10 +87,12 @@ with st.sidebar:
     show_ichimoku   = st.checkbox("☁️ Show Ichimoku (Tenkan/Kijun)", value=True)
     show_fibo   = st.checkbox("💫 Show FIB bands", value=True)
     show_bb   = st.checkbox("🌈 Show BB bands", value=True)
+    show_msi_res = st.checkbox("💹 MSI Res", value=True)
 
     st.header("📊 PANEL TOGGLES")
     FAST_ENTRY_MODE = st.checkbox("⚡ Fast Entry Mode", value=False)
     show_thre = st.checkbox("🌀 THRE Panel", value=True)
+    show_msi_res = st.checkbox("🧬 MSI Res", value=True)
     
     show_fpm = st.checkbox("🧬 FPM Panel", value=True)
     show_anchor = st.checkbox("🔗 Fractal Anchor", value=True)
@@ -1068,11 +1070,12 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
                     label=f"MSI {window}",
                     linewidth=1.5,
                     alpha=0.8)
+        if show_msi_res:
             
-        ax2 = ax.twinx()
-        ax2.plot(df["timestamp"], df["msi_resonance"], color='purple', linestyle='--', alpha=0.7, label='MSI Resonance')
-        ax2.set_ylabel("Resonance Score", color='purple')
-        ax2.tick_params(axis='y', labelcolor='purple')
+            ax2 = ax.twinx()
+            ax2.plot(df["timestamp"], df["msi_resonance"], color='purple', linestyle='--', alpha=0.7, label='MSI Resonance')
+            ax2.set_ylabel("Resonance Score", color='purple')
+            ax2.tick_params(axis='y', labelcolor='purple')
 
     
     ax.set_title("📊 MSI Volatility Tracker")
