@@ -362,8 +362,8 @@ def detect_multiple_cycles(series, sample_rate=1, top_n=3):
         return []
 
     detrended = series - np.mean(series)
-    yf = fft(detrended)
-    xf = fftfreq(N, d=sample_rate)[:N//2]
+    yf = rfft(detrended)
+    xf = rfftfreq(N, d=sample_rate)[:N//2]
     spectrum = 2.0/N * np.abs(yf[:N//2])
 
     # Ignore DC component (freq=0)
