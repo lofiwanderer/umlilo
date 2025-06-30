@@ -356,69 +356,7 @@ def compute_supertrend(df, period=10, multiplier=2.0, source="msi"):
         return df
     
 
-def detect_multiple_cycles(series, sample_rate=1, top_n=3):
-    N = len(series)
-    if N < 10:
-        return []
 
-    detrended = series - np.mean(series)
-    yf = rfft(detrended)
-    xf = rfftfreq(N, d=sample_rate)[:N//2]
-    spectrum = 2.0/N * np.abs(yf[:N//2])
-
-    # Ignore DC component (freq=0)
-    xf = xf[1:]
-    spectrum = spectrum[1:]
-
-    if len(spectrum) == 0:
-        return []
-
-    # Get top N peaks
-    top_indices = spectrum.argsort()[-top_n:][::-1]
-    cycles = []
-
-    for idx in top_indices:
-        freq = xf[idx]
-        if freq <= 0:
-            continue
-        cycle_length = round(1 / freq)
-        energy = spectrum[idx]
-        if cycle_length > 1 and cycle_length < N // 2:
-            cycles.append({
-                'cycle_length': cycle_length,
-                'energy': energy
-            })
-
-    return cycles
-
-
-def estimate_cycle_phase_position(series, cycle_length):
-    N = len(series)
-    t = np.arange(N)
-    frequency = 1 / cycle_length
-    sine_wave = np.sin(2 * np.pi * frequency * t)
-    # Cross-correlation to find best lag
-    corr = np.correlate(series - np.mean(series), sine_wave, mode='full')
-    lag = corr.argmax() - (N - 1)
-    # Normalize phase within cycle
-    phase_pos = lag % cycle_length
-    phase_fraction = phase_pos / cycle_length
-    phase_degrees = phase_fraction * 360
-    return phase_pos, phase_degrees
-    
-
-def label_phase(phase_degrees):
-    phase_degrees = phase_degrees % 360
-    if 0 <= phase_degrees < 90:
-        return "Birth"
-    elif 90 <= phase_degrees < 150:
-        return "Ascent"
-    elif 150 <= phase_degrees < 210:
-        return "Peak"
-    elif 210 <= phase_degrees < 270:
-        return "Post-Peak"
-    else:
-        return "Collapse"
 
 
     
@@ -1242,28 +1180,9 @@ if not df.empty:
      micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
      resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE)
     
-    analysis_window = 34  # Or chosen window
-    recent_series = df["score"].iloc[-analysis_window:].fillna(0)
     
-    # 1. Detect multiple cycles
-    detected_cycles = detect_multiple_cycles(recent_series, top_n=3)
     
-    multi_cycle_results = []
     
-    for cycle in detected_cycles:
-        cycle_length = cycle['cycle_length']
-        energy = cycle['energy']
-        phase_pos, phase_deg = estimate_cycle_phase_position(recent_series, cycle_length)
-        phase_label_str = label_phase(phase_deg)
-        
-        multi_cycle_results.append({
-            'cycle_length': cycle_length,
-            'energy': round(energy, 3),
-            'phase_position': phase_pos,
-            'phase_degrees': round(phase_deg, 2),
-            'phase_label': phase_label_str
-        })
-
     
     
     spiral_detector = NaturalFibonacciSpiralDetector(df, window_size=selected_window)
@@ -1295,17 +1214,9 @@ if not df.empty:
     # Plot MSI Chart
     plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, spiral_centers=spiral_centers)
     
-    with st.expander("🔎 Multi-Cycle Detector Results", expanded=False):
+   #with st.expander("🔎 Multi-Cycle Detector Results", expanded=False):
         
-        if multi_cycle_results:
-            for cycle in multi_cycle_results:
-                st.markdown(f"""
-                **Cycle Length:** {cycle['cycle_length']} rounds  
-                - Energy: {cycle['energy']}  
-                - Phase: {cycle['phase_label']} ({cycle['phase_position']} / {cycle['cycle_length']}, {cycle['phase_degrees']}°)
-                """)
-        else:
-            st.warning("No significant cycles detected.")
+        
         
 
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
