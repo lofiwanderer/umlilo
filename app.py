@@ -370,7 +370,7 @@ def compute_custom_phase_score(
     weighted_energy = compute_weighted_energy(msi_values, window_sizes)
 
     gap = compute_gap_since_last_pink(current_round_index, last_pink_index)
-    gap_alignment = fib_gap_alignment(gap)
+    fib_alignment = fib_gap_alignment(gap)
 
      # Final Phase Score (tunable weights)
     phase_score = (
