@@ -158,6 +158,8 @@ def get_phase_label(position, cycle_length):
 
     
 FIB_NUMBERS = [3, 5, 8, 13, 21, 34, 55]
+FIBONACCI_NUMBERS = [3, 5, 8, 13, 21, 34, 55]
+ENVELOPE_MULTS = [1.0, 1.618, 2.618]
 
 class NaturalFibonacciSpiralDetector:
     def __init__(self, df, window_size=34):
@@ -270,7 +272,241 @@ def compute_resonance(row, selected_windows, weights=None):
     
     resonance_score = weighted_sum / weight_total
     return round(resonance_score, 2) 
+
+def compute_slope_agreement(slopes):
+    """Percentage of slopes in the same direction."""
+    signs = [np.sign(s) for s in slopes]
+    pos_count = signs.count(1)
+    neg_cout = signs.count(-1)
+    return round(max(count_pos, count_neg) / len(signs), 2)
+
+def compute_ordering_score(msi_values):
+    """Measures hierarchy — are shorter windows leading longer?"""
+    mismatches = sum(1 for i in range(len(msi_values)-1) if msi_values[i] < msi_values[i+1])
+    return round(1 - (mismatches / (len(msi_values) - 1)), 2)
+
+def detect_slope_inflections(slope_series):
+    """Counts number of sign flips in slopes."""
+    inflections = 0
+    for i in range(1, len(slope_series)):
+        if np.sign(slope_series[i]) != np.sign(slope_series[i-1]):
+            inflections += 1
+    return inflections
+
+def compute_weighted_energy(msi_values, window_sizes):
+    weights = []
+    for w in window_sizes:
+        if w <= 8:
+            weights.append(0.5)
+        elif w <= 21:
+            weights.append(1.0)
+        else:
+            weights.append(1.5)
+    weighted = [v * w for v, w in zip(msi_values, weights)]
+    return sum(weighted) / sum(weights)
+
+def dynamic_feb_bands(ma_value, phase_score):
+    """Phase-weighted dynamic envelope bands."""
+    if phase_score >= 0.75:
+        mults = ENVELOPE_MULTS
+    elif phase_score >= 0.5:
+        mults = [0.85, 1.3, 2.0]
+    else:
+        mults = [0.7, 1.0, 1.5]
+    return [round(ma_value * m, 3) for m in mults]
+
+def check_envelope_breakouts(msi_value, bands):
+    """Flags for each breakout level."""
+    return {
+        "breakout_1": msi_value >= bands[0],
+        "breakout_1_618": msi_value >= bands[1],
+        "breakout_2_618": msi_value >= bands[2],
+    }
+
+def compute_volatility(series, window=5):
+    """Std deviation over recent rounds."""
+    return round(series[-window:].std(), 3)
+
+def compute_gap_since_last_pink(current_index, last_pink_index):
+    """How many rounds since last surge/pink?"""
+    if last_pink_index is None:
+        return None
+    return max(1, current_index - last_pink_index)
+
+def fib_gap_alignment(gap):
+    """How closely does gap match Fibonacci numbers?"""
+    if gap is None:
+        return 0.5
+    closest = min(FIBONACCI_NUMBERS, key=lambda x: abs(x - gap))
+    alignment = 1 - (abs(closest - gap) / max(FIBONACCI_NUMBERS))
+    return round(max(0, alignment), 2)
+
+def map_phase_label(score):
+    if score >= 0.75:
+        return "Ascent"
+    elif score >= 0.5:
+        return "Birth"
+    elif 0.4 <= score < 0.5:
+        return "Peak"
+    elif 0.25 <= score < 0.4:
+        return "Post-Peak"
+    else:
+        return "Collapse"
+
+def compute_custom_phase_score(
+    current_round_index,
+    last_pink_index,
+    msi_values,
+    slopes,
+    window_sizes
+):
+    # Ordering Score
+    ordering_score = compute_ordering_score(msi_values)
     
+    # Slope Agreement
+    slope_alignment = compute_slope_alignment(slopes)
+    
+    # Weighted Energy
+    weighted_energy = compute_weighted_energy(msi_values, window_sizes)
+
+    gap = compute_gap_since_last_pink(current_round_index, last_pink_index)
+    gap_alignment = fib_gap_alignment(gap)
+
+     # Final Phase Score (tunable weights)
+    phase_score = (
+        ordering_score * 0.3 +
+        slope_alignment * 0.2 +
+        weighted_energy * 0.3 +
+        fib_alignment * 0.2
+    )
+    phase_score = round(min(max(phase_score, 0.0), 1.0), 3)
+
+    phase_label = map_phase_label(phase_score)
+
+    return {
+        'ordering_score': ordering_score,
+        'slope_alignment': slope_alignment,
+        'weighted_energy': weighted_energy,
+        "gap_since_last_pink": gap,
+        "fib_gap_alignment": gap_alignment,
+        'phase_score': phase_score,
+        'phase_label': phase_label
+    }
+
+def estimate_regime_length_class(gap):
+    """Classifies regime by gap size."""
+    if gap is None:
+        return "Unknown", None
+    if gap <= 8:
+        return "Micro", 8
+    elif gap <= 21:
+        return "Meso", 21
+    else:
+        return "Macro", 34
+
+def compute_spiral_projection_windows(current_round, fib_numbers=FIBONACCI_NUMBERS):
+    """Predict future likely shift windows."""
+    return [current_round + f for f in fib_numbers]
+
+def detect_trap_cluster_state(recent_gaps, fib_numbers=FIBONACCI_NUMBERS):
+    """
+    Determines if recent pink gaps are clustering tightly in Fibonacci intervals,
+    which suggests bait/trap regimes designed to harvest bets.
+    """
+    if len(recent_gaps) < 3:
+        return "Unknown"
+
+    # Count how many gaps are in small Fib range
+    tight_cluster_count = sum(1 for g in recent_gaps if g in [3,5,8])
+    if tight_cluster_count >= 2:
+        return "High Trap Probability"
+
+    # Check for expansion pattern
+    expansion_gaps = [g for g in recent_gaps if g > 13]
+    if len(expansion_gaps) >= 2:
+        return "Expansion Zone (Dry Trap)"
+
+    return "Neutral"
+
+
+def classify_phase_label(slope_agreement, ordering_score, inflections, phase_score, volatility):
+    """
+    Label the current phase of the regime based on MSI slope structure, inflections,
+    and volatility.
+    """
+    if slope_agreement >= 0.8 and ordering_score >= 0.75 and inflections <= 1 and phase_score >= 0.75:
+        return "Ascent"
+
+    if slope_agreement >= 0.5 and ordering_score >= 0.5 and inflections <= 2 and phase_score >= 0.5:
+        return "Birth"
+
+    if inflections >= 3 or volatility > 1.0:
+        return "Peak / Range"
+
+    if slope_agreement <= 0.2 and ordering_score <= 0.2:
+        return "Collapse / Blue Train"
+
+    return "Unclassified"
+
+def classify_regime_state(
+    current_round_index,
+    last_pink_index,
+    recent_scores,
+    current_msi_values,
+    current_slopes,
+    slope_history_series,
+    phase_score,
+    recent_gap_history
+):
+    """
+    Complete regime classification for current round.
+    """
+
+    # Core Slope Features
+    slope_agreement = compute_slope_agreement(current_slopes)
+    ordering_score = compute_ordering_score(current_msi_values)
+    inflections = sum([detect_slope_inflections(s) for s in slope_history_series])
+    volatility = compute_volatility(recent_scores)
+
+    # Envelope Breakout Detection
+    ma_value = np.mean(recent_scores)
+    bands = dynamic_feb_bands(ma_value, phase_score)
+    msi_mean_value = np.mean(current_msi_values)
+    envelope_flags = check_envelope_breakouts(msi_mean_value, bands)
+
+    # Gap and Fibonacci Alignment
+    gap = compute_gap_since_last_pink(current_round_index, last_pink_index)
+    gap_alignment = fib_gap_alignment(gap)
+    regime_type, estimated_length = estimate_regime_length_class(gap)
+    current_pos_in_regime = gap if gap else 0
+    rounds_to_shift = estimated_length - current_pos_in_regime if estimated_length else None
+
+    spiral_forecast = compute_spiral_projection_windows(current_round_index)
+    trap_cluster_state = detect_trap_cluster_state(recent_gap_history)
+
+    # Phase Classification
+    phase_label = classify_phase_label(slope_agreement, ordering_score, inflections, phase_score, volatility)
+
+    # Final Result
+    result = {
+        "regime_type": regime_type,
+        "estimated_length": estimated_length,
+        "phase_label": phase_label,
+        "phase_score": phase_score,
+        "current_round_in_regime": current_pos_in_regime,
+        "rounds_to_next_shift": rounds_to_shift,
+        "gap_since_last_pink": gap,
+        "fib_gap_alignment": gap_alignment,
+        "spiral_projection_windows": spiral_forecast,
+        "trap_cluster_state": trap_cluster_state,
+        "slope_agreement": slope_agreement,
+        "ordering_score": ordering_score,
+        "slope_inflections": inflections,
+        "volatility": volatility,
+        "envelope_flags": envelope_flags
+    }
+
+    return result
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
@@ -833,11 +1069,23 @@ def analyze_data(data, pink_threshold, window_size, window = selected_msi_window
     )
 
 
+    df["recent_scores"] = df['multiplier'].tail(34)  # use biggest fib window
+    df["current_msi_values"] = [df[f"msi_{w}"].iloc[-1] for w in selected_msi_windows]
+    df["current_slopes"] = [df[f"slope_{w}"].iloc[-1] for w in selected_msi_windows]
+    df["slope_history_series"] = [df[f"slope_{w}"].tail(5).tolist() for w in selected_msi_windows
+                                  
+    df["pink_df"] = df[df['multiplier'] >= 10.0]
+    df["last_pink_index"] = pink_df['round_index'].max() if not pink_df.empty else None
     
+    # Optional: history of recent gaps between pinks
+    df["pink_rounds"] = pink_df['round_index'].sort_values().tolist()
+    df["recent_gaps"] = [pink_rounds[i] - pink_rounds[i-1] for i in range(1, len(pink_rounds))][-5:]
+
+   
     
-    # Prepare and safely round/format outputs, avoiding NoneType formatting
-    def safe_round(val, precision=4):
-        return round(val, precision) if pd.notnull(val) else None
+        # Prepare and safely round/format outputs, avoiding NoneType formatting
+        def safe_round(val, precision=4):
+            return round(val, precision) if pd.notnull(val) else None
     
     # Initialize variables
     upper_slope = (0, )
@@ -1194,6 +1442,29 @@ if not df.empty:
     
     true_flp_watchlist = project_true_forward_flp(spiral_centers, fib_layers=selected_fib_layers, max_rounds=max_rounds)
 
+    phase_score= compute_custom_phase_score(
+    current_round_index= df['round_index'].iloc[-1],
+    last_pink_index= df["last_pink_index"],
+    msi_values= df["current_msi_values"],
+    slopes= df["current_slopes"],
+    window_sizes= selected_msi_windows
+    )
+
+    #phase_score['phase_score']
+
+    #phase_score['phase_label']
+
+    regime_result = classify_regime_state(
+    current_round_index=df['round_index'].iloc[-1],
+    last_pink_index=df["last_pink_index"],
+    recent_scores=df["recent_scores"],
+    current_msi_values=df["current_msi_values"],
+    current_slopes=slopes= df["current_slopes"],
+    slope_history_series=slope_history_series,
+    phase_score=phase_score['phase_score'],
+    recent_gap_history=df["recent_gaps"]
+    )
+
 
 
     
@@ -1214,7 +1485,15 @@ if not df.empty:
     # Plot MSI Chart
     plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, spiral_centers=spiral_centers)
     
-   #with st.expander("🔎 Multi-Cycle Detector Results", expanded=False):
+   with st.expander("🔎 Multi-Cycle Detector Results", expanded=False):
+       
+       st.subheader("🎯 Custom Regime Classifier")
+       st.markdown(f"**Regime Type:** {regime_result['regime_type']} ({regime_result['estimated_length']} rounds)")
+       st.markdown(f"**Phase:** {regime_result['phase_label']} (Score: {regime_result['phase_score']})")
+       st.markdown(f"**Round in Regime:** {regime_result['current_round_in_regime']}/{regime_result['estimated_length']}")
+       st.markdown(f"**Rounds to Next Shift:** {regime_result['rounds_to_next_shift']}")
+       st.markdown(f"**Fibonacci Alignment:** {regime_result['fib_gap_alignment']}")
+       st.markdown(f"**Spiral Projections:** {regime_result['spiral_projection_windows']}")
         
         
         
