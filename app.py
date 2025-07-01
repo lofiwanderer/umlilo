@@ -1072,7 +1072,7 @@ def analyze_data(data, pink_threshold, window_size, window = selected_msi_window
     df["recent_scores"] = df['multiplier'].tail(34)  # use biggest fib window
     df["current_msi_values"] = [df[f"msi_{w}"].iloc[-1] for w in selected_msi_windows]
     df["current_slopes"] = [df[f"slope_{w}"].iloc[-1] for w in selected_msi_windows]
-    df["slope_history_series"] = [df[f"slope_{w}"].tail(5).tolist() for w in selected_msi_windows
+    df["slope_history_series"] = [df[f"slope_{w}"].tail(5).tolist() for w in selected_msi_windows]
                                   
     df["pink_df"] = df[df['multiplier'] >= 10.0]
     df["last_pink_index"] = pink_df['round_index'].max() if not pink_df.empty else None
