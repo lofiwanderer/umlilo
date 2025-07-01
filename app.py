@@ -1486,8 +1486,8 @@ if not df.empty:
     
     # Plot MSI Chart
     plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, spiral_centers=spiral_centers)
-    
-   with st.expander("🔎 Multi-Cycle Detector Results", expanded=False):
+
+    with st.expander("🔎 Multi-Cycle Detector Results", expanded=False):
        st.subheader("🎯 Custom Regime Classifier")
        st.markdown(f"**Regime Type:** {regime_result['regime_type']} ({regime_result['estimated_length']} rounds)")
        st.markdown(f"**Phase:** {regime_result['phase_label']} (Score: {regime_result['phase_score']})")
@@ -1496,10 +1496,10 @@ if not df.empty:
        st.markdown(f"**Fibonacci Alignment:** {regime_result['fib_gap_alignment']}")
        st.markdown(f"**Spiral Projections:** {regime_result['spiral_projection_windows']}")
        
+    
+   
       
-        
-        
-        
+    
 
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
         fig, ax = plt.subplots(figsize=(10, 4))
