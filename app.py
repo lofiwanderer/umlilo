@@ -388,7 +388,7 @@ def compute_custom_phase_score(
         'slope_alignment': slope_alignment,
         'weighted_energy': weighted_energy,
         "gap_since_last_pink": gap,
-        "fib_gap_alignment": gap_alignment,
+        "fib_gap_alignment": fib_alignment,
         'phase_score': phase_score,
         'phase_label': phase_label
     }
