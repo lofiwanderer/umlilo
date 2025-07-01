@@ -1084,8 +1084,10 @@ def analyze_data(data, pink_threshold, window_size, window = selected_msi_window
    
     
         # Prepare and safely round/format outputs, avoiding NoneType formatting
-        def safe_round(val, precision=4):
-            return round(val, precision) if pd.notnull(val) else None
+    def safe_round(val, precision=4):
+        return round(val, precision) if pd.notnull(val) else None
+        
+          
     
     # Initialize variables
     upper_slope = (0, )
