@@ -364,7 +364,7 @@ def compute_custom_phase_score(
     ordering_score = compute_ordering_score(msi_values)
     
     # Slope Agreement
-    slope_alignment = compute_slope_alignment(slopes)
+    slope_alignment = compute_slope_agreement(current_slopes)
     
     # Weighted Energy
     weighted_energy = compute_weighted_energy(msi_values, window_sizes)
