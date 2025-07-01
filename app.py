@@ -1461,8 +1461,8 @@ if not df.empty:
     last_pink_index=df["last_pink_index"],
     recent_scores=df["recent_scores"],
     current_msi_values=df["current_msi_values"],
-    current_slopes=slopes= df["current_slopes"],
-    slope_history_series=slope_history_series,
+    current_slopes= df["current_slopes"],
+    slope_history_series=df["slope_history_series"],
     phase_score=phase_score['phase_score'],
     recent_gap_history=df["recent_gaps"]
     )
