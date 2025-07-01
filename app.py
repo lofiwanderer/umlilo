@@ -277,8 +277,8 @@ def compute_slope_agreement(slopes):
     """Percentage of slopes in the same direction."""
     signs = [np.sign(s) for s in slopes]
     pos_count = signs.count(1)
-    neg_cout = signs.count(-1)
-    return round(max(count_pos, count_neg) / len(signs), 2)
+    neg_count = signs.count(-1)
+    return round(max(pos_count, neg_count) / len(signs), 2)
 
 def compute_ordering_score(msi_values):
     """Measures hierarchy — are shorter windows leading longer?"""
