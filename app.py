@@ -1069,17 +1069,10 @@ def analyze_data(data, pink_threshold, window_size, window = selected_msi_window
     )
 
 
-    df["recent_scores"] = df['multiplier'].tail(34)  # use biggest fib window
-    df["current_msi_values"] = [df[f"msi_{w}"].iloc[-1] for w in selected_msi_windows]
-    df["current_slopes"] = [df[f"slope_{w}"].iloc[-1] for w in selected_msi_windows]
-    df["slope_history_series"] = [df[f"slope_{w}"].tail(5).tolist() for w in selected_msi_windows]
+   
                                   
-    df["pink_df"] = df[df['multiplier'] >= 10.0]
-    df["last_pink_index"] = pink_df['round_index'].max() if not pink_df.empty else None
     
-    # Optional: history of recent gaps between pinks
-    df["pink_rounds"] = pink_df['round_index'].sort_values().tolist()
-    df["recent_gaps"] = [pink_rounds[i] - pink_rounds[i-1] for i in range(1, len(pink_rounds))][-5:]
+   
 
    
     
@@ -1443,12 +1436,23 @@ if not df.empty:
     max_rounds = len(df)
     
     true_flp_watchlist = project_true_forward_flp(spiral_centers, fib_layers=selected_fib_layers, max_rounds=max_rounds)
+    recent_scores = df['multiplier'].tail(34)  # use biggest fib window
+    current_msi_values= [df[f"msi_{w}"].iloc[-1] for w in selected_msi_windows]
+    current_slopes= [df[f"slope_{w}"].iloc[-1] for w in selected_msi_windows]
+    slope_history_series = [df[f"slope_{w}"].tail(5).tolist() for w in selected_msi_windows]
+
+    pink_df = df[df['multiplier'] >= 10.0]
+    last_pink_index = pink_df['round_index'].max() if not pink_df.empty else None
+    
+     # Optional: history of recent gaps between pinks
+    pink_rounds = pink_df['round_index'].sort_values().tolist()
+    recent_gaps = [pink_rounds[i] - pink_rounds[i-1] for i in range(1, len(pink_rounds))][-5:]
 
     phase_score= compute_custom_phase_score(
     current_round_index= df['round_index'].iloc[-1],
-    last_pink_index= df["last_pink_index"],
-    msi_values= df["current_msi_values"],
-    slopes= df["current_slopes"],
+    last_pink_index= last_pink_index,
+    msi_values= current_msi_values,
+    slopes= current_slopes,
     window_sizes= selected_msi_windows
     )
 
@@ -1458,13 +1462,13 @@ if not df.empty:
 
     regime_result = classify_regime_state(
     current_round_index=df['round_index'].iloc[-1],
-    last_pink_index=df["last_pink_index"],
-    recent_scores=df["recent_scores"],
-    current_msi_values=df["current_msi_values"],
-    current_slopes= df["current_slopes"],
-    slope_history_series=df["slope_history_series"],
+    last_pink_index=last_pink_index,
+    recent_scores=recent_scores,
+    current_msi_values=current_msi_values,
+    current_slopes= current_slopes,
+    slope_history_series=slope_history_series,
     phase_score=phase_score['phase_score'],
-    recent_gap_history=df["recent_gaps"]
+    recent_gap_history=recent_gaps
     )
 
 
