@@ -91,7 +91,21 @@ with st.sidebar:
             step=0.1
         )
         window_weights.append(weight)
+
+    # ---------------------------------
+    # Sidebar Toggles for Fib Retracement
+    # ---------------------------------
+    st.sidebar.subheader("📐 Fibonacci Retracement Settings")
+
+    fib_lookback_window = st.sidebar.selectbox(
+    "Lookback Window (Rounds)",
+    options=[5, 8, 13, 21, 34, 55],
+    index=3
+    )
     
+    show_fib_retracement = st.sidebar.checkbox(
+        "📏 Show Fib Retracements", value=True
+    )
     st.header("📉 Indicator Visibility")
 
     show_supertrend = st.checkbox("🟢 Show SuperTrend", value=True)
@@ -507,6 +521,52 @@ def classify_regime_state(
     }
 
     return result
+
+# ============================
+# MSI FIBONACCI RETRACEMENT MODULE
+# ============================
+
+def calculate_fibonacci_retracements(msi_series, fib_lookback_window):
+    """
+    Calculate Fibonacci retracement and extension levels
+    from swing high/low over user-specified lookback window.
+    """
+    recent = msi_series.tail(fib_lookback_window).dropna()
+    if recent.empty or len(recent) < 2:
+        return None
+
+    swing_high = recent.max()
+    swing_low = recent.min()
+
+    if swing_high == swing_low:
+        # Avoid division by zero when flat
+        return None
+
+    # Compute standard retracement levels
+    retracements = {
+        "0.0": round(swing_low, 3),
+        "0.236": round(swing_high - 0.236 * (swing_high - swing_low), 3),
+        "0.382": round(swing_high - 0.382 * (swing_high - swing_low), 3),
+        "0.5": round((swing_high + swing_low) / 2, 3),
+        "0.618": round(swing_high - 0.618 * (swing_high - swing_low), 3),
+        "0.786": round(swing_high - 0.786 * (swing_high - swing_low), 3),
+        "1.0": round(swing_high, 3)
+    }
+
+    # Compute extension levels
+    range_ = swing_high - swing_low
+    extensions = {
+        "1.618": round(swing_high + 0.618 * range_, 3),
+        "2.618": round(swing_high + 1.618 * range_, 3),
+        "3.618": round(swing_high + 2.618 * range_, 3),
+        "-0.618": round(swing_low - 0.618 * range_, 3),
+        "-1.618": round(swing_low - 1.618 * range_, 3),
+        "-2.618": round(swing_low - 2.618 * range_, 3)
+    }
+
+    return retracements, extensions, swing_high, swing_low
+
+
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
@@ -1337,7 +1397,37 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
             ax2.set_ylabel("Resonance Score", color='purple')
             ax2.tick_params(axis='y', labelcolor='purple')
 
-    
+        # ---------------------------------
+        # MSI FIBONACCI RETRACEMENT OVERLAY
+        # ---------------------------------
+        if show_fib_retracement:
+            fib_msi_column = f"msi_{selected_msi_windows}"
+            if fib_msi_column in df.columns:
+                fib_msi_series = df[fib_msi_column]
+                results = calculate_fibonacci_retracements(fib_msi_series, fib_lookback_window)
+        
+                if results:
+                    retrace, ext, high, low = results
+        
+                    # Plot retracement levels
+                    for level, value in retrace.items():
+                        ax.axhline(value, color='navy', linestyle='--', alpha=0.4)
+                        ax.text(
+                            df["timestamp"].iloc[-1], value,
+                            f"{level}",
+                            fontsize=7, color='navy', va='bottom'
+                        )
+        
+                    # Plot extension levels
+                    for level, value in ext.items():
+                        ax.axhline(value, color='purple', linestyle=':', alpha=0.3)
+                        ax.text(
+                            df["timestamp"].iloc[-1], value,
+                            f"{level}x",
+                            fontsize=7, color='purple', va='top'
+                        )
+        
+            
     ax.set_title("📊 MSI Volatility Tracker")
     with st.expander("Legend", expanded=False):
         ax.legend()
