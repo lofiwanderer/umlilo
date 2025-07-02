@@ -96,6 +96,11 @@ with st.sidebar:
     # Sidebar Toggles for Fib Retracement
     # ---------------------------------
     st.sidebar.subheader("📐 Fibonacci Retracement Settings")
+    fib_msi_window = st.sidebar.selectbox(
+    "MSI Window for Fib Retracement",
+    options=[5, 8, 13, 21, 34, 55],
+    index=2
+    )
 
     fib_lookback_window = st.sidebar.selectbox(
     "Lookback Window (Rounds)",
@@ -1291,7 +1296,7 @@ def analyze_data(data, pink_threshold, window_size, window = selected_msi_window
 
 
 # =================== MSI CHART PLOTTING ========================
-def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_lookback_window, spiral_centers=[], window = selected_msi_windows):
+def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_msi_window, fib_lookback_window, spiral_centers=[], window = selected_msi_windows):
     if len(df) < 2:
         st.warning("Need at least 2 rounds to plot MSI chart.")
         return
@@ -1401,7 +1406,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         # MSI FIBONACCI RETRACEMENT OVERLAY
         # ---------------------------------
         if show_fib_retracement:
-            fib_msi_column = f"msi_{selected_msi_windows}"
+            fib_msi_column = f"msi_{fib_msi_window}"
             if fib_msi_column in df.columns:
                 fib_msi_series = df[fib_msi_column]
                 results = calculate_fibonacci_retracements(fib_msi_series, fib_lookback_window)
@@ -1579,7 +1584,7 @@ if not df.empty:
         
     
     # Plot MSI Chart
-    plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_lookback_window,  spiral_centers=spiral_centers)
+    plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_msi_window, fib_lookback_window,  spiral_centers=spiral_centers)
 
     with st.expander("🔎 Multi-Cycle Detector Results", expanded=False):
        st.subheader("🎯 Custom Regime Classifier")
