@@ -1291,7 +1291,7 @@ def analyze_data(data, pink_threshold, window_size, window = selected_msi_window
 
 
 # =================== MSI CHART PLOTTING ========================
-def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, spiral_centers=[], window = selected_msi_windows):
+def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, spiral_centers=[], window = selected_msi_windows, fib_lookback_window):
     if len(df) < 2:
         st.warning("Need at least 2 rounds to plot MSI chart.")
         return
@@ -1579,7 +1579,7 @@ if not df.empty:
         
     
     # Plot MSI Chart
-    plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, spiral_centers=spiral_centers)
+    plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, spiral_centers=spiral_centers, selected_msi_windows, fib_lookback_window)
 
     with st.expander("🔎 Multi-Cycle Detector Results", expanded=False):
        st.subheader("🎯 Custom Regime Classifier")
