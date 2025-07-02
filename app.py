@@ -1579,7 +1579,7 @@ if not df.empty:
         
     
     # Plot MSI Chart
-    plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_lookback_window,  spiral_centers=spiral_centers, selected_msi_windows)
+    plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_lookback_window,  spiral_centers=spiral_centers)
 
     with st.expander("🔎 Multi-Cycle Detector Results", expanded=False):
        st.subheader("🎯 Custom Regime Classifier")
