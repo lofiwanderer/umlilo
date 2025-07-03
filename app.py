@@ -1712,11 +1712,12 @@ if not df.empty:
        st.markdown(f"**Score:** {alignment_score}")
        if gaps:
            st.markdown(f"Gaps between pinks: {gaps}")
-      st.subheader("📈 Alignment Score Trend")
+           
+       st.subheader("📈 Alignment Score Trend")
 
-      if len(st.session_state["alignment_score_history"]) >= 2:
+       if len(st.session_state["alignment_score_history"]) >= 2:
            st.line_chart(st.session_state["alignment_score_history"])
-      else:
+       else:
            st.markdown("_Need at least 2 scores to show trend._")
 
        if show_multi_fib_analysis and 'multi_fib_results' in locals():
