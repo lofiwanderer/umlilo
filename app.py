@@ -45,6 +45,9 @@ if "last_position" not in st.session_state:
 if "current_mult" not in st.session_state:
     st.session_state.current_mult = 2.0
 
+if "alignment_score_history" not in st.session_state:
+    st.session_state["alignment_score_history"] = []
+
 # ================ CONFIGURATION SIDEBAR ==================
 with st.sidebar:
     st.header("⚙️ QUANTUM PARAMETERS")
@@ -122,6 +125,22 @@ with st.sidebar:
         "📊 Show Multi-Window Fib Analysis",
         value=True
     )
+
+    st.sidebar.subheader("🎯 Fib Alignment Score Engine Settings")
+
+    fib_alignment_window = st.sidebar.selectbox(
+        "Lookback Window (Rounds)",
+        options=[21, 34, 55],
+        index=1
+    )
+    
+    fib_alignment_tolerance = st.sidebar.slider(
+        "Gap Tolerance",
+        min_value=0.5,
+        max_value=3.0,
+        value=1.0,
+        step=0.1
+    )
     st.header("📉 Indicator Visibility")
 
     show_supertrend = st.checkbox("🟢 Show SuperTrend", value=True)
@@ -190,6 +209,7 @@ def get_phase_label(position, cycle_length):
 FIB_NUMBERS = [3, 5, 8, 13, 21, 34, 55]
 FIBONACCI_NUMBERS = [3, 5, 8, 13, 21, 34, 55]
 ENVELOPE_MULTS = [1.0, 1.618, 2.618]
+FIB_GAPS = [3, 5, 8, 13, 21, 34, 55]
 
 class NaturalFibonacciSpiralDetector:
     def __init__(self, df, window_size=34):
@@ -600,6 +620,50 @@ def compute_multi_window_fib_retracements(df, msi_column, windows):
             }
     return results
 
+def compute_fib_alignment_score(df, fib_threshold=10.0, lookback_window=34, tolerance=1.0):
+    """
+    Compute a score 0–1 for how well the sequence of recent 'pink' rounds
+    aligns to Fibonacci intervals.
+    - fib_threshold: multiplier value considered a pink.
+    - lookback_window: number of rounds to analyze.
+    - tolerance: +/- range allowed when matching Fib gaps.
+    """
+    if len(df) < lookback_window:
+        return None, []
+
+    recent_df = df.tail(lookback_window).copy()
+    recent_df = recent_df.reset_index(drop=True)
+    recent_df['relative_index'] = recent_df.index
+
+    # Find pink rounds in recent window
+    pink_indexes = recent_df[recent_df['multiplier'] >= fib_threshold]['relative_index'].tolist()
+
+    if len(pink_indexes) < 2:
+        return 0.0, []
+
+    # Compute gaps between pink rounds
+    gaps = [pink_indexes[i+1] - pink_indexes[i] for i in range(len(pink_indexes)-1)]
+
+    # For each gap, score it by closeness to Fib sequence
+    scores = []
+    for gap in gaps:
+        diffs = [abs(gap - fib) for fib in FIB_GAPS]
+        min_diff = min(diffs)
+        if min_diff <= tolerance:
+            # Perfect or near-perfect match
+            scores.append(1.0)
+        else:
+            # Score decays with distance
+            decay = np.exp(-min_diff / tolerance)
+            scores.append(decay)
+
+    # Average score
+    if scores:
+        alignment_score = np.clip(np.mean(scores), 0, 1)
+    else:
+        alignment_score = 0.0
+
+    return round(alignment_score, 3), gaps
 
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
@@ -1609,8 +1673,14 @@ if not df.empty:
     recent_gap_history=recent_gaps
     )
 
-
-
+    alignment_score, gaps = compute_fib_alignment_score(
+    df,
+    fib_threshold=10.0,
+    lookback_window=fib_alignment_window,
+    tolerance=fib_alignment_tolerance
+    )
+    # Store for chart
+    st.session_state["alignment_score_history"].append(alignment_score)
     
     # Check if we completed a cycle
     if dominant_cycle and current_round_position == 0 and 'last_position' in st.session_state:
@@ -1637,6 +1707,17 @@ if not df.empty:
        st.markdown(f"**Rounds to Next Shift:** {regime_result['rounds_to_next_shift']}")
        st.markdown(f"**Fibonacci Alignment:** {regime_result['fib_gap_alignment']}")
        st.markdown(f"**Spiral Projections:** {regime_result['spiral_projection_windows']}")
+
+       st.subheader("📊 Fibonacci Alignment Score")
+       st.markdown(f"**Score:** {alignment_score}")
+       if gaps:
+           st.markdown(f"Gaps between pinks: {gaps}")
+      st.subheader("📈 Alignment Score Trend")
+
+      if len(st.session_state["alignment_score_history"]) >= 2:
+           st.line_chart(st.session_state["alignment_score_history"])
+      else:
+           st.markdown("_Need at least 2 scores to show trend._")
 
        if show_multi_fib_analysis and 'multi_fib_results' in locals():
            
