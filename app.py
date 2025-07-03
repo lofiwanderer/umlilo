@@ -624,9 +624,9 @@ def compute_fib_alignment_score(df, fib_threshold=10.0, lookback_window=34, tole
     """
     Compute a score 0–1 for how well the sequence of recent 'pink' rounds
     aligns to Fibonacci intervals.
-    - fib_threshold: multiplier value considered a pink.
-    - lookback_window: number of rounds to analyze.
-    - tolerance: +/- range allowed when matching Fib gaps.
+    #- fib_threshold: multiplier value considered a pink.
+    #- lookback_window: number of rounds to analyze.
+    #- tolerance: +/- range allowed when matching Fib gaps.
     """
     if len(df) < lookback_window:
         return None, []
