@@ -111,6 +111,17 @@ with st.sidebar:
     show_fib_retracement = st.sidebar.checkbox(
         "📏 Show Fib Retracements", value=True
     )
+
+    st.sidebar.subheader("📐 Multi-Window Fibonacci Analysis")
+    multi_fib_windows = st.sidebar.multiselect(
+        "Select Fib Lookback Windows",
+        options=[5, 8, 13, 21, 34, 55],
+        default=[13, 21, 34]
+    )
+    show_multi_fib_analysis = st.sidebar.checkbox(
+        "📊 Show Multi-Window Fib Analysis",
+        value=True
+    )
     st.header("📉 Indicator Visibility")
 
     show_supertrend = st.checkbox("🟢 Show SuperTrend", value=True)
@@ -570,6 +581,24 @@ def calculate_fibonacci_retracements(msi_series, fib_lookback_window):
     }
 
     return retracements, extensions, swing_high, swing_low
+
+def compute_multi_window_fib_retracements(df, msi_column, windows):
+    """
+    For each selected lookback window, compute retracement levels.
+    Returns a dict of window -> retracement levels.
+    """
+    results = {}
+    for w in windows:
+        res = calculate_fibonacci_retracements(df[msi_column], w)
+        if res:
+            retrace, ext, high, low = res
+            results[w] = {
+                "retracements": retrace,
+                "extensions": ext,
+                "swing_high": high,
+                "swing_low": low
+            }
+    return results
 
 
 @st.cache_data
@@ -1431,7 +1460,21 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
                             f"{level}x",
                             fontsize=7, color='purple', va='top'
                         )
+        if show_multi_fib_analysis:
+            msi_col = f"msi_{fib_msi_window}"
+            if msi_col in df.columns:
+                multi_fib_results = compute_multi_window_fib_retracements(df, msi_col, multi_fib_windows)
+                colors = ["navy", "green", "orange", "purple", "red", "brown"]
         
+                for idx, (window, result) in enumerate(multi_fib_results.items()):
+                    color = colors[idx % len(colors)]
+                    for level, value in result["retracements"].items():
+                        ax.axhline(value, color=color, linestyle='--', alpha=0.3)
+                        ax.text(
+                            df["timestamp"].iloc[-1], value,
+                            f"{level} (W{window})",
+                            fontsize=7, color=color, va='bottom'
+                        )
             
     ax.set_title("📊 MSI Volatility Tracker")
     with st.expander("Legend", expanded=False):
@@ -1594,10 +1637,15 @@ if not df.empty:
        st.markdown(f"**Rounds to Next Shift:** {regime_result['rounds_to_next_shift']}")
        st.markdown(f"**Fibonacci Alignment:** {regime_result['fib_gap_alignment']}")
        st.markdown(f"**Spiral Projections:** {regime_result['spiral_projection_windows']}")
-       
-    
-   
-      
+
+       if show_multi_fib_analysis and 'multi_fib_results' in locals():
+           
+           st.sidebar.subheader("🔎 Fib Confluence Zones")
+           for window, res in multi_fib_results.items():
+               st.sidebar.markdown(f"**Window {window}**")
+               for level, value in res["retracements"].items():
+                   st.sidebar.markdown(f"{level}: `{value}`")
+            
     
 
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
