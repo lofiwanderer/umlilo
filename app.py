@@ -1453,7 +1453,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         ax.text(ts, df["msi"].max() * 0.9, f"🌀 {sc['label']}", rotation=90,
                 fontsize=8, ha='center', va='top', color=color)
         
-    if show_ichimoku::
+    if show_ichimoku:
         for echo in spiral_echoes:
             ts = pd.to_datetime(echo["timestamp"])
             label = f"{echo['gap']}-Echo ({echo['source_label']})"
