@@ -1411,7 +1411,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         ax.plot(df["timestamp"], df["bb_upper_10"], color='#0AEFFF', linestyle='--', label="upperBB", alpha=1.0)
         ax.plot(df["timestamp"], df["bb_lower_10"], color='#0AEFFF', linestyle='--', alpha=1.0)
        
-    ax.axhline(0, color='black', linestyle='.-', linewidth=1.6)
+    ax.axhline(0, color='black', linestyle='-.', linewidth=1.6)
     
     # Highlight squeeze
     ax.scatter(df[df["squeeze_flag"]]["timestamp"], df[df["squeeze_flag"]]["msi"], color='purple', label="Squeeze", s=20)
