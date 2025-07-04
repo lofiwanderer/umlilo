@@ -75,7 +75,7 @@ with st.sidebar:
 
     st.sidebar.subheader("MSI Multi-Window Settings")
 
-    default_fib_windows = [5, 8, 13, 21, 34]
+    default_fib_windows = [3, 5, 8, 13, 21, 34]
     
     selected_msi_windows = st.sidebar.multiselect(
         "Select MSI Window Sizes (Fibonacci)",
@@ -101,13 +101,13 @@ with st.sidebar:
     st.sidebar.subheader("📐 Fibonacci Retracement Settings")
     fib_msi_window = st.sidebar.selectbox(
     "MSI Window for Fib Retracement",
-    options=[5, 8, 13, 21, 34, 55],
+    options=[3, 5, 8, 13, 21, 34, 55],
     index=2
     )
 
     fib_lookback_window = st.sidebar.selectbox(
     "Lookback Window (Rounds)",
-    options=[5, 8, 13, 21, 34, 55],
+    options=[3, 5, 8, 13, 21, 34, 55],
     index=3
     )
     
