@@ -114,6 +114,9 @@ with st.sidebar:
     show_fib_retracement = st.sidebar.checkbox(
         "📏 Show Fib Retracements", value=True
     )
+    show_fib_ext = st.sidebar.checkbox(
+        "📏 Show Fib extentsions", value=True
+    )
 
     st.sidebar.subheader("📐 Multi-Window Fibonacci Analysis")
     multi_fib_windows = st.sidebar.multiselect(
@@ -145,14 +148,15 @@ with st.sidebar:
 
     show_supertrend = st.checkbox("🟢 Show SuperTrend", value=True)
     show_ichimoku   = st.checkbox("☁️ Show Ichimoku (Tenkan/Kijun)", value=True)
-    show_fibo   = st.checkbox("💫 Show FIB bands", value=True)
+    show_fibo   = st.checkbox("💫 Show FIB modules", value=True)
     show_bb   = st.checkbox("🌈 Show BB bands", value=True)
+    show_fibo_bands   = st.checkbox("📏 Show FIB  bands", value=True)
     show_msi_res = st.checkbox("💹 MSI Res", value=True)
 
     st.header("📊 PANEL TOGGLES")
     FAST_ENTRY_MODE = st.checkbox("⚡ Fast Entry Mode", value=False)
     show_thre = st.checkbox("🌀 THRE Panel", value=True)
-    show_msi_res = st.checkbox("🧬 MSI Res", value=True)
+    
     
     show_fpm = st.checkbox("🧬 FPM Panel", value=True)
     show_anchor = st.checkbox("🔗 Fractal Anchor", value=True)
@@ -1407,7 +1411,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         ax.plot(df["timestamp"], df["bb_upper_10"], color='#0AEFFF', linestyle='--', label="upperBB", alpha=1.0)
         ax.plot(df["timestamp"], df["bb_lower_10"], color='#0AEFFF', linestyle='--', alpha=1.0)
        
-    ax.axhline(0, color='gray', linestyle=':')
+    ax.axhline(0, color='black', linestyle='.-', linewidth=1.6)
     
     # Highlight squeeze
     ax.scatter(df[df["squeeze_flag"]]["timestamp"], df[df["squeeze_flag"]]["msi"], color='purple', label="Squeeze", s=20)
@@ -1449,7 +1453,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         ax.text(ts, df["msi"].max() * 0.9, f"🌀 {sc['label']}", rotation=90,
                 fontsize=8, ha='center', va='top', color=color)
         
-    if show_bb:
+    if show_ichimoku::
         for echo in spiral_echoes:
             ts = pd.to_datetime(echo["timestamp"])
             label = f"{echo['gap']}-Echo ({echo['source_label']})"
@@ -1459,21 +1463,22 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
 
     if show_fibo:
         
+        if show_fibo_bands:
 
-        # Plot center line and key Fibonacci bands
-        ax.plot(df["timestamp"], df["feb_center"], linestyle="--", color="gray", linewidth=1.5)
-        
-        # Upper bands
-        ax.plot(df["timestamp"], df["feb_upper_1_618"], linestyle=":", color="purple", linewidth=1.3)
-        ax.plot(df["timestamp"], df["feb_upper_2_618"], linestyle=":", color="purple", linewidth=1.3)
-        
-        # Lower bands
-        ax.plot(df["timestamp"], df["feb_lower_1_618"], linestyle=":", color="purple", linewidth=1.3)
-        ax.plot(df["timestamp"], df["feb_lower_2_618"], linestyle=":", color="purple", linewidth=1.3)
-        
-        # Optional: Light fill between bands for visualization
-        ax.fill_between(df["timestamp"], df["feb_lower_1_618"], df["feb_upper_1_618"],
-                        color="gold", alpha=0.5, )
+            # Plot center line and key Fibonacci bands
+            ax.plot(df["timestamp"], df["feb_center"], linestyle="--", color="gray", linewidth=1.5)
+            
+            # Upper bands
+            ax.plot(df["timestamp"], df["feb_upper_1_618"], linestyle="--", color="blue", linewidth=1.3)
+            ax.plot(df["timestamp"], df["feb_upper_2_618"], linestyle="--", color="black", linewidth=1.3)
+            
+            # Lower bands
+            ax.plot(df["timestamp"], df["feb_lower_1_618"], linestyle="--", color="blue", linewidth=1.3)
+            ax.plot(df["timestamp"], df["feb_lower_2_618"], linestyle="--", color="black", linewidth=1.3)
+            
+            # Optional: Light fill between bands for visualization
+            ax.fill_between(df["timestamp"], df["feb_lower_1_618"], df["feb_upper_1_618"],
+                            color="pink", alpha=0.3, )
         
         for w in true_flp_watchlist:
             if w["target_round"] < len(df):
@@ -1517,13 +1522,14 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
                         )
         
                     # Plot extension levels
-                    for level, value in ext.items():
-                        ax.axhline(value, color='purple', linestyle=':', alpha=0.3)
-                        ax.text(
-                            df["timestamp"].iloc[-1], value,
-                            f"{level}x",
-                            fontsize=7, color='purple', va='top'
-                        )
+                    if show_fib_ext:
+                        for level, value in ext.items():
+                            ax.axhline(value, color='purple', linestyle=':', alpha=0.3)
+                            ax.text(
+                                df["timestamp"].iloc[-1], value,
+                                f"{level}x",
+                                fontsize=7, color='purple', va='top'
+                            )    
         if show_multi_fib_analysis:
             msi_col = f"msi_{fib_msi_window}"
             if msi_col in df.columns:
