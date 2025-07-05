@@ -719,7 +719,7 @@ class QuantumFibonacciEntanglement:
             return "NEUTRAL"
         
         # More sensitive forecasting
-        surge_score = (sum(self.multipliers[-3:])/3 * 1.618 - min(self.multipliers[-5:])
+        surge_score = (sum(self.multipliers[-3:])/3 * 1.618) - min(self.multipliers[-5:])
         trap_score = max(self.multipliers[-5:]) - (sum(self.multipliers[-3:])/3 * 0.618)
         
         if surge_score > 1.0:  # Lowered threshold
