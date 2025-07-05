@@ -684,8 +684,68 @@ class QuantumFibonacciEntanglement:
     def __init__(self, multiplier_sequence: list):
         self.multipliers = multiplier_sequence
         self.dynamic_threshold = 0.25  # Starting threshold
-        self.accuracy = 0.75  # Default accuracy
         
+    def fib_wavelet_analysis(self):
+        """Measure casino's Fib sequence manipulation"""
+        if len(self.multipliers) < 3:
+            return 0.0  # Insufficient data
+        
+        actual_ranges = []
+        fib_lengths = [3, 5, 8, 13, 21]
+        
+        for fib in fib_lengths:
+            if len(self.multipliers) >= fib:
+                # Analyze last 'fib' rounds
+                segment = self.multipliers[-fib:]
+                actual_range = max(segment) - min(segment)
+                actual_ranges.append(actual_range)
+        
+        if not actual_ranges:
+            return 0.0
+            
+        avg_range = sum(actual_ranges) / len(actual_ranges)
+        normalized_ranges = [r / avg_range for r in actual_ranges]
+        
+        decoherence = 0
+        for i in range(min(len(normalized_ranges), 5)):  # First 5 ratios
+            decoherence += abs(normalized_ranges[i] - [0.236, 0.382, 0.5, 0.618, 0.786][i])
+            
+        return decoherence / 5  # Normalized 0-1 score
+
+    def golden_phase_lock(self, window=8):
+        """Detect golden ratio violations"""
+        if len(self.multipliers) < window or window < 2:
+            return False
+            
+        recent = self.multipliers[-window:]
+        volatility = (max(recent) - min(recent)) / np.mean(recent) if np.mean(recent) > 0 else 0
+        
+        # Adaptive threshold based on volatility
+        threshold = self.dynamic_threshold * (1 + 0.5 * volatility)
+        
+        for i in range(1, len(recent)):
+            ratio = recent[i] / recent[i-1]
+            # Measure deviation from golden ratio (1.618)
+            deviation = abs(ratio - 1.618) / 1.618  # Relative error
+            if deviation > threshold:
+                return True  # Violation detected
+        return False
+
+    def entangled_fib_prediction(self):
+        """Quantum forecast using only multipliers"""
+        if len(self.multipliers) < 5:
+            return "NEUTRAL"
+        
+        # More sensitive forecasting
+        surge_score = (sum(self.multipliers[-3:])/3 * 1.618) - min(self.multipliers[-5:])
+        trap_score = max(self.multipliers[-5:]) - (sum(self.multipliers[-3:])/3 * 0.618)
+        
+        if surge_score > 1.0:  # Lowered threshold
+            return "SURGE_IMMINENT"
+        elif trap_score < -0.8:  # Lowered threshold
+            return "TRAP_DEPLOYING"
+        return "NEUTRAL"
+    
     def update_threshold(self, is_correct: bool):
         """Adapt to casino's behavior patterns"""
         if is_correct:
@@ -697,57 +757,22 @@ class QuantumFibonacciEntanglement:
             
         # Maintain threshold within operational bounds
         self.dynamic_threshold = max(0.15, min(0.45, self.dynamic_threshold))
-        
-    def golden_phase_lock(self, window=8):
-        if len(self.multipliers) < window: 
-            return False
-            
-        recent = self.multipliers[-window:]
-        volatility = (max(recent) - min(recent)) / np.mean(recent)
-        
-        # Adaptive threshold based on volatility
-        threshold = self.dynamic_threshold * (1 + 0.5 * volatility)
-        
-        for i in range(1, len(recent)):
-            ratio = recent[i] / recent[i-1]
-            if abs(ratio - 1.618) / 1.618 > threshold:
-                return True  # Violation detected
-        return False
-
-    def entangled_fib_prediction(self):
-        if len(self.multipliers) < 5:
-            return "NEUTRAL"
-        
-        # More sensitive forecasting
-        surge_score = (sum(self.multipliers[-3:])/3 * 1.618) - min(self.multipliers[-5:])
-        trap_score = max(self.multipliers[-5:]) - (sum(self.multipliers[-3:])/3 * 0.618)
-        
-        if surge_score > 1.0:  # Lowered threshold
-            return "SURGE_IMMINENT"
-        elif trap_score < -0.8:  # Lowered threshold 
-            return "TRAP_DEPLOYING"
-        return "NEUTRAL"
 
 
-def verify_qfe_predictions(df):
-    """Check previous predictions against new rounds"""
+def verify_qfe_predictions(df, qfe):
     current_round_count = len(df)
     
-    # Check if we have new rounds to verify
-    if current_round_count <= st.session_state.qfe_accuracy['last_checked']:
-        return
-    
-    # Process all predictions that haven't been checked
-    for round_idx, prediction in st.session_state.qfe_predictions.items():
-        if round_idx >= len(df) - 1:  # Prediction was for future round
+    # Process predictions that haven't been checked
+    for round_idx, prediction in list(st.session_state.qfe_predictions.items()):
+        # Skip if we don't have the next round yet
+        if round_idx + 1 >= current_round_count:
             continue
             
-        if round_idx <= st.session_state.qfe_accuracy['last_checked']:
-            continue  # Already checked
-            
-        actual_multiplier = df.loc[round_idx + 1, 'multiplier']
+        # Get actual outcome
+        actual_multiplier = df.iloc[round_idx + 1]['multiplier']
         is_correct = False
         
+        # Check prediction accuracy
         if prediction == "SURGE_IMMINENT":
             is_correct = actual_multiplier >= 2.0
         elif prediction == "TRAP_DEPLOYING":
@@ -758,10 +783,77 @@ def verify_qfe_predictions(df):
         if is_correct:
             st.session_state.qfe_accuracy['correct'] += 1
         
+        # Update QFE threshold
+        qfe.update_threshold(is_correct)
+        
         # Remove verified prediction
         del st.session_state.qfe_predictions[round_idx]
     
+    # Update last checked index
     st.session_state.qfe_accuracy['last_checked'] = current_round_count - 1
+
+    
+    
+    st.session_state.qfe_accuracy['last_checked'] = current_round_count - 1
+
+def qfe_dashboard(df):
+    st.subheader("🌀 QUANTUM FIBONACCI ENTANGLEMENT")
+    
+    # Initialize session state for tracking
+    if 'qfe_predictions' not in st.session_state:
+        st.session_state.qfe_predictions = {}
+    if 'qfe_accuracy' not in st.session_state:
+        st.session_state.qfe_accuracy = {'total': 0, 'correct': 0, 'last_checked': -1}
+    
+    # Convert multipliers to list
+    multiplier_list = df['multiplier'].tolist()
+    
+    # Initialize QFE engine
+    qfe = QuantumFibonacciEntanglement(multiplier_list)
+    
+    # Set initial threshold if needed
+    if hasattr(qfe, 'dynamic_threshold'):
+        qfe.dynamic_threshold = st.session_state.get('qfe_threshold', 0.25)
+    
+    # Get QFE metrics
+    coherence_loss = qfe.fib_wavelet_analysis()
+    phase_lock = qfe.golden_phase_lock()
+    prediction = qfe.entangled_fib_prediction()
+    
+    # Store current prediction
+    current_round_idx = len(df) - 1
+    st.session_state.qfe_predictions[current_round_idx] = prediction
+    
+    # Verify predictions when new data arrives
+    if len(df) > st.session_state.qfe_accuracy['last_checked'] + 1:
+        verify_qfe_predictions(df, qfe)
+    
+    # Display metrics
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Quantum Decoherence", f"{coherence_loss:.4f}", 
+                 delta="Trap manipulation" if coherence_loss > 0.18 else "Natural sequence")
+    
+    with col2:
+        status = "VIOLATED!" if phase_lock else "INTACT"
+        color = "red" if phase_lock else "green"
+        st.metric("Sacred Geometry", status, 
+                 delta="TRAP ACTIVE" if phase_lock else "Quantum stable",
+                 delta_color="inverse" if phase_lock else "normal")
+    
+    with col3:
+        delta_val = "Quantum certainty" if prediction != "NEUTRAL" else ""
+        st.metric("Entangled Forecast", prediction, delta=delta_val)
+    
+    # Display accuracy and threshold
+    if st.session_state.qfe_accuracy['total'] > 0:
+        accuracy = st.session_state.qfe_accuracy['correct'] / st.session_state.qfe_accuracy['total']
+        st.progress(accuracy, text=f"QFE Accuracy: {accuracy:.0%}")
+    
+    if hasattr(qfe, 'dynamic_threshold'):
+        st.caption(f"Adaptive Threshold: {qfe.dynamic_threshold:.4f}")
+        st.session_state.qfe_threshold = qfe.dynamic_threshold
 
 
 @st.cache_data
@@ -1801,43 +1893,8 @@ if not df.empty:
     plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_msi_window, fib_lookback_window,  spiral_centers=spiral_centers)
 
     # ===== QUANTUM FIBONACCI ENTANGLEMENT DISPLAY =====
-    st.subheader("🌀 QUANTUM FIBONACCI ENTANGLEMENT")
-    
-    # Get raw multipliers as list
-    multiplier_list = df['multiplier'].tolist()
-    
-    # Initialize QFE engine with ONLY raw multipliers
-    qfe = QuantumFibonacciEntanglement(multiplier_list)
-    
-    # 1. Decoherence Gauge
-    coherence_loss = qfe.fib_wavelet_analysis()
-    st.metric("Quantum Decoherence", f"{coherence_loss:.4f}", 
-              delta="Trap manipulation level" if coherence_loss > 0.18 else "Natural sequence")
-    
-    # 2. Golden Phase Monitor
-    phase_lock = qfe.golden_phase_lock()
-    st.metric("Sacred Geometry", 
-              "INTACT" if not phase_lock else "VIOLATED!",
-              delta="Quantum stable" if not phase_lock else "TRAP ACTIVE")
-    
-    # 3. Entangled Prediction
-    prediction = qfe.entangled_fib_prediction()
-    st.metric("Entangled Forecast", prediction, 
-              delta="Quantum certainty: 89.7%" if prediction != "NEUTRAL" else "")
-    # In your QFE display section:
-    current_round_idx = len(df) - 1
-    
-    # Store prediction for current state
-    st.session_state.qfe_predictions[current_round_idx] = prediction
-    
-    # Verify previous predictions
-    verify_qfe_predictions(df)
-    
-    # Display accuracy
-    accuracy = (st.session_state.qfe_accuracy['correct'] / 
-                st.session_state.qfe_accuracy['total']) if st.session_state.qfe_accuracy['total'] > 0 else 0
-    st.metric("QFE Accuracy", f"{accuracy:.0%}", 
-              delta=f"{st.session_state.qfe_accuracy['correct']}/{st.session_state.qfe_accuracy['total']}")
+    # Display QFE Dashboard
+    qfe_dashboard(df)
 
 
     with st.expander("🔎 Multi-Cycle Detector Results", expanded=False):
