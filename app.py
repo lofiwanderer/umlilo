@@ -669,56 +669,78 @@ def compute_fib_alignment_score(df, fib_threshold=10.0, lookback_window=34, tole
 
     return round(alignment_score, 3), gaps
 
-def fib_wavelet_analysis(self):
-    actual_ranges = []
-    for fib in [3,5,8,13,21]:  # Core Fibonacci lengths
-        if len(self.multipliers) >= fib:
-            segment = self.multipliers[-fib:]  # Most recent 'fib' rounds
-            actual_range = max(segment) - min(segment)
-            actual_ranges.append(actual_range)
+class QuantumFibonacciEntanglement:
+    def __init__(self, multiplier_sequence: list):
+        """
+        PURE standalone Fibonacci quantum detector
+        Only requires raw multiplier sequence
+        """
+        self.multipliers = multiplier_sequence
+        self.pure_ratios = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0]
     
-    avg_range = sum(actual_ranges)/len(actual_ranges)
-    normalized_ranges = [r/avg_range for r in actual_ranges]
-    
-    decoherence = 0
-    for i in range(min(5, len(normalized_ranges))):
-        decoherence += abs(normalized_ranges[i] - self.pure_ratios[i])
+    def fib_wavelet_analysis(self):
+        """Measure casino's Fib sequence manipulation"""
+        if len(self.multipliers) < 3:
+            return 0.0  # Insufficient data
         
-    return decoherence / 5  # Normalized decoherence score
+        actual_ranges = []
+        fib_lengths = [3, 5, 8, 13, 21]
+        
+        for fib in fib_lengths:
+            if len(self.multipliers) >= fib:
+                # Analyze last 'fib' rounds
+                segment = self.multipliers[-fib:]
+                actual_range = max(segment) - min(segment)
+                actual_ranges.append(actual_range)
+        
+        if not actual_ranges:
+            return 0.0
+            
+        avg_range = sum(actual_ranges) / len(actual_ranges)
+        normalized_ranges = [r / avg_range for r in actual_ranges]
+        
+        decoherence = 0
+        for i in range(min(len(normalized_ranges), 5)):  # First 5 ratios
+            decoherence += abs(normalized_ranges[i] - self.pure_ratios[i])
+            
+        return decoherence / 5  # Normalized 0-1 score
 
-def golden_phase_lock(self, window=8):
-    recent = self.multipliers[-window:]
-    golden_angle = 2 * math.pi * (1 - 0.618)  # 137.5° sacred angle
-    
-    # Convert multipliers to phase deviations
-    phase_deviations = []
-    for i in range(1, len(recent)):
-        ratio = recent[i] / recent[i-1]
-        deviation = abs(ratio - 1.618)  # Distance from golden ratio
-        phase_deviations.append(deviation * golden_angle)
-    
-    # Calculate phase coherence
-    complex_sum = sum(math.cos(d) + 1j*math.sin(d) for d in phase_deviations)
-    coherence = abs(complex_sum) / len(phase_deviations)
-    return coherence < 0.618  # True if sacred geometry broken
+    def golden_phase_lock(self, window=8):
+        """Detect golden ratio violations"""
+        if len(self.multipliers) < window or window < 2:
+            return False
+            
+        recent = self.multipliers[-window:]
+        deviations = []
+        
+        for i in range(1, len(recent)):
+            ratio = recent[i] / recent[i-1]
+            # Measure deviation from golden ratio (1.618)
+            deviation = abs(ratio - 1.618) / 1.618  # Relative error
+            deviations.append(deviation)
+        
+        avg_deviation = sum(deviations) / len(deviations)
+        return avg_deviation > 0.25  # Threshold for violation
 
-
-def entangled_fib_prediction(self):
-    # Calculate MSI_3, MSI_5, MSI_8 directly from multipliers
-    msi_3 = sum(1 for m in self.multipliers[-3:] if m > 1.0)  # Simple binary scoring
-    msi_5 = sum(1 for m in self.multipliers[-5:] if m > 1.0)
-    msi_8 = sum(1 for m in self.multipliers[-8:] if m > 1.0)
-    
-    # Quantum state equation
-    φ = (1 + math.sqrt(5)) / 2  # Golden ratio
-    prediction = msi_5 * φ - msi_3
-    
-    # Thresholds based on sacred geometry
-    if prediction > 1.618 * msi_8:
-        return "SURGE_IMMINENT"
-    elif prediction < 0.382 * msi_8:
-        return "TRAP_DEPLOYING"
-    return "NEUTRAL"
+    def entangled_fib_prediction(self):
+        """Quantum forecast using only multipliers"""
+        if len(self.multipliers) < 8:
+            return "NEUTRAL"
+        
+        # Directly calculate MSI-like scores
+        msi_3 = sum(1 for m in self.multipliers[-3:] if m > 1.0)
+        msi_5 = sum(1 for m in self.multipliers[-5:] if m > 1.0)
+        msi_8 = sum(1 for m in self.multipliers[-8:] if m > 1.0)
+        
+        # Quantum prediction equation (Golden Ratio based)
+        φ = (1 + math.sqrt(5)) / 2  # 1.618...
+        prediction = msi_5 * φ - msi_3
+        
+        if prediction > 1.618 * msi_8:
+            return "SURGE_IMMINENT"
+        elif prediction < 0.382 * msi_8:
+            return "TRAP_DEPLOYING"
+        return "NEUTRAL"
 
 
 @st.cache_data
@@ -1760,24 +1782,25 @@ if not df.empty:
     # ===== QUANTUM FIBONACCI ENTANGLEMENT DISPLAY =====
     st.subheader("🌀 QUANTUM FIBONACCI ENTANGLEMENT")
     
+    # Get raw multipliers as list
+    multiplier_list = df['multiplier'].tolist()
+    
+    # Initialize QFE engine with ONLY raw multipliers
+    qfe = QuantumFibonacciEntanglement(multiplier_list)
+    
     # 1. Decoherence Gauge
-    coherence_loss = fib_wavelet_analysis(df['multiplier'].tail(34))
+    coherence_loss = qfe.fib_wavelet_analysis()
     st.metric("Quantum Decoherence", f"{coherence_loss:.4f}", 
               delta="Trap manipulation level" if coherence_loss > 0.18 else "Natural sequence")
     
     # 2. Golden Phase Monitor
-    phase_lock = golden_phase_lock(df['multiplier'].tail(8))
+    phase_lock = qfe.golden_phase_lock()
     st.metric("Sacred Geometry", 
               "INTACT" if not phase_lock else "VIOLATED!",
               delta="Quantum stable" if not phase_lock else "TRAP ACTIVE")
     
     # 3. Entangled Prediction
-    current_state = {
-        'msi_3': df['msi_3'].iloc[-1],
-        'msi_5': df['msi_5'].iloc[-1],
-        'msi_8': df['msi_8'].iloc[-1]
-    }
-    prediction = entangled_fib_prediction(current_state)
+    prediction = qfe.entangled_fib_prediction()
     st.metric("Entangled Forecast", prediction, 
               delta="Quantum certainty: 89.7%" if prediction != "NEUTRAL" else "")
 
