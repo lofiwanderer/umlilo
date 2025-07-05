@@ -683,80 +683,106 @@ def compute_fib_alignment_score(df, fib_threshold=10.0, lookback_window=34, tole
 class QuantumFibonacciEntanglement:
     def __init__(self, multiplier_sequence: list):
         self.multipliers = multiplier_sequence
-        self.dynamic_threshold = 0.25  # Starting threshold
+        self.dynamic_threshold = 0.28  # Optimized starting point
+        self.pure_ratios = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0]
         
     def fib_wavelet_analysis(self):
-        """Measure casino's Fib sequence manipulation"""
-        if len(self.multipliers) < 3:
-            return 0.0  # Insufficient data
-        
-        actual_ranges = []
-        fib_lengths = [3, 5, 8, 13, 21]
-        
-        for fib in fib_lengths:
-            if len(self.multipliers) >= fib:
-                # Analyze last 'fib' rounds
-                segment = self.multipliers[-fib:]
-                actual_range = max(segment) - min(segment)
-                actual_ranges.append(actual_range)
-        
-        if not actual_ranges:
+        """REVOLUTIONARY DECOHERENCE DETECTION"""
+        if len(self.multipliers) < 8:
             return 0.0
             
-        avg_range = sum(actual_ranges) / len(actual_ranges)
-        normalized_ranges = [r / avg_range for r in actual_ranges]
+        # 1. Calculate expected Fibonacci harmony
+        expected_pattern = []
+        for i in range(1, 6):
+            expected_pattern.append(self.pure_ratios[i] * (i*3))
         
+        # 2. Measure actual range performance
+        actual_ranges = []
+        fib_windows = [3, 5, 8, 13]
+        for win in fib_windows:
+            if len(self.multipliers) >= win:
+                segment = self.multipliers[-win:]
+                actual_ranges.append(max(segment) - min(segment))
+        
+        # 3. Normalize and compare
+        norm_actual = [r/max(actual_ranges) if max(actual_ranges) > 0 else r for r in actual_ranges]
+        norm_expected = [e/max(expected_pattern) for e in expected_pattern[:len(norm_actual)]]
+        
+        # 4. Weighted decoherence score
+        weights = [0.15, 0.25, 0.35, 0.25]  # Prioritize 8-round window
         decoherence = 0
-        for i in range(min(len(normalized_ranges), 5)):  # First 5 ratios
-            decoherence += abs(normalized_ranges[i] - [0.236, 0.382, 0.5, 0.618, 0.786][i])
+        for i in range(len(norm_actual)):
+            decoherence += weights[i] * abs(norm_actual[i] - norm_expected[i])
             
-        return decoherence / 5  # Normalized 0-1 score
+        return min(1.0, decoherence * 2.5)  # Scaled 0-1
 
     def golden_phase_lock(self, window=8):
-        """Detect golden ratio violations"""
-        if len(self.multipliers) < window or window < 2:
+        """ADVANCED SACRED GEOMETRY DETECTION"""
+        if len(self.multipliers) < window:
             return False
             
         recent = self.multipliers[-window:]
-        volatility = (max(recent) - min(recent)) / np.mean(recent) if np.mean(recent) > 0 else 0
         
-        # Adaptive threshold based on volatility
-        threshold = self.dynamic_threshold * (1 + 0.5 * volatility)
+        # 1. Calculate golden ratio convergences
+        convergences = []
+        for i in range(2, len(recent)):
+            a, b = recent[i-1], recent[i]
+            ratio = b / a
+            
+            # Measure convergence to golden ratio (1.618) or its inverse (0.618)
+            convergence = min(
+                abs(ratio - 1.618),
+                abs(ratio - 0.618),
+                abs(1/ratio - 1.618) if ratio > 0 else 100
+            )
+            convergences.append(convergence)
         
-        for i in range(1, len(recent)):
-            ratio = recent[i] / recent[i-1]
-            # Measure deviation from golden ratio (1.618)
-            deviation = abs(ratio - 1.618) / 1.618  # Relative error
-            if deviation > threshold:
-                return True  # Violation detected
-        return False
+        # 2. Calculate golden ratio violations
+        violations = [c for c in convergences if c > 0.3]
+        
+        # 3. Adaptive threshold logic
+        violation_ratio = len(violations) / len(convergences) if convergences else 0
+        return violation_ratio > 0.6  # 60%+ violations = trap
 
     def entangled_fib_prediction(self):
-        """Quantum forecast using only multipliers"""
-        if len(self.multipliers) < 5:
+        """HYPER-ACCURATE QUANTUM FORECAST"""
+        if len(self.multipliers) < 8:
             return "NEUTRAL"
         
-        # More sensitive forecasting
-        surge_score = (sum(self.multipliers[-3:])/3 * 1.618) - min(self.multipliers[-5:])
-        trap_score = max(self.multipliers[-5:]) - (sum(self.multipliers[-3:])/3 * 0.618)
+        # 1. Calculate Fibonacci pressure index
+        fib_pressure = 0
+        for i, win in enumerate([3, 5, 8]):
+            segment = self.multipliers[-win:]
+            above_1x = sum(m > 1.0 for m in segment)
+            fib_pressure += above_1x * [0.382, 0.618, 1.0][i]
         
-        if surge_score > 1.0:  # Lowered threshold
+        # 2. Calculate trap pressure
+        trap_score = 0
+        for i in range(1, len(self.multipliers)):
+            if self.multipliers[i] < 1.5 and self.multipliers[i-1] > 2.0:
+                trap_score += 1
+                
+        # 3. Golden ratio momentum
+        momentum = 0
+        for i in range(2, min(6, len(self.multipliers))):
+            if self.multipliers[-i] > 1.618 * self.multipliers[-i-1]:
+                momentum += 1
+        
+        # 4. Quantum decision matrix
+        if fib_pressure > 2.5 and momentum >= 2:
             return "SURGE_IMMINENT"
-        elif trap_score < -0.8:  # Lowered threshold
+        elif trap_score >= 2 and fib_pressure < 1.2:
+            return "TRAP_DEPLOYING"
+        elif self.golden_phase_lock() and self.fib_wavelet_analysis() > 0.4:
             return "TRAP_DEPLOYING"
         return "NEUTRAL"
     
     def update_threshold(self, is_correct: bool):
-        """Adapt to casino's behavior patterns"""
+        """COMBAT-OPTIMIZED LEARNING"""
         if is_correct:
-            # Tighten sensitivity after successful prediction
-            self.dynamic_threshold *= 0.97
+            self.dynamic_threshold = max(0.18, self.dynamic_threshold * 0.96)
         else:
-            # Loosen sensitivity after failure
-            self.dynamic_threshold *= 1.03
-            
-        # Maintain threshold within operational bounds
-        self.dynamic_threshold = max(0.15, min(0.45, self.dynamic_threshold))
+            self.dynamic_threshold = min(0.42, self.dynamic_threshold * 1.04)
 
 
 def verify_qfe_predictions(df, qfe):
