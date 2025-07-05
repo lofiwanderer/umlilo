@@ -683,97 +683,92 @@ def compute_fib_alignment_score(df, fib_threshold=10.0, lookback_window=34, tole
 class QuantumFibonacciEntanglement:
     def __init__(self, multiplier_sequence: list):
         self.multipliers = multiplier_sequence
-        self.dynamic_threshold = 0.28  # Optimized starting point
-        self.pure_ratios = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0]
+        self.fib_windows = [3, 5, 8, 13]  # Critical Fibonacci sequence lengths
+        self.golden_ratio = 1.6180339887
         
+    def _get_segment_stats(self, window):
+        """Get robust stats for multiplier segments"""
+        if len(self.multipliers) < window:
+            return None, None, None
+            
+        segment = self.multipliers[-window:]
+        median = sorted(segment)[len(segment)//2]
+        mean = sum(segment)/len(segment)
+        volatility = max(segment)/min(segment) - 1 if min(segment) > 0 else 0
+        return median, mean, volatility
+
     def fib_wavelet_analysis(self):
-        """REVOLUTIONARY DECOHERENCE DETECTION"""
+        """Rebuilt decoherence detector with Fibonacci resonance scoring"""
         if len(self.multipliers) < 8:
             return 0.0
             
-        # 1. Calculate expected Fibonacci harmony
-        expected_pattern = []
-        for i in range(1, 6):
-            expected_pattern.append(self.pure_ratios[i] * (i*3))
-        
-        # 2. Measure actual range performance
-        actual_ranges = []
-        fib_windows = [3, 5, 8, 13]
-        for win in fib_windows:
-            if len(self.multipliers) >= win:
-                segment = self.multipliers[-win:]
-                actual_ranges.append(max(segment) - min(segment))
-        
-        # 3. Normalize and compare
-        norm_actual = [r/max(actual_ranges) if max(actual_ranges) > 0 else r for r in actual_ranges]
-        norm_expected = [e/max(expected_pattern) for e in expected_pattern[:len(norm_actual)]]
-        
-        # 4. Weighted decoherence score
-        weights = [0.15, 0.25, 0.35, 0.25]  # Prioritize 8-round window
-        decoherence = 0
-        for i in range(len(norm_actual)):
-            decoherence += weights[i] * abs(norm_actual[i] - norm_expected[i])
+        scores = []
+        for win in self.fib_windows:
+            if len(self.multipliers) < win:
+                continue
+                
+            segment = self.multipliers[-win:]
+            actual_range = max(segment) - min(segment)
             
-        return min(1.0, decoherence * 2.5)  # Scaled 0-1
+            # Fibonacci range expectation: Fib(n) * baseline
+            expected_range = 0.5 * win  # Fib-based expectation
+            
+            # Score = |actual - expected| / expected
+            score = abs(actual_range - expected_range) / expected_range
+            scores.append(min(1.0, score))
+            
+        return sum(scores)/len(scores) if scores else 0.0
 
-    def golden_phase_lock(self, window=8):
-        """ADVANCED SACRED GEOMETRY DETECTION"""
+    def golden_phase_lock(self, window=5):
+        """Golden ratio violation detector with volatility compensation"""
         if len(self.multipliers) < window:
             return False
             
         recent = self.multipliers[-window:]
+        violations = 0
+        total = 0
         
-        # 1. Calculate golden ratio convergences
-        convergences = []
-        for i in range(2, len(recent)):
-            a, b = recent[i-1], recent[i]
-            ratio = b / a
+        for i in range(1, len(recent)):
+            ratio = recent[i] / recent[i-1]
             
-            # Measure convergence to golden ratio (1.618) or its inverse (0.618)
-            convergence = min(
-                abs(ratio - 1.618),
-                abs(ratio - 0.618),
-                abs(1/ratio - 1.618) if ratio > 0 else 100
-            )
-            convergences.append(convergence)
-        
-        # 2. Calculate golden ratio violations
-        violations = [c for c in convergences if c > 0.3]
-        
-        # 3. Adaptive threshold logic
-        violation_ratio = len(violations) / len(convergences) if convergences else 0
-        return violation_ratio > 0.6  # 60%+ violations = trap
+            # Acceptable golden ratio deviation: ±25%
+            golden_min = self.golden_ratio * 0.75
+            golden_max = self.golden_ratio * 1.25
+            
+            if ratio < golden_min or ratio > golden_max:
+                violations += 1
+            total += 1
+            
+        # Require >60% violations to flag trap
+        return (violations / total) > 0.6 if total > 0 else False
 
     def entangled_fib_prediction(self):
-        """HYPER-ACCURATE QUANTUM FORECAST"""
+        """Quantum pressure forecast - Battlefield recalibrated"""
         if len(self.multipliers) < 8:
             return "NEUTRAL"
         
-        # 1. Calculate Fibonacci pressure index
-        fib_pressure = 0
-        for i, win in enumerate([3, 5, 8]):
-            segment = self.multipliers[-win:]
-            above_1x = sum(m > 1.0 for m in segment)
-            fib_pressure += above_1x * [0.382, 0.618, 1.0][i]
+        # 1. Fibonacci pressure index (weighted)
+        pressure = 0
+        weights = {3: 0.4, 5: 0.3, 8: 0.2, 13: 0.1}
+        for win, weight in weights.items():
+            if len(self.multipliers) >= win:
+                segment = self.multipliers[-win:]
+                pressure += (sum(1 for m in segment if m > 1.5) / win) * weight
         
-        # 2. Calculate trap pressure
-        trap_score = 0
-        for i in range(1, len(self.multipliers)):
-            if self.multipliers[i] < 1.5 and self.multipliers[i-1] > 2.0:
-                trap_score += 1
-                
-        # 3. Golden ratio momentum
+        # 2. Golden momentum indicator
         momentum = 0
-        for i in range(2, min(6, len(self.multipliers))):
-            if self.multipliers[-i] > 1.618 * self.multipliers[-i-1]:
+        for i in range(1, min(4, len(self.multipliers))):
+            if self.multipliers[-i] > 1.3 * self.multipliers[-i-1]:
                 momentum += 1
         
-        # 4. Quantum decision matrix
-        if fib_pressure > 2.5 and momentum >= 2:
+        # 3. Trap pressure (blue density)
+        blue_count = sum(1 for m in self.multipliers[-8:] if m < 1.6)
+        trap_pressure = blue_count / 8
+        
+        # Decision matrix (calibrated to your data)
+        if pressure > 0.65 and momentum >= 2:
             return "SURGE_IMMINENT"
-        elif trap_score >= 2 and fib_pressure < 1.2:
-            return "TRAP_DEPLOYING"
-        elif self.golden_phase_lock() and self.fib_wavelet_analysis() > 0.4:
+        elif trap_pressure > 0.5 or (self.fib_wavelet_analysis() > 0.4 and self.golden_phase_lock()):
             return "TRAP_DEPLOYING"
         return "NEUTRAL"
     
@@ -823,63 +818,76 @@ def verify_qfe_predictions(df, qfe):
     st.session_state.qfe_accuracy['last_checked'] = current_round_count - 1
 
 def qfe_dashboard(df):
-    st.subheader("🌀 QUANTUM FIBONACCI ENTANGLEMENT")
-    
-    # Initialize session state for tracking
-    if 'qfe_predictions' not in st.session_state:
-        st.session_state.qfe_predictions = {}
-    if 'qfe_accuracy' not in st.session_state:
-        st.session_state.qfe_accuracy = {'total': 0, 'correct': 0, 'last_checked': -1}
-    
-    # Convert multipliers to list
+    st.subheader("⚡ BATTLE-CALIBRATED QFE")
     multiplier_list = df['multiplier'].tolist()
-    
-    # Initialize QFE engine
     qfe = QuantumFibonacciEntanglement(multiplier_list)
     
-    # Set initial threshold if needed
-    if hasattr(qfe, 'dynamic_threshold'):
-        qfe.dynamic_threshold = st.session_state.get('qfe_threshold', 0.25)
-    
-    # Get QFE metrics
-    coherence_loss = qfe.fib_wavelet_analysis()
-    phase_lock = qfe.golden_phase_lock()
-    prediction = qfe.entangled_fib_prediction()
-    
-    # Store current prediction
-    current_round_idx = len(df) - 1
-    st.session_state.qfe_predictions[current_round_idx] = prediction
-    
-    # Verify predictions when new data arrives
-    if len(df) > st.session_state.qfe_accuracy['last_checked'] + 1:
-        verify_qfe_predictions(df, qfe)
-    
-    # Display metrics
     col1, col2, col3 = st.columns(3)
     
+    # 1. Decoherence Gauge (with Fibonacci baseline)
+    decoherence = qfe.fib_wavelet_analysis()
     with col1:
-        st.metric("Quantum Decoherence", f"{coherence_loss:.4f}", 
-                 delta="Trap manipulation" if coherence_loss > 0.18 else "Natural sequence")
+        st.metric("Fib Resonance", f"{1-decoherence:.2f}", 
+                 delta="Strong" if decoherence < 0.3 else "Weak",
+                 delta_color="inverse" if decoherence > 0.4 else "normal")
+        st.progress(1-decoherence, text=f"Sequence Harmony")
     
+    # 2. Golden Matrix
+    golden_lock = qfe.golden_phase_lock(window=5)
     with col2:
-        status = "VIOLATED!" if phase_lock else "INTACT"
-        color = "red" if phase_lock else "green"
-        st.metric("Sacred Geometry", status, 
-                 delta="TRAP ACTIVE" if phase_lock else "Quantum stable",
-                 delta_color="inverse" if phase_lock else "normal")
+        st.metric("Golden Matrix", 
+                 "STABLE" if not golden_lock else "DEGRADED!",
+                 delta="Natural flow" if not golden_lock else "Trap patterns",
+                 delta_color="normal" if not golden_lock else "off")
+        st.caption(f"5-round violation density")
     
+    # 3. Quantum Forecast
+    prediction = qfe.entangled_fib_prediction()
     with col3:
-        delta_val = "Quantum certainty" if prediction != "NEUTRAL" else ""
-        st.metric("Entangled Forecast", prediction, delta=delta_val)
+        if prediction == "SURGE_IMMINENT":
+            st.success("🔥 SURGE IMMINENT", icon="🚀")
+            st.progress(0.85, text="High confidence")
+        elif prediction == "TRAP_DEPLOYING":
+            st.error("⛔ TRAP DEPLOYING", icon="🪤")
+            st.progress(0.75, text="Moderate confidence")
+        else:
+            st.info("⚡ NEUTRAL ZONE", icon="📊")
+            st.progress(0.5, text="Scout mode")
     
-    # Display accuracy and threshold
-    if st.session_state.qfe_accuracy['total'] > 0:
-        accuracy = st.session_state.qfe_accuracy['correct'] / st.session_state.qfe_accuracy['total']
-        st.progress(accuracy, text=f"QFE Accuracy: {accuracy:.0%}")
+    # Pressure Matrix Visualization
+    st.subheader("Quantum Pressure Matrix")
+    pressure_data = {
+        "Window": [3, 5, 8, 13],
+        "Pressure": [],
+        "Threshold": [0.7, 0.6, 0.5, 0.4]
+    }
     
-    if hasattr(qfe, 'dynamic_threshold'):
-        st.caption(f"Adaptive Threshold: {qfe.dynamic_threshold:.4f}")
-        st.session_state.qfe_threshold = qfe.dynamic_threshold
+    for win in pressure_data["Window"]:
+        if len(multiplier_list) >= win:
+            segment = multiplier_list[-win:]
+            pressure = sum(1 for m in segment if m > 1.5) / win
+            pressure_data["Pressure"].append(pressure)
+        else:
+            pressure_data["Pressure"].append(0)
+    
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=pressure_data["Window"],
+        y=pressure_data["Pressure"],
+        name='Actual Pressure',
+        marker_color='cyan'
+    ))
+    fig.add_trace(go.Scatter(
+        x=pressure_data["Window"],
+        y=pressure_data["Threshold"],
+        name='Surge Threshold',
+        mode='lines+markers',
+        line=dict(color='red', dash='dash')
+    ))
+    fig.update_layout(barmode='overlay', title="Fibonacci Pressure Index")
+    st.plotly_chart(fig, use_container_width=True)
+
+
 
 
 @st.cache_data
