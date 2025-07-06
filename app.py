@@ -1898,6 +1898,20 @@ if not df.empty:
 
     # ===== QUANTUM FIBONACCI ENTANGLEMENT DISPLAY =====
     # Display QFE Dashboard
+    # ============================
+    # 1️⃣ QFE Engine Initialization
+    # ============================
+    multipliers = df['multiplier'].tolist()
+    qfe_engine = QuantumFibonacciEntanglement(multipliers)
+    
+    # ============================
+    # 2️⃣ Generate Wavefront Data
+    # ============================
+    wavefront_data = qfe_engine.adaptive_fpi_dashboard()
+    
+    # ============================
+    # 3️⃣ Plot the Visualization
+    # ============================
     plot_adaptive_wavefront(wavefront_data)
 
 
