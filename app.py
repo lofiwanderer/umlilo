@@ -689,7 +689,7 @@ class QuantumFibonacciEntanglement:
 
     def _calculate_pressure_wavefront(self, window):
         if len(self.multipliers) < window:
-            return 0, 0, 0, 0
+            return 0, 0, 0, 0, 0
 
         segment = self.multipliers[-window:]
         surge_force, resistance, momentum = 0, 0, 0
