@@ -690,7 +690,7 @@ class QuantumFibonacciEntanglement:
     def _calculate_pressure_wavefront(self, window):
         """Quantum pressure dynamics with temporal decay"""
         if len(self.multipliers) < window:
-            return 0, 0
+            return 0, 0, 0
             
         segment = self.multipliers[-window:]
         
