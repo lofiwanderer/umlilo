@@ -1898,7 +1898,7 @@ if not df.empty:
 
     # ===== QUANTUM FIBONACCI ENTANGLEMENT DISPLAY =====
     # Display QFE Dashboard
-    plot_adaptive_wavefront()
+    plot_adaptive_wavefront(wavefront_data)
 
 
     with st.expander("🔎 Multi-Cycle Detector Results", expanded=False):
