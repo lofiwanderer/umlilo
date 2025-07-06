@@ -734,7 +734,7 @@ class QuantumFibonacciEntanglement:
             
             wavefront_data.append({
                 "window": win,
-                "pressure": surge,
+                "pressure": surge_force,
                 "resistance": resistance,
                 "momentum": momentum,
                 "threshold": max(0.4, min(0.95, adaptive_threshold))
