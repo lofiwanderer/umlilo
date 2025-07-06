@@ -726,7 +726,7 @@ class QuantumFibonacciEntanglement:
         wavefront_data = []
         
         for i, win in enumerate(self.fib_windows):
-            surge, resistance, momentum = self._calculate_pressure_wavefront(win)
+            surge_force, resistance, momentum = self._calculate_pressure_wavefront(win)
             
             # Adaptive threshold = f(volatility, resistance)
             volatility = np.std(self.multipliers[-win:]) if len(self.multipliers) >= win else 0
