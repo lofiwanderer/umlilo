@@ -926,8 +926,117 @@ def plot_adaptive_wavefront(wavefront_data):
 
     st.plotly_chart(fig, use_container_width=True)
 
+def normalize_msi(msi_series, window_size):
+    if len(msi_series) < window_size:
+        return 0.5  # Default midpoint if not enough data
+    
+    window = msi_series[-window_size:]
+    min_val, max_val = np.min(window), np.max(window)
+    range_width = max_val - min_val
+    
+    if range_width < 0.01:
+        return 0.5  # Flat regime: no volatility
+    
+    normalized = (msi_series[-1] - min_val) / range_width
+    return max(0, min(1, normalized))  # Bound to [0,1]
 
+def dynamic_threshold(range_width):
+    if range_width < 0.5:
+        return 0.618
+    elif range_width < 1.0:
+        return 0.5
+    else:
+        return 0.382
 
+def compute_range_width(msi_series, window_size):
+    if len(msi_series) < window_size:
+        return 0.0
+    window = msi_series[-window_size:]
+    return np.max(window) - np.min(window)
+
+def anti_trap_entry_signal(msi_dict):
+    """
+    msi_dict = {
+        3: msi_series_3,
+        5: msi_series_5,
+        8: msi_series_8
+    }
+    """
+    confirmations = 0
+
+    for window_size, series in msi_dict.items():
+        range_width = compute_range_width(series, window_size)
+        threshold = dynamic_threshold(range_width)
+        norm_msi = normalize_msi(series, window_size)
+        
+        if norm_msi > threshold:
+            confirmations += 1
+
+    if confirmations >= 2:
+        return "✅ CLEAN ENTRY ZONE DETECTED"
+    else:
+        return "⚠️ TRAP RISK - HOLD FIRE"
+        
+def get_normalized_signal_data(msi_dict):
+    data = []
+    for window_size, series in msi_dict.items():
+        range_width = compute_range_width(series, window_size)
+        threshold = dynamic_threshold(range_width)
+        norm_msi = normalize_msi(series, window_size)
+        
+        trap_risk = norm_msi <= threshold
+        data.append({
+            'Window': window_size,
+            'Normalized_MSI': norm_msi,
+            'Threshold': threshold,
+            'Range_Width': range_width,
+            'Trap_Risk': trap_risk
+        })
+    return pd.DataFrame(data)
+
+def plot_normalized_signal_dashboard(df_signal):
+    fig = go.Figure()
+    
+    # Bars - Normalized MSI
+    fig.add_trace(go.Bar(
+        x=df_signal['Window'],
+        y=df_signal['Normalized_MSI'],
+        name='Normalized MSI',
+        marker_color=df_signal['Trap_Risk'].apply(lambda x: 'red' if x else 'green'),
+        opacity=0.8
+    ))
+    
+    # Threshold line
+    fig.add_trace(go.Scatter(
+        x=df_signal['Window'],
+        y=df_signal['Threshold'],
+        mode='lines+markers',
+        name='Adaptive Threshold',
+        line=dict(color='gold', dash='dash', width=2),
+        marker=dict(symbol='diamond', size=10)
+    ))
+
+    # Range width overlay (translucent)
+    fig.add_trace(go.Scatter(
+        x=df_signal['Window'],
+        y=df_signal['Range_Width'],
+        mode='lines+markers',
+        name='Range Width',
+        fill='tozeroy',
+        fillcolor='rgba(255,0,0,0.1)',
+        line=dict(color='crimson')
+    ))
+
+    # Layout customization
+    fig.update_layout(
+        title='🔍 Normalized MSI Alignment & Anti-Trap Detection',
+        xaxis_title='Fibonacci Window Size',
+        yaxis_title='Normalized Level (0–1 Scale)',
+        hovermode='x unified',
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+    )
+    
+    return fig
 
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
@@ -1980,6 +2089,24 @@ if not df.empty:
     # 3️⃣ Plot the Visualization
     # ============================
     plot_adaptive_wavefront(wavefront_data)
+
+    # Assume you have pandas dataframe df with MSI columns:
+    # df['msi_3'], df['msi_5'], df['msi_8']
+    
+    msi_dict = {
+        3: df['msi_3'].dropna().tolist(),
+        5: df['msi_5'].dropna().tolist(),
+        8: df['msi_8'].dropna().tolist(),
+    }
+    
+    entry_signal = anti_trap_entry_signal(msi_dict)
+
+    df_signal = get_normalized_signal_data(msi_dict)
+    fig_signal = plot_normalized_signal_dashboard(df_signal)
+    st.plotly_chart(fig_signal)
+    st.subheader("🎯 Anti-Trap Signal")
+    st.success(entry_signal if "CLEAN" in entry_signal else entry_signal)
+
 
     with st.expander("🔎 Multi-Cycle Detector Results", expanded=False):
        st.subheader("🎯 Custom Regime Classifier")
