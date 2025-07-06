@@ -683,101 +683,84 @@ def compute_fib_alignment_score(df, fib_threshold=10.0, lookback_window=34, tole
 class QuantumFibonacciEntanglement:
     def __init__(self, multiplier_sequence: list):
         self.multipliers = multiplier_sequence
-        self.fib_windows = [3, 5, 8, 13]  # Critical Fibonacci sequence lengths
+        self.fib_windows = [3, 5, 8, 13]
         self.golden_ratio = 1.6180339887
+        self.pressure_history = []
         
-    def _get_segment_stats(self, window):
-        """Get robust stats for multiplier segments"""
+    def _calculate_pressure_wavefront(self, window):
+        """Quantum pressure dynamics with temporal decay"""
         if len(self.multipliers) < window:
-            return None, None, None
+            return 0, 0
             
         segment = self.multipliers[-window:]
-        median = sorted(segment)[len(segment)//2]
-        mean = sum(segment)/len(segment)
-        volatility = max(segment)/min(segment) - 1 if min(segment) > 0 else 0
-        return median, mean, volatility
-
-    def fib_wavelet_analysis(self):
-        """Rebuilt decoherence detector with Fibonacci resonance scoring"""
-        if len(self.multipliers) < 8:
-            return 0.0
-            
-        scores = []
-        for win in self.fib_windows:
-            if len(self.multipliers) < win:
-                continue
+        
+        # 1. Purple/Pink pressure (amplified)
+        surge_force = 0
+        for m in segment:
+            if m >= 10:  # Pink
+                surge_force += 3.0  # Quantum amplification
+            elif m >= 2:  # Purple
+                surge_force += 1.0
                 
-            segment = self.multipliers[-win:]
-            actual_range = max(segment) - min(segment)
-            
-            # Fibonacci range expectation: Fib(n) * baseline
-            expected_range = 0.5 * win  # Fib-based expectation
-            
-            # Score = |actual - expected| / expected
-            score = abs(actual_range - expected_range) / expected_range
-            scores.append(min(1.0, score))
-            
-        return sum(scores)/len(scores) if scores else 0.0
-
-    def golden_phase_lock(self, window=5):
-        """Golden ratio violation detector with volatility compensation"""
-        if len(self.multipliers) < window:
-            return False
-            
-        recent = self.multipliers[-window:]
-        violations = 0
-        total = 0
+        # 2. Blue decay (entropy resistance)
+        resistance = 0
+        for m in segment:
+            if m < 2:
+                # Resistance = (2 - multiplier) * Fibonacci weight
+                resistance += (2 - m) * (1.618 ** (segment.index(m)/len(segment)))
         
-        for i in range(1, len(recent)):
-            ratio = recent[i] / recent[i-1]
-            
-            # Acceptable golden ratio deviation: ±25%
-            golden_min = self.golden_ratio * 0.75
-            golden_max = self.golden_ratio * 1.25
-            
-            if ratio < golden_min or ratio > golden_max:
-                violations += 1
-            total += 1
-            
-        # Require >60% violations to flag trap
-        return (violations / total) > 0.6 if total > 0 else False
-
-    def entangled_fib_prediction(self):
-        """Quantum pressure forecast - Battlefield recalibrated"""
-        if len(self.multipliers) < 8:
-            return "NEUTRAL"
-        
-        # 1. Fibonacci pressure index (weighted)
-        pressure = 0
-        weights = {3: 0.4, 5: 0.3, 8: 0.2, 13: 0.1}
-        for win, weight in weights.items():
-            if len(self.multipliers) >= win:
-                segment = self.multipliers[-win:]
-                pressure += (sum(1 for m in segment if m > 1.5) / win) * weight
-        
-        # 2. Golden momentum indicator
+        # 3. Wavefront momentum
         momentum = 0
-        for i in range(1, min(4, len(self.multipliers))):
-            if self.multipliers[-i] > 1.3 * self.multipliers[-i-1]:
-                momentum += 1
+        for i in range(1, len(segment)):
+            if segment[i] > segment[i-1]:
+                momentum += 1.5 if segment[i] > 2 else 0.8
         
-        # 3. Trap pressure (blue density)
-        blue_count = sum(1 for m in self.multipliers[-8:] if m < 1.6)
-        trap_pressure = blue_count / 8
+        # 4. Temporal decay factor (recent events matter more)
+        time_decay = np.linspace(1.5, 0.5, len(segment))
+        surge_force = sum([s * d for s, d in zip([m>=2 for m in segment], time_decay)])
         
-        # Decision matrix (calibrated to your data)
-        if pressure > 0.65 and momentum >= 2:
-            return "SURGE_IMMINENT"
-        elif trap_pressure > 0.5 or (self.fib_wavelet_analysis() > 0.4 and self.golden_phase_lock()):
-            return "TRAP_DEPLOYING"
-        return "NEUTRAL"
-    
-    def update_threshold(self, is_correct: bool):
-        """COMBAT-OPTIMIZED LEARNING"""
-        if is_correct:
-            self.dynamic_threshold = max(0.18, self.dynamic_threshold * 0.96)
-        else:
-            self.dynamic_threshold = min(0.42, self.dynamic_threshold * 1.04)
+        return surge_force, resistance, momentum
+        
+    def adaptive_fpi_dashboard(self):
+        """Dynamic pressure wavefront visualization"""
+        wavefront_data = []
+        
+        for i, win in enumerate(self.fib_windows):
+            surge, resistance, momentum = self._calculate_pressure_wavefront(win)
+            
+            # Adaptive threshold = f(volatility, resistance)
+            volatility = np.std(self.multipliers[-win:]) if len(self.multipliers) >= win else 0
+            adaptive_threshold = 0.65 + (0.15 * i) - (resistance * 0.2) + (volatility * 0.3)
+            
+            wavefront_data.append({
+                "window": win,
+                "pressure": surge,
+                "resistance": resistance,
+                "momentum": momentum,
+                "threshold": max(0.4, min(0.95, adaptive_threshold))
+            })
+        
+        return wavefront_data
+
+    def early_entry_signal(self):
+        """Predict surge 1-2 rounds before critical threshold breach"""
+        wavefront = self.adaptive_fpi_dashboard()
+        
+        # 1. Pressure acceleration detector
+        pressure_slope = 0
+        if len(self.pressure_history) > 2:
+            pressure_slope = self.pressure_history[-1] - self.pressure_history[-3]
+        
+        # 2. Resistance collapse indicator
+        resistance_drop = wavefront[0]['resistance'] < (0.7 * wavefront[1]['resistance'])
+        
+        # 3. Quantum entanglement signal
+        if (pressure_slope > 0.5 and 
+            wavefront[0]['pressure'] > 0.6 and 
+            resistance_drop):
+            return "⚡ PRE-SURGE ACTIVATION"
+        
+        return None
 
 
 def verify_qfe_predictions(df, qfe):
@@ -817,75 +800,62 @@ def verify_qfe_predictions(df, qfe):
     
     st.session_state.qfe_accuracy['last_checked'] = current_round_count - 1
 
-def qfe_dashboard(df):
-    st.subheader("⚡ BATTLE-CALIBRATED QFE")
-    multiplier_list = df['multiplier'].tolist()
-    qfe = QuantumFibonacciEntanglement(multiplier_list)
-    
-    col1, col2, col3 = st.columns(3)
-    
-    # 1. Decoherence Gauge (with Fibonacci baseline)
-    decoherence = qfe.fib_wavelet_analysis()
-    with col1:
-        st.metric("Fib Resonance", f"{1-decoherence:.2f}", 
-                 delta="Strong" if decoherence < 0.3 else "Weak",
-                 delta_color="inverse" if decoherence > 0.4 else "normal")
-        st.progress(1-decoherence, text=f"Sequence Harmony")
-    
-    # 2. Golden Matrix
-    golden_lock = qfe.golden_phase_lock(window=5)
-    with col2:
-        st.metric("Golden Matrix", 
-                 "STABLE" if not golden_lock else "DEGRADED!",
-                 delta="Natural flow" if not golden_lock else "Trap patterns",
-                 delta_color="normal" if not golden_lock else "off")
-        st.caption(f"5-round violation density")
-    
-    # 3. Quantum Forecast
-    prediction = qfe.entangled_fib_prediction()
-    with col3:
-        if prediction == "SURGE_IMMINENT":
-            st.success("🔥 SURGE IMMINENT", icon="🚀")
-            st.progress(0.85, text="High confidence")
-        elif prediction == "TRAP_DEPLOYING":
-            st.error("⛔ TRAP DEPLOYING", icon="🪤")
-            st.progress(0.75, text="Moderate confidence")
-        else:
-            st.info("⚡ NEUTRAL ZONE", icon="📊")
-            st.progress(0.5, text="Scout mode")
-    
-    # Pressure Matrix Visualization
-    st.subheader("Quantum Pressure Matrix")
-    pressure_data = {
-        "Window": [3, 5, 8, 13],
-        "Pressure": [],
-        "Threshold": [0.7, 0.6, 0.5, 0.4]
-    }
-    
-    for win in pressure_data["Window"]:
-        if len(multiplier_list) >= win:
-            segment = multiplier_list[-win:]
-            pressure = sum(1 for m in segment if m > 1.5) / win
-            pressure_data["Pressure"].append(pressure)
-        else:
-            pressure_data["Pressure"].append(0)
-    
+def plot_adaptive_wavefront(wavefront_data):
     fig = go.Figure()
+    
+    # Pressure wave bars
     fig.add_trace(go.Bar(
-        x=pressure_data["Window"],
-        y=pressure_data["Pressure"],
-        name='Actual Pressure',
-        marker_color='cyan'
+        x=[w['window'] for w in wavefront_data],
+        y=[w['pressure'] for w in wavefront_data],
+        name='Pressure Wave',
+        marker_color='#1f77b4',
+        width=0.6
     ))
+    
+    # Resistance reef (area chart)
     fig.add_trace(go.Scatter(
-        x=pressure_data["Window"],
-        y=pressure_data["Threshold"],
-        name='Surge Threshold',
-        mode='lines+markers',
-        line=dict(color='red', dash='dash')
+        x=[w['window'] for w in wavefront_data],
+        y=[w['resistance'] for w in wavefront_data],
+        fill='tozeroy',
+        name='Resistance Reef',
+        fillcolor='rgba(255,0,0,0.2)',
+        line=dict(color='crimson')
     ))
-    fig.update_layout(barmode='overlay', title="Fibonacci Pressure Index")
-    st.plotly_chart(fig, use_container_width=True)
+    
+    # Adaptive threshold tide line
+    fig.add_trace(go.Scatter(
+        x=[w['window'] for w in wavefront_data],
+        y=[w['threshold'] for w in wavefront_data],
+        mode='lines+markers',
+        name='Tide Threshold',
+        line=dict(color='gold', dash='dash', width=2),
+        marker=dict(symbol='diamond', size=10)
+    ))
+    
+    # Momentum quiver plot
+    for w in wavefront_data:
+        fig.add_annotation(
+            x=w['window'],
+            y=w['pressure'] + 0.05,
+            ax=0,
+            ay=-30 if w['momentum'] < 1 else 30,
+            xref='x',
+            yref='y',
+            axref='pixel',
+            ayref='pixel',
+            showarrow=True,
+            arrowhead=2,
+            arrowsize=1,
+            arrowwidth=2,
+            arrowcolor='green' if w['momentum'] > 1 else 'red'
+        )
+    
+    fig.update_layout(
+        title='🌊 Quantum Pressure Wavefront',
+        yaxis_title='Pressure Intensity',
+        hovermode='x unified'
+    )
+    st.plotly_chart(fig)
 
 
 
@@ -1928,7 +1898,7 @@ if not df.empty:
 
     # ===== QUANTUM FIBONACCI ENTANGLEMENT DISPLAY =====
     # Display QFE Dashboard
-    qfe_dashboard(df)
+    plot_adaptive_wavefront()
 
 
     with st.expander("🔎 Multi-Cycle Detector Results", expanded=False):
