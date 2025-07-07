@@ -1164,6 +1164,27 @@ class QuantumGambit:
         self.temporal_signatures = self.temporal_weaponization()
         return self
 
+
+def forecast_phase_space(df, steps=3):
+    """Predict future phase states using quantum recurrence"""
+    # 1. Prepare state vectors
+    states = np.column_stack([df['instant_phase'], df['phase_velocity']])
+    
+    # 2. Train quantum recurrence model
+    model = RecurrentQuantumNetwork(states)
+    model.train(epochs=50)
+    
+    # 3. Generate forecast
+    forecast = model.predict(last_state=states[-1], steps=steps)
+    
+    # 4. Convert to multiplier projections
+    multiplier_forecast = []
+    for phase, vel in forecast:
+        # Inverse Hilbert transform approximation
+        multiplier = 1.0 + 0.5 * np.sin(phase) * (1 + vel)
+        multiplier_forecast.append(max(1.0, multiplier))
+    
+    return forecast, multiplier_forecast
 # ======================= UI ENHANCEMENTS =============================
 def plot_phase_space(df):
     """Holographic phase space visualization"""
@@ -1200,6 +1221,17 @@ def plot_phase_space(df):
                 symbol='x'
             ),
             name='TRAP ZONES'
+        ))
+        # Add forecast to phase space plot
+        forecast_points, multipliers = forecast_phase_space(df)
+        fig.add_trace(go.Scatter3d(
+            x=forecast_timestamps,
+            y=[p[0] for p in forecast_points],
+            z=[p[1] for p in forecast_points],
+            mode='markers+text',
+            marker=dict(size=10, color='gold', symbol='diamond'),
+            text=[f"{m:.1f}x" for m in multipliers],
+            name='Quantum Forecast'
         ))
     
     fig.update_layout(
