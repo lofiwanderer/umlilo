@@ -17,6 +17,7 @@ from scipy.signal import find_peaks, peak_widths
 from scipy.signal import hilbert
 import math
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.cluster import KMeans
 from matplotlib import gridspec
 #from thre_fused_tdi_module import plot_thre_fused_tdi
 #import morlet_phase_enhancement
@@ -1037,6 +1038,206 @@ def plot_normalized_signal_dashboard(df_signal):
     )
     
     return fig
+# ======================= QUANTUM CONSTANTS ============================
+VOLATILITY_THRESHOLDS = {'micro': 1.5, 'meso': 3.0, 'macro': 5.0}
+PHASE_SPACE_BINS = 30  # Hilbert transform resolution
+MULTIVERSE_SIMULATIONS = 1000  # Parallel universe simulations
+
+# ======================= QUANTUM ENGINE ===============================
+class QuantumGambit:
+    def __init__(self, df):
+        self.df = df.copy()
+        self.phase_space = None
+        self.multiverse = None
+        self.entropy_state = None
+        self.temporal_signatures = None
+        
+    def hilbert_phase_space(self):
+        """Transform data into Hilbert phase space for trap detection"""
+        if len(self.df) < 10: return self.df
+        
+        # Hilbert transform for instantaneous phase
+        analytic_signal = hilbert(self.df['multiplier'].values)
+        self.df['instant_phase'] = np.unwrap(np.angle(analytic_signal))
+        
+        # Phase velocity (regime change detector)
+        self.df['phase_velocity'] = np.gradient(self.df['instant_phase'])
+        
+        # Phase acceleration (trap predictor)
+        self.df['phase_accel'] = np.gradient(self.df['phase_velocity'])
+        
+        # Detect compression traps
+        self.df['trap_signature'] = (self.df['phase_velocity'].rolling(5).std() < 0.08) & \
+                                   (self.df['range_width'].diff() < 0)
+        return self.df
+    
+    def adaptive_fibonacci(self, current_regime):
+        """Regime-aware Fibonacci levels"""
+        base_levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
+        
+        if current_regime == 'trap_compression':
+            return [l * 0.82 for l in base_levels]
+        elif current_regime == 'surge_favorable':
+            return [l * 1.18 for l in base_levels]
+        return base_levels
+    
+    def simulate_multiverse(self):
+        """Run parallel universe simulations"""
+        if len(self.df) < 20: return {}
+        
+        # Build Markov transition matrix
+        states = ['SURGE', 'NEUTRAL', 'TRAP']
+        transition_counts = {s: {s2: 1 for s2 in states} for s in states}
+        
+        # Learn from history
+        for i in range(1, len(self.df)):
+            prev_state = 'SURGE' if self.df['multiplier'].iloc[i-1] > 3 else \
+                        'TRAP' if self.df['trap_signature'].iloc[i-1] else 'NEUTRAL'
+            curr_state = 'SURGE' if self.df['multiplier'].iloc[i] > 3 else \
+                        'TRAP' if self.df['trap_signature'].iloc[i] else 'NEUTRAL'
+            transition_counts[prev_state][curr_state] += 1
+        
+        # Normalize to probabilities
+        markov_matrix = {}
+        for s in states:
+            total = sum(transition_counts[s].values())
+            markov_matrix[s] = {s2: count/total for s2, count in transition_counts[s].items()}
+        
+        # Simulate 1000 paths
+        paths = []
+        current_state = 'SURGE' if self.df['multiplier'].iloc[-1] > 3 else \
+                      'TRAP' if self.df['trap_signature'].iloc[-1] else 'NEUTRAL'
+                      
+        for _ in range(MULTIVERSE_SIMULATIONS):
+            path = []
+            state = current_state
+            for _ in range(5):  # Next 5 rounds
+                probs = markov_matrix[state]
+                state = np.random.choice(list(probs.keys()), p=list(probs.values()))
+                path.append(state)
+            paths.append(path)
+        
+        # Calculate trap probability
+        trap_prob = sum(1 for p in paths if 'TRAP' in p) / len(paths)
+        
+        return {
+            'trap_probability': trap_prob,
+            'paths': paths,
+            'optimal_entry': np.argmax([p[0]=='SURGE' for p in paths])
+        }
+    
+    def entropy_negation(self):
+        """Combat adaptive entropy with reverse Shannon coding"""
+        entropy = stats.entropy(pd.cut(self.df['multiplier'], bins=10).value_counts(normalize=True))
+        
+        if entropy < 1.5:  # Low entropy = predictable trap
+            return 'INVERT'
+        elif entropy > 2.8:  # High entropy = genuine randomness
+            return 'TRUST'
+        return 'NEUTRAL'
+    
+    def temporal_weaponization(self):
+        """Detect time-based trap patterns"""
+        if 'timestamp' not in self.df: return {}
+        
+        # Create 30-second time bins
+        self.df['time_bin'] = (self.df['timestamp'].astype(int) // 10**9) % 30
+        
+        # Cluster analysis of trap timing
+        trap_times = self.df[self.df['trap_signature']]['time_bin'].values
+        if len(trap_times) > 5:
+            kmeans = KMeans(n_clusters=3).fit(trap_times.reshape(-1,1))
+            cluster_centers = sorted(kmeans.cluster_centers_.flatten())
+            return {'trap_clusters': cluster_centers}
+        return {}
+    
+    def execute_quantum(self):
+        """Run full quantum analysis suite"""
+        self.df = self.hilbert_phase_space()
+        self.multiverse = self.simulate_multiverse()
+        self.entropy_state = self.entropy_negation()
+        self.temporal_signatures = self.temporal_weaponization()
+        return self
+
+# ======================= UI ENHANCEMENTS =============================
+def plot_phase_space(df):
+    """Holographic phase space visualization"""
+    if 'instant_phase' not in df or len(df) < 10: return
+    
+    fig = go.Figure()
+    
+    # Phase space trajectory
+    fig.add_trace(go.Scatter3d(
+        x=df['timestamp'],
+        y=df['instant_phase'],
+        z=df['phase_velocity'],
+        mode='lines+markers',
+        marker=dict(
+            size=4,
+            color=df['multiplier'],
+            colorscale='Viridis',
+            showscale=True
+        ),
+        line=dict(color='darkblue', width=2)
+    ))
+    
+    # Trap signatures
+    trap_df = df[df['trap_signature']]
+    if not trap_df.empty:
+        fig.add_trace(go.Scatter3d(
+            x=trap_df['timestamp'],
+            y=trap_df['instant_phase'],
+            z=trap_df['phase_velocity'],
+            mode='markers',
+            marker=dict(
+                size=8,
+                color='red',
+                symbol='x'
+            ),
+            name='TRAP ZONES'
+        ))
+    
+    fig.update_layout(
+        title='🌌 HILBERT PHASE SPACE (Trap Detection)',
+        scene=dict(
+            xaxis_title='Time',
+            yaxis_title='Instant Phase',
+            zaxis_title='Phase Velocity'
+        ),
+        height=600
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+def render_multiverse(sim_data):
+    """Visualize parallel universe simulations"""
+    if not sim_data: return
+    
+    # Prepare path visualization
+    path_counts = defaultdict(int)
+    for path in sim_data['paths']:
+        path_str = '→'.join(path[:3])  # First 3 steps
+        path_counts[path_str] += 1
+    
+    # Create bar chart of top paths
+    top_paths = sorted(path_counts.items(), key=lambda x: -x[1])[:10]
+    paths, counts = zip(*top_paths)
+    
+    fig = go.Figure([go.Bar(x=paths, y=counts)])
+    fig.update_layout(
+        title=f'🌀 MULTIVERSE PATHS (Trap Prob: {sim_data["trap_probability"]:.0%})',
+        yaxis_title='Simulation Count'
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+# ======================= SIDEBAR ENHANCEMENTS ========================
+def quantum_sidebar():
+    with st.sidebar:
+        st.header("⚡ QUANTUM PARAMETERS")
+        st.slider("Multiverse Simulations", 100, 5000, MULTIVERSE_SIMULATIONS, key='multiverse_sims')
+        st.number_input("Micro Volatility Threshold", value=VOLATILITY_THRESHOLDS['micro'], key='micro_thresh')
+        st.number_input("Meso Volatility Threshold", value=VOLATILITY_THRESHOLDS['meso'], key='meso_thresh')
+        st.checkbox("Activate Temporal Weaponization", value=True, key='use_temporal')
+        st.checkbox("Enable Entropy Negation", value=True, key='use_entropy')
 
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
@@ -1750,6 +1951,26 @@ def analyze_data(data, pink_threshold, window_size, window = selected_msi_window
         
         # Predict next 5 rounds
         resonance_forecast_vals = resonance_forecast(harmonic_waves, resonance_matrix) if harmonic_waves else None
+
+     # ===== QUANTUM ENHANCEMENTS =====
+    # 1. Range metrics
+    df['range_width'] = df['multiplier'].rolling(RANGE_WINDOW).apply(lambda x: x.max() - x.min(), raw=True)
+    df['range_center'] = df['multiplier'].rolling(RANGE_WINDOW).mean()
+    
+    # 2. Regime classification
+    df['regime_state'] = np.where(
+        (df['range_width'].diff() > 0) & (df['range_center'].diff() > 0),
+        'surge_favorable',
+        np.where(
+            (df['range_width'].diff() < 0) & (df['range_center'].diff().abs() < 0.1),
+            'trap_zone',
+            'neutral'
+        )
+    )
+    
+    # 3. Execute quantum analysis
+    quantum = QuantumGambit(df).execute_quantum()
+    df = quantum.df
     
     # Return all computed values
     return (df, latest_msi, window_size, recent_df, msi_score, msi_color, latest_tpi, 
@@ -1758,7 +1979,7 @@ def analyze_data(data, pink_threshold, window_size, window = selected_msi_window
             eis, interference, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, 
             micro_pct, micro_phase_label, micro_freq, dominant_freq, phase, gamma_amplitude, 
             micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
-            resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals)
+            resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals, quantum)
 
 
 # =================== MSI CHART PLOTTING ========================
@@ -1998,7 +2219,7 @@ if not df.empty:
      eis, interference, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, 
      micro_pct, micro_phase_label, micro_freq, dominant_freq, phase, gamma_amplitude, 
      micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
-     resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE)
+     resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals, quantum_engine) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE)
     
     
     
@@ -2090,6 +2311,37 @@ if not df.empty:
     # ============================
     plot_adaptive_wavefront(wavefront_data)
 
+     # ===== QUANTUM WAR ROOM =====
+    st.header("🚀 QUANTUM WAR ROOM")
+    
+    # 1. Phase space visualization
+    plot_phase_space(df)
+    
+    # 2. Multiverse simulation
+    if quantum_engine.multiverse:
+        render_multiverse(quantum_engine.multiverse)
+        
+        # Decision matrix
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Trap Probability", f"{quantum_engine.multiverse['trap_probability']:.0%}")
+        with col2:
+            st.metric("Optimal Entry Round", quantum_engine.multiverse['optimal_entry'])
+    
+    # 3. Entropy override
+    if quantum_engine.entropy_state:
+        st.subheader(f"🧠 ENTROPY OVERRIDE: {quantum_engine.entropy_state}")
+        if quantum_engine.entropy_state == 'INVERT':
+            st.error("⚠️ SYSTEM DETECTED PATTERN - INVERT NEXT SIGNAL")
+        elif quantum_engine.entropy_state == 'TRUST':
+            st.success("✅ GENUINE RANDOMNESS - TRUST SYSTEM")
+    
+    # 4. Temporal signatures
+    if quantum_engine.temporal_signatures:
+        st.subheader("⏱️ TEMPORAL TRAP SIGNATURES")
+        st.write(f"Trap clusters at seconds: {quantum_engine.temporal_signatures.get('trap_clusters', [])}")
+
+    
     # Assume you have pandas dataframe df with MSI columns:
     # df['msi_3'], df['msi_5'], df['msi_8']
     
@@ -2103,12 +2355,14 @@ if not df.empty:
 
     df_signal = get_normalized_signal_data(msi_dict)
     fig_signal = plot_normalized_signal_dashboard(df_signal)
-    st.plotly_chart(fig_signal)
-    st.subheader("🎯 Anti-Trap Signal")
-    st.success(entry_signal if "CLEAN" in entry_signal else entry_signal)
+    
 
 
     with st.expander("🔎 Multi-Cycle Detector Results", expanded=False):
+       st.plotly_chart(fig_signal)
+       st.subheader("🎯 Anti-Trap Signal")
+       st.success(entry_signal if "CLEAN" in entry_signal else entry_signal)
+        
        st.subheader("🎯 Custom Regime Classifier")
        st.markdown(f"**Regime Type:** {regime_result['regime_type']} ({regime_result['estimated_length']} rounds)")
        st.markdown(f"**Phase:** {regime_result['phase_label']} (Score: {regime_result['phase_score']})")
@@ -2246,4 +2500,5 @@ if not df.empty:
 
 else:
     st.info("Enter at least 1 round to begin analysis.")
-
+    
+quantum_sidebar()
