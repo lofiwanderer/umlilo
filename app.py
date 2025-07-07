@@ -1149,7 +1149,7 @@ class QuantumGambit:
         self.df['time_bin'] = (self.df['timestamp'].astype(int) // 10**9) % 30
         
         # Cluster analysis of trap timing
-        if 'trap_signature' not in self.df:
+        if len(self.df) < 10:
             return {}
         trap_times = self.df.loc[self.df['trap_signature'], 'time_bin'].values
         if len(trap_times) > 5:
