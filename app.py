@@ -1165,26 +1165,38 @@ class QuantumGambit:
         return self
 
 
+# ========== FORECAST FUNCTION ===============
 def forecast_phase_space(df, steps=3):
-    """Predict future phase states using quantum recurrence"""
-    # 1. Prepare state vectors
-    states = np.column_stack([df['instant_phase'], df['phase_velocity']])
+    """
+    Predict future phase states using AR(1) model as realistic stand-in
+    for recurrent sequence forecasting.
+    """
+    if 'instant_phase' not in df or len(df) < 10:
+        return [], []
     
-    # 2. Train quantum recurrence model
-    model = RecurrentQuantumNetwork(states)
-    model.train(epochs=50)
+    window_size = 30
+    phases = df['instant_phase'].values[-window_size:]
+    velocities = df['phase_velocity'].values[-window_size:]
     
-    # 3. Generate forecast
-    forecast = model.predict(last_state=states[-1], steps=steps)
+    # Fit AR(1) linear trend
+    phi_phase = np.polyfit(range(len(phases)), phases, 1)
+    phi_velocity = np.polyfit(range(len(velocities)), velocities, 1)
     
-    # 4. Convert to multiplier projections
-    multiplier_forecast = []
-    for phase, vel in forecast:
-        # Inverse Hilbert transform approximation
-        multiplier = 1.0 + 0.5 * np.sin(phase) * (1 + vel)
-        multiplier_forecast.append(max(1.0, multiplier))
+    forecast_phases = []
+    forecast_velocities = []
     
-    return forecast, multiplier_forecast
+    for step in range(steps):
+        next_phase = phi_phase[0]*(len(phases)+step) + phi_phase[1]
+        next_velocity = phi_velocity[0]*(len(velocities)+step) + phi_velocity[1]
+        
+        forecast_phases.append(next_phase)
+        forecast_velocities.append(next_velocity)
+    
+    multipliers = [max(1.0, 1.0 + 0.5 * np.sin(p) * (1 + v))
+                    for p, v in zip(forecast_phases, forecast_velocities)]
+    
+    return list(zip(forecast_phases, forecast_velocities)), multipliers
+
 # ======================= UI ENHANCEMENTS =============================
 def plot_phase_space(df):
     """Holographic phase space visualization"""
@@ -1224,15 +1236,19 @@ def plot_phase_space(df):
         ))
         # Add forecast to phase space plot
         forecast_points, multipliers = forecast_phase_space(df)
-        fig.add_trace(go.Scatter3d(
-            x=forecast_timestamps,
-            y=[p[0] for p in forecast_points],
-            z=[p[1] for p in forecast_points],
-            mode='markers+text',
-            marker=dict(size=10, color='gold', symbol='diamond'),
-            text=[f"{m:.1f}x" for m in multipliers],
-            name='Quantum Forecast'
-        ))
+        if forecast_points:
+            last_time = df['timestamp'].iloc[-1]
+            forecast_timestamps = [last_time + pd.Timedelta(seconds=15*(i+1)) for i in range(len(forecast_points))]
+            
+            fig.add_trace(go.Scatter3d(
+                x=forecast_timestamps,
+                y=[p[0] for p in forecast_points],
+                z=[p[1] for p in forecast_points],
+                mode='markers+text',
+                marker=dict(size=10, color='gold', symbol='diamond'),
+                text=[f"{m:.1f}x" for m in multipliers],
+                name='Quantum Forecast'
+            ))
     
     fig.update_layout(
         title='🌌 HILBERT PHASE SPACE (Trap Detection)',
