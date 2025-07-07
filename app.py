@@ -1233,6 +1233,11 @@ def render_multiverse(sim_data):
 def quantum_sidebar():
     with st.sidebar:
         st.header("⚡ QUANTUM PARAMETERS")
+        RANGE_WINDOW = st.sidebar.selectbox(
+        "Range Lookback Window (Rounds)",
+        options=[3, 5, 8, 13, 21, 34, 55],
+        index=3
+        )
         st.slider("Multiverse Simulations", 100, 5000, MULTIVERSE_SIMULATIONS, key='multiverse_sims')
         st.number_input("Micro Volatility Threshold", value=VOLATILITY_THRESHOLDS['micro'], key='micro_thresh')
         st.number_input("Meso Volatility Threshold", value=VOLATILITY_THRESHOLDS['meso'], key='meso_thresh')
@@ -1681,7 +1686,7 @@ def fractal_anchor_visualizer(df, msi_col="msi", score_col="score", window=8):
 
 # =================== DATA ANALYSIS ========================
 @st.cache_data(show_spinner=False)
-def analyze_data(data, pink_threshold, window_size, window = selected_msi_windows):
+def analyze_data(data, pink_threshold, window_size, window = selected_msi_windows, RANGE_WINDOW):
     df = data.copy()
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df["type"] = df["multiplier"].apply(lambda x: "Pink" if x >= pink_threshold else ("Purple" if x >= 2 else "Blue"))
@@ -2219,7 +2224,7 @@ if not df.empty:
      eis, interference, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, 
      micro_pct, micro_phase_label, micro_freq, dominant_freq, phase, gamma_amplitude, 
      micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
-     resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals, quantum_engine) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE)
+     resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals, quantum_engine) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE, RANGE_WINDOW)
     
     
     
