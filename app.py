@@ -181,7 +181,12 @@ with st.sidebar:
     if st.button("🧹 Clear Cache", help="Force harmonic + MSI recalculation"):
         st.cache_data.clear()  # Streamlit's built-in cache clearer
         st.success("Cache cleared — recalculations will run fresh.")
-
+        
+    RANGE_WINDOW = st.sidebar.selectbox(
+        "Range Lookback Window (Rounds)",
+        options=[3, 5, 8, 13, 21, 34, 55],
+        index=3
+        )
 # =================== ADVANCED HELPER FUNCTIONS ========================
 @st.cache_data
 def bollinger_bands(series, window, num_std=2):
@@ -1233,11 +1238,7 @@ def render_multiverse(sim_data):
 def quantum_sidebar():
     with st.sidebar:
         st.header("⚡ QUANTUM PARAMETERS")
-        RANGE_WINDOW = st.sidebar.selectbox(
-        "Range Lookback Window (Rounds)",
-        options=[3, 5, 8, 13, 21, 34, 55],
-        index=3
-        )
+        
         st.slider("Multiverse Simulations", 100, 5000, MULTIVERSE_SIMULATIONS, key='multiverse_sims')
         st.number_input("Micro Volatility Threshold", value=VOLATILITY_THRESHOLDS['micro'], key='micro_thresh')
         st.number_input("Meso Volatility Threshold", value=VOLATILITY_THRESHOLDS['meso'], key='meso_thresh')
