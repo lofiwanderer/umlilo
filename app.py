@@ -1686,7 +1686,7 @@ def fractal_anchor_visualizer(df, msi_col="msi", score_col="score", window=8):
 
 # =================== DATA ANALYSIS ========================
 @st.cache_data(show_spinner=False)
-def analyze_data(data, pink_threshold, window_size, window = selected_msi_windows, RANGE_WINDOW):
+def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, window = selected_msi_windows):
     df = data.copy()
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df["type"] = df["multiplier"].apply(lambda x: "Pink" if x >= pink_threshold else ("Purple" if x >= 2 else "Blue"))
