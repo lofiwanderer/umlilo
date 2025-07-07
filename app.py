@@ -1043,6 +1043,35 @@ def plot_normalized_signal_dashboard(df_signal):
     )
     
     return fig
+
+
+def detect_trap_signatures(df):
+    """Improved trap signature detection with dynamic thresholds."""
+    if len(df) < 10:
+        df['trap_signature'] = False
+        return df
+
+    # Rolling volatility of multiplier (like MSI but adaptive)
+    df['volatility_score'] = df['multiplier'].rolling(8, min_periods=1).std()
+
+    # Rolling phase velocity std (measures local "calm" or compression)
+    df['phase_vel_std'] = df['phase_velocity'].rolling(5, min_periods=1).std()
+
+    # Phase acceleration spike (detects sudden manipulative "snap")
+    df['phase_accel_spike'] = np.abs(df['phase_accel']) > df['phase_accel'].rolling(8, min_periods=1).std() * 1.5
+
+    # Range compression ratio
+    df['range_compression'] = df['volatility_score'] / df['volatility_score'].rolling(10, min_periods=1).mean()
+
+    # Trap signal: low phase velocity std, high acceleration spike, compressed range
+    df['trap_signature'] = (
+        (df['phase_vel_std'] < 0.07) &
+        (df['phase_accel_spike']) &
+        (df['range_compression'] < 0.85)
+    )
+
+    return df
+                       
 # ======================= QUANTUM CONSTANTS ============================
 VOLATILITY_THRESHOLDS = {'micro': 1.5, 'meso': 3.0, 'macro': 5.0}
 PHASE_SPACE_BINS = 30  # Hilbert transform resolution
@@ -1072,32 +1101,7 @@ class QuantumGambit:
         self.df['phase_accel'] = np.gradient(self.df['phase_velocity'])
         
         # Detect compression traps
-        def detect_trap_signatures(df):
-            """Improved trap signature detection with dynamic thresholds."""
-            if len(df) < 10:
-                df['trap_signature'] = False
-                return df
-        
-            # Rolling volatility of multiplier (like MSI but adaptive)
-            df['volatility_score'] = df['multiplier'].rolling(8, min_periods=1).std()
-        
-            # Rolling phase velocity std (measures local "calm" or compression)
-            df['phase_vel_std'] = df['phase_velocity'].rolling(5, min_periods=1).std()
-        
-            # Phase acceleration spike (detects sudden manipulative "snap")
-            df['phase_accel_spike'] = np.abs(df['phase_accel']) > df['phase_accel'].rolling(8, min_periods=1).std() * 1.5
-        
-            # Range compression ratio
-            df['range_compression'] = df['volatility_score'] / df['volatility_score'].rolling(10, min_periods=1).mean()
-        
-            # Trap signal: low phase velocity std, high acceleration spike, compressed range
-            df['trap_signature'] = (
-                (df['phase_vel_std'] < 0.07) &
-                (df['phase_accel_spike']) &
-                (df['range_compression'] < 0.85)
-            )
-        
-            return df
+        self.df = detect_trap_signatures(self.df)
             
         return self.df
     
@@ -1174,7 +1178,10 @@ class QuantumGambit:
         self.df['time_bin'] = (self.df['timestamp'].astype(int) // 10**9) % 30
         
         # Cluster analysis of trap timing
-        trap_times = self.df[df['trap_signature']]['time_bin'].values
+        if 'trap_signature' not in self.df:
+            return {}
+        trap_times = self.df.loc[self.df['trap_signature'], 'time_bin'].values
+        
         if len(trap_times) > 5:
             kmeans = KMeans(n_clusters=3).fit(trap_times.reshape(-1,1))
             cluster_centers = sorted(kmeans.cluster_centers_.flatten())
