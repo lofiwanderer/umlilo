@@ -1072,8 +1072,33 @@ class QuantumGambit:
         self.df['phase_accel'] = np.gradient(self.df['phase_velocity'])
         
         # Detect compression traps
-        self.df['trap_signature'] = (self.df['phase_velocity'].rolling(5).std() < 0.08) & \
-                                   (self.df['range_width'].diff() < 0)
+        def detect_trap_signatures(df):
+            """Improved trap signature detection with dynamic thresholds."""
+            if len(df) < 10:
+                df['trap_signature'] = False
+                return df
+        
+            # Rolling volatility of multiplier (like MSI but adaptive)
+            df['volatility_score'] = df['multiplier'].rolling(8, min_periods=1).std()
+        
+            # Rolling phase velocity std (measures local "calm" or compression)
+            df['phase_vel_std'] = df['phase_velocity'].rolling(5, min_periods=1).std()
+        
+            # Phase acceleration spike (detects sudden manipulative "snap")
+            df['phase_accel_spike'] = np.abs(df['phase_accel']) > df['phase_accel'].rolling(8, min_periods=1).std() * 1.5
+        
+            # Range compression ratio
+            df['range_compression'] = df['volatility_score'] / df['volatility_score'].rolling(10, min_periods=1).mean()
+        
+            # Trap signal: low phase velocity std, high acceleration spike, compressed range
+            df['trap_signature'] = (
+                (df['phase_vel_std'] < 0.07) &
+                (df['phase_accel_spike']) &
+                (df['range_compression'] < 0.85)
+            )
+        
+            return df
+            
         return self.df
     
     def adaptive_fibonacci(self, current_regime):
@@ -1198,14 +1223,32 @@ def plot_phase_space(df):
             z=trap_df['phase_velocity'],
             mode='markers',
             marker=dict(
-                size=8,
-                color='red',
-                symbol='x'
+                size=6,
+                color=trap_df['trap_confidence'],  # Confidence-based color
+                colorscale='Reds',
+                cmin=0,
+                cmax=1,
+                showscale=True,
+                colorbar=dict(title='Trap Confidence')
             ),
             name='TRAP ZONES'
         ))
         # Add forecast to phase space plot
-        
+
+        fig.add_trace(go.Scatter3d(
+        x=df['timestamp'],
+        y=df['instant_phase'],
+        z=df['phase_velocity'],
+        mode='markers',
+        marker=dict(
+            size=2,
+            color=df['volatility_score'],
+            colorscale='Viridis',
+            opacity=0.3,
+            showscale=False
+        ),
+        name='Volatility Regime'
+        ))
     
     fig.update_layout(
         title='🌌 HILBERT PHASE SPACE (Trap Detection)',
@@ -1982,6 +2025,15 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, window = selec
     # 3. Execute quantum analysis
     quantum = QuantumGambit(df).execute_quantum()
     df = quantum.df
+    detect_trap_signatures(df)
+    df['trap_confidence'] = 0.0
+    if 'trap_signature' in df and df['trap_signature'].any():
+        # Confidence based on combined signals
+        conf = (
+            (0.5 / (df['phase_vel_std'] + 1e-5)) + 
+            (df['phase_accel'].abs() / (df['phase_accel'].abs().rolling(8).mean() + 1e-5))
+        )
+        df['trap_confidence'] = (conf - conf.min()) / (conf.max() - conf.min())
     
     # Return all computed values
     return (df, latest_msi, window_size, recent_df, msi_score, msi_color, latest_tpi, 
