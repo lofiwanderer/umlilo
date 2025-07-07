@@ -1174,7 +1174,7 @@ class QuantumGambit:
         self.df['time_bin'] = (self.df['timestamp'].astype(int) // 10**9) % 30
         
         # Cluster analysis of trap timing
-        trap_times = self.df[self.df['trap_signature']]['time_bin'].values
+        trap_times = self.df[df['trap_signature']]['time_bin'].values
         if len(trap_times) > 5:
             kmeans = KMeans(n_clusters=3).fit(trap_times.reshape(-1,1))
             cluster_centers = sorted(kmeans.cluster_centers_.flatten())
