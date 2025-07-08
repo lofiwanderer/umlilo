@@ -876,7 +876,7 @@ def plot_adaptive_wavefront(wavefront_data):
         y=[w['surge_potential'] for w in wavefront_data],
         mode='lines+markers',
         name='Surge Potential',
-        line=dict(color='darkgreen', width=3),
+        line=dict(color='white', width=3),
         marker=dict(symbol='circle', size=9, color='darkgreen')
     ))
 
@@ -917,7 +917,7 @@ def plot_adaptive_wavefront(wavefront_data):
             arrowwidth=2,
             arrowcolor='green' if w['momentum'] > 0 else 'red',
             text=f"Momentum: {w['momentum']:.2f}",
-            font=dict(color='black', size=10)
+            font=dict(color='white', size=10)
         )
 
     # 8️⃣ Final Layout Tuning
@@ -1008,7 +1008,7 @@ def plot_normalized_signal_dashboard(df_signal):
         x=df_signal['Window'],
         y=df_signal['Normalized_MSI'],
         name='Normalized MSI',
-        marker_color=df_signal['Trap_Risk'].apply(lambda x: 'red' if x else 'green'),
+        marker_color=df_signal['Trap_Risk'].apply(lambda x: 'red' if x else 'white'),
         opacity=0.8
     ))
     
@@ -1972,8 +1972,8 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
             col_name = f"msi_{window}"
             ax.plot(df["timestamp"], df[col_name],
                     label=f"MSI {window}",
-                    linewidth=1.5,
-                    alpha=0.8)
+                    linewidth=1.8,
+                    alpha=0.9)
         if show_msi_res:
             
             ax2 = ax.twinx()
@@ -1995,11 +1995,11 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         
                     # Plot retracement levels
                     for level, value in retrace.items():
-                        ax.axhline(value, color='navy', linestyle='--', alpha=0.4)
+                        ax.axhline(value, color='navy', linestyle=':', alpha=0.8)
                         ax.text(
                             df["timestamp"].iloc[-1], value,
                             f"{level}",
-                            fontsize=7, color='navy', va='bottom'
+                            fontsize=9, color='navy', va='bottom'
                         )
         
                     # Plot extension levels
