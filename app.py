@@ -1046,14 +1046,14 @@ def plot_normalized_signal_dashboard(df_signal):
 # ======================= QUANTUM CONSTANTS ============================
 VOLATILITY_THRESHOLDS = {'micro': 1.5, 'meso': 3.0, 'macro': 5.0}
 PHASE_SPACE_BINS = 30  # Hilbert transform resolution
-MULTIVERSE_SIMULATIONS = 1000  # Parallel universe simulations
+
 
 # ======================= QUANTUM ENGINE ===============================
 class QuantumGambit:
     def __init__(self, df):
         self.df = df.copy()
         self.phase_space = None
-        self.multiverse = None
+        
         self.entropy_state = None
         self.temporal_signatures = None
         
@@ -1086,50 +1086,7 @@ class QuantumGambit:
             return [l * 1.18 for l in base_levels]
         return base_levels
     
-    def simulate_multiverse(self):
-        """Run parallel universe simulations"""
-        if len(self.df) < 20: return {}
-        
-        # Build Markov transition matrix
-        states = ['SURGE', 'NEUTRAL', 'TRAP']
-        transition_counts = {s: {s2: 1 for s2 in states} for s in states}
-        
-        # Learn from history
-        for i in range(1, len(self.df)):
-            prev_state = 'SURGE' if self.df['multiplier'].iloc[i-1] > 3 else \
-                        'TRAP' if self.df['trap_signature'].iloc[i-1] else 'NEUTRAL'
-            curr_state = 'SURGE' if self.df['multiplier'].iloc[i] > 3 else \
-                        'TRAP' if self.df['trap_signature'].iloc[i] else 'NEUTRAL'
-            transition_counts[prev_state][curr_state] += 1
-        
-        # Normalize to probabilities
-        markov_matrix = {}
-        for s in states:
-            total = sum(transition_counts[s].values())
-            markov_matrix[s] = {s2: count/total for s2, count in transition_counts[s].items()}
-        
-        # Simulate 1000 paths
-        paths = []
-        current_state = 'SURGE' if self.df['multiplier'].iloc[-1] > 3 else \
-                      'TRAP' if self.df['trap_signature'].iloc[-1] else 'NEUTRAL'
-                      
-        for _ in range(MULTIVERSE_SIMULATIONS):
-            path = []
-            state = current_state
-            for _ in range(5):  # Next 5 rounds
-                probs = markov_matrix[state]
-                state = np.random.choice(list(probs.keys()), p=list(probs.values()))
-                path.append(state)
-            paths.append(path)
-        
-        # Calculate trap probability
-        trap_prob = sum(1 for p in paths if 'TRAP' in p) / len(paths)
-        
-        return {
-            'trap_probability': trap_prob,
-            'paths': paths,
-            'optimal_entry': np.argmax([p[0]=='SURGE' for p in paths])
-        }
+    
     
     def entropy_negation(self):
         """Combat adaptive entropy with reverse Shannon coding"""
@@ -1161,7 +1118,7 @@ class QuantumGambit:
     def execute_quantum(self):
         """Run full quantum analysis suite"""
         self.df = self.hilbert_phase_space()
-        self.multiverse = self.simulate_multiverse()
+        
         self.entropy_state = self.entropy_negation()
         self.temporal_signatures = self.temporal_weaponization()
         return self
@@ -1220,33 +1177,14 @@ def plot_phase_space(df):
     )
     st.plotly_chart(fig, use_container_width=True)
 
-def render_multiverse(sim_data):
-    """Visualize parallel universe simulations"""
-    if not sim_data: return
-    
-    # Prepare path visualization
-    path_counts = defaultdict(int)
-    for path in sim_data['paths']:
-        path_str = '→'.join(path[:3])  # First 3 steps
-        path_counts[path_str] += 1
-    
-    # Create bar chart of top paths
-    top_paths = sorted(path_counts.items(), key=lambda x: -x[1])[:10]
-    paths, counts = zip(*top_paths)
-    
-    fig = go.Figure([go.Bar(x=paths, y=counts)])
-    fig.update_layout(
-        title=f'🌀 MULTIVERSE PATHS (Trap Prob: {sim_data["trap_probability"]:.0%})',
-        yaxis_title='Simulation Count'
-    )
-    st.plotly_chart(fig, use_container_width=True)
+
 
 # ======================= SIDEBAR ENHANCEMENTS ========================
 def quantum_sidebar():
     with st.sidebar:
         st.header("⚡ QUANTUM PARAMETERS")
         
-        st.slider("Multiverse Simulations", 100, 5000, MULTIVERSE_SIMULATIONS, key='multiverse_sims')
+        
         st.number_input("Micro Volatility Threshold", value=VOLATILITY_THRESHOLDS['micro'], key='micro_thresh')
         st.number_input("Meso Volatility Threshold", value=VOLATILITY_THRESHOLDS['meso'], key='meso_thresh')
         st.checkbox("Activate Temporal Weaponization", value=True, key='use_temporal')
@@ -1887,75 +1825,15 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, window = selec
     resonance_forecast_vals = None
     
     # Harmonic Analysis
-    if N > 0:  # Ensure we have data
-        yf = rfft(scores - np.mean(scores))
-        xf = rfftfreq(N, T)
-        
-        # Always detect dominant cycle first
-        dominant_cycle = detect_dominant_cycle(scores)
-        
-        if dominant_cycle:
-            current_round_position = len(scores) % dominant_cycle
-            wave_label, wave_pct = get_phase_label(current_round_position, dominant_cycle)
+    
             
-            # Recompute FFT for wave fitting
-            idx_max = np.argmax(np.abs(yf[1:])) + 1 if len(yf) > 1 else 0
-            dominant_freq = xf[idx_max] if idx_max < len(xf) else 0
+     # Energy Integrity Score (EIS)
+     blues = len(df[df["score"] < 0])
+     purples = len(df[(df["score"] == 1.0) | (df["score"] == 1.5)])
+     pinks = len(df[df["score"] >= 2.0])
+     eis = (purples * 1 + pinks * 2) - blues       
             
-            # Harmonic wave fit + forecast
-            phase = np.angle(yf[idx_max]) if idx_max < len(yf) else 0
             
-            # Harmonic Fit (Past)
-            x_past = np.arange(N)  # Safe, aligned x for past
-            harmonic_wave = np.sin(2 * np.pi * dominant_freq * x_past + phase)
-            dom_slope = np.polyfit(np.arange(N), harmonic_wave, 1)[0] if N > 1 else 0
-            
-            # Harmonic Forecast (Future)
-            forecast_len = 5
-            future_x = np.arange(N, N + forecast_len)
-            harmonic_forecast = np.sin(2 * np.pi * dominant_freq * future_x + phase)
-            forecast_times = [df["timestamp"].iloc[-1] + pd.Timedelta(seconds=5 * i) for i in range(forecast_len)]
-            
-            # Secondary harmonic (micro-wave) in 8–12 range
-            # Micro Wave Detection
-            if N > 1 and len(xf) > 1:
-                mask_micro = (xf > 0.08) & (xf < 0.15)
-                if np.any(mask_micro) and len(np.where(mask_micro)[0]) > 0:
-                    micro_indices = np.where(mask_micro)[0]
-                    if len(micro_indices) > 0 and len(yf) > max(micro_indices):
-                        micro_idx = micro_indices[np.argmax(np.abs(yf[micro_indices]))]
-                        micro_freq = xf[micro_idx]
-                        micro_phase = np.angle(yf[micro_idx])
-                        micro_wave = np.sin(2 * np.pi * micro_freq * np.arange(N) + micro_phase)
-                        micro_slope = np.polyfit(np.arange(N), micro_wave, 1)[0] if N > 1 else 0
-                        
-                        micro_amplitudes = np.abs(yf[micro_indices])
-                        micro_amplitude = np.max(micro_amplitudes) if len(micro_amplitudes) > 0 else 0
-                        
-                        micro_cycle_len = round(1 / micro_freq) if micro_freq else None
-                        micro_position = (N - 1) % micro_cycle_len + 1 if micro_cycle_len else None
-                        micro_phase_label, micro_pct = get_phase_label(micro_position, micro_cycle_len) if micro_cycle_len else ("N/A", None)
-            
-            # Energy Integrity Score (EIS)
-            blues = len(df[df["score"] < 0])
-            purples = len(df[(df["score"] == 1.0) | (df["score"] == 1.5)])
-            pinks = len(df[df["score"] >= 2.0])
-            eis = (purples * 1 + pinks * 2) - blues
-            
-            # Alignment test
-            if dom_slope > 0 and micro_slope > 0:
-                interference = "Constructive (Aligned)"
-            elif dom_slope * micro_slope < 0:
-                interference = "Destructive (Conflict)"
-            else:
-                interference = "Neutral or Unclear"
-            
-            # Channel Bounds (1-STD deviation)
-            amplitude = np.std(scores)
-            upper_channel = harmonic_forecast + amplitude
-            lower_channel = harmonic_forecast - amplitude
-            
-            gamma_amplitude = np.max(np.abs(yf)) if len(yf) > 0 else 0
     
     # Run resonance analysis if we have enough data
     if N >= 10:  # Need at least 10 rounds
@@ -2319,40 +2197,29 @@ if not df.empty:
     # ============================
     wavefront_data = qfe_engine.adaptive_fpi_dashboard()
     
-    # ============================
-    # 3️⃣ Plot the Visualization
-    # ============================
-    plot_adaptive_wavefront(wavefront_data)
+    
 
      # ===== QUANTUM WAR ROOM =====
-    st.header("🚀 QUANTUM WAR ROOM")
+    #st.header("🚀 QUANTUM WAR ROOM")
     
     # 1. Phase space visualization
-    plot_phase_space(df)
+    #plot_phase_space(df)
     
     # 2. Multiverse simulation
-    if quantum_engine.multiverse:
-        render_multiverse(quantum_engine.multiverse)
-        
-        # Decision matrix
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Trap Probability", f"{quantum_engine.multiverse['trap_probability']:.0%}")
-        with col2:
-            st.metric("Optimal Entry Round", quantum_engine.multiverse['optimal_entry'])
+    
     
     # 3. Entropy override
-    if quantum_engine.entropy_state:
-        st.subheader(f"🧠 ENTROPY OVERRIDE: {quantum_engine.entropy_state}")
-        if quantum_engine.entropy_state == 'INVERT':
-            st.error("⚠️ SYSTEM DETECTED PATTERN - INVERT NEXT SIGNAL")
-        elif quantum_engine.entropy_state == 'TRUST':
-            st.success("✅ GENUINE RANDOMNESS - TRUST SYSTEM")
+    #if quantum_engine.entropy_state:
+     #   st.subheader(f"🧠 ENTROPY OVERRIDE: {quantum_engine.entropy_state}")
+     #  if quantum_engine.entropy_state == 'INVERT':
+     #       st.error("⚠️ SYSTEM DETECTED PATTERN - INVERT NEXT SIGNAL")
+     #   elif quantum_engine.entropy_state == 'TRUST':
+     #       st.success("✅ GENUINE RANDOMNESS - TRUST SYSTEM")
     
     # 4. Temporal signatures
-    if quantum_engine.temporal_signatures:
-        st.subheader("⏱️ TEMPORAL TRAP SIGNATURES")
-        st.write(f"Trap clusters at seconds: {quantum_engine.temporal_signatures.get('trap_clusters', [])}")
+    #if quantum_engine.temporal_signatures:
+     #   st.subheader("⏱️ TEMPORAL TRAP SIGNATURES")
+      #  st.write(f"Trap clusters at seconds: {quantum_engine.temporal_signatures.get('trap_clusters', [])}")
 
     
     # Assume you have pandas dataframe df with MSI columns:
@@ -2368,13 +2235,19 @@ if not df.empty:
 
     df_signal = get_normalized_signal_data(msi_dict)
     fig_signal = plot_normalized_signal_dashboard(df_signal)
-    
 
+    with st.expander("🔎 Fibonacci pressure index+ Range Fuckery Modulation", expanded=False):
+        # ============================
+        # 3️⃣ Plot the Visualization
+        # ============================
+        plot_adaptive_wavefront(wavefront_data)
+        
+        st.plotly_chart(fig_signal)
+        st.subheader("🎯 Anti-Trap Signal")
+        st.success(entry_signal if "CLEAN" in entry_signal else entry_signal)
 
     with st.expander("🔎 Multi-Cycle Detector Results", expanded=False):
-       st.plotly_chart(fig_signal)
-       st.subheader("🎯 Anti-Trap Signal")
-       st.success(entry_signal if "CLEAN" in entry_signal else entry_signal)
+       
         
        st.subheader("🎯 Custom Regime Classifier")
        st.markdown(f"**Regime Type:** {regime_result['regime_type']} ({regime_result['estimated_length']} rounds)")
@@ -2514,4 +2387,4 @@ if not df.empty:
 else:
     st.info("Enter at least 1 round to begin analysis.")
     
-quantum_sidebar()
+#quantum_sidebar()
