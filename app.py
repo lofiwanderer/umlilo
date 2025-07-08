@@ -876,7 +876,7 @@ def plot_adaptive_wavefront(wavefront_data):
         y=[w['surge_potential'] for w in wavefront_data],
         mode='lines+markers',
         name='Surge Potential',
-        line=dict(color='lightgreen', width=3),
+        line=dict(color='green', width=3),
         marker=dict(symbol='circle', size=9, color='darkgreen')
     ))
 
@@ -1008,7 +1008,7 @@ def plot_normalized_signal_dashboard(df_signal):
         x=df_signal['Window'],
         y=df_signal['Normalized_MSI'],
         name='Normalized MSI',
-        marker_color=df_signal['Trap_Risk'].apply(lambda x: 'red' if x else 'lightgreen'),
+        marker_color=df_signal['Trap_Risk'].apply(lambda x: 'red' if x else 'blue'),
         opacity=0.8
     ))
     
@@ -1881,7 +1881,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         
     # MSI with Bollinger Bands
     st.subheader("MSI with Bollinger Bands")
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(12, 8))
     ax.plot(df["timestamp"], df["msi"], label="MSI", color='black')
     if show_bb:
         
