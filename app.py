@@ -876,7 +876,7 @@ def plot_adaptive_wavefront(wavefront_data):
         y=[w['surge_potential'] for w in wavefront_data],
         mode='lines+markers',
         name='Surge Potential',
-        line=dict(color='white', width=3),
+        line=dict(color='lightgreen', width=3),
         marker=dict(symbol='circle', size=9, color='darkgreen')
     ))
 
@@ -1008,7 +1008,7 @@ def plot_normalized_signal_dashboard(df_signal):
         x=df_signal['Window'],
         y=df_signal['Normalized_MSI'],
         name='Normalized MSI',
-        marker_color=df_signal['Trap_Risk'].apply(lambda x: 'red' if x else 'white'),
+        marker_color=df_signal['Trap_Risk'].apply(lambda x: 'red' if x else 'lightgreen'),
         opacity=0.8
     ))
     
