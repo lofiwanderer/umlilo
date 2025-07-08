@@ -1828,10 +1828,10 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, window = selec
     
             
      # Energy Integrity Score (EIS)
-     blues = len(df[df["score"] < 0])
-     purples = len(df[(df["score"] == 1.0) | (df["score"] == 1.5)])
-     pinks = len(df[df["score"] >= 2.0])
-     eis = (purples * 1 + pinks * 2) - blues       
+    blues = len(df[df["score"] < 0])
+    purples = len(df[(df["score"] == 1.0) | (df["score"] == 1.5)])
+    pinks = len(df[df["score"] >= 2.0])
+    eis = (purples * 1 + pinks * 2) - blues       
             
             
     
