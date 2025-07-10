@@ -2173,7 +2173,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
             eis, interference, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, 
             micro_pct, micro_phase_label, micro_freq, dominant_freq, phase, gamma_amplitude, 
             micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
-            resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals, quantum)
+            resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals, quantum,result)
 
 
 # =================== MSI CHART PLOTTING ========================
@@ -2413,7 +2413,7 @@ if not df.empty:
      eis, interference, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, 
      micro_pct, micro_phase_label, micro_freq, dominant_freq, phase, gamma_amplitude, 
      micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
-     resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals, quantum_engine) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE, RANGE_WINDOW, VOLATILITY_THRESHOLDS)
+     resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals, quantum_engine, result) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE, RANGE_WINDOW, VOLATILITY_THRESHOLDS)
     
     
     
