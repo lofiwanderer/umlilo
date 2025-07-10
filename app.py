@@ -1208,30 +1208,22 @@ VOLATILITY_THRESHOLDS = {
 }
 
 @st.cache_data
-def calculate_range_metrics(df, window=RANGE_WINDOW):
+def calculate_range_metrics(df, window=20):
     df = df.copy()
-    
-        # Make sure round_index exists and is correct
     df = df.reset_index(drop=True)
     df['round_index'] = np.arange(len(df))
 
-    # 1. Range Width Volatility
-    df['range_width'] = df['multiplier'].rolling(window).apply(
+    # Rolling computations
+    df['range_width'] = df['multiplier'].rolling(window, min_periods=1).apply(
         lambda x: x.max() - x.min(), raw=True
     )
-    
-    # 2. Range Width Slope
-    df['width_slope'] = df['range_width'].diff()
-    
-    # 3. Range Center Drift
-    df['range_center'] = df['multiplier'].rolling(window).mean()
-    df['center_slope'] = df['range_center'].diff()
+    df['range_center'] = df['multiplier'].rolling(window, min_periods=1).mean()
 
-     # Clean NaNs from rolling
-    df = df.dropna(subset=['range_width', 'range_center', 'width_slope', 'center_slope']).reset_index(drop=True)
-    df['round_index'] = np.arange(len(df))
-    
-    # 4. Volatility Classification
+    # Slopes (difference)
+    df['width_slope'] = df['range_width'].diff().fillna(0)
+    df['center_slope'] = df['range_center'].diff().fillna(0)
+
+    # Volatility classification
     conditions = [
         (df['range_width'] < VOLATILITY_THRESHOLDS['micro']),
         (df['range_width'] < VOLATILITY_THRESHOLDS['meso']),
@@ -1239,8 +1231,8 @@ def calculate_range_metrics(df, window=RANGE_WINDOW):
     ]
     choices = ['micro', 'meso', 'macro']
     df['volatility_class'] = np.select(conditions, choices, default='unknown')
-    
-    # 5. Regime State Detection
+
+    # Regime state detection
     df['regime_state'] = np.where(
         (df['width_slope'] > 0) & (df['center_slope'] > 0),
         'surge_favorable',
@@ -1250,8 +1242,6 @@ def calculate_range_metrics(df, window=RANGE_WINDOW):
             'neutral'
         )
     )
-
-  
 
     return df
 
