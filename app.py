@@ -1381,25 +1381,29 @@ def plot_raw_range_signals(df):
 
     # Add traces for each signal
     fig.add_trace(go.Scatter(
-        x=df['timestamp'], y=df['range_width'],
+        x=df['timestamp'], 
+        y=df['range_width'],
         name='Range Width',
         line=dict(color='royalblue', width=2)
-    )
+    ))
 
     fig.add_trace(go.Scatter(
-        x=df['timestamp'], y=df['range_center'],
+        x=df['timestamp'], 
+        y=df['range_center'],
         name='Range Center',
         line=dict(color='white', dash='dot')
-    )
+    ))
 
     fig.add_trace(go.Scatter(
-        x=df['timestamp'], y=df['width_slope'],
+        x=df['timestamp'], 
+        y=df['width_slope'],
         name='Width Slope',
         line=dict(color='orange')
-    )
+    ))
 
     fig.add_trace(go.Scatter(
-        x=df['timestamp'], y=df['slope_std'],
+        x=df['timestamp'], 
+        y=df['slope_std'],
         name='Slope Std (Resonance)',
         line=dict(color='red')
     ))
