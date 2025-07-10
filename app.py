@@ -1330,7 +1330,7 @@ def advanced_dynamic_range_trap_detector(
     if len(df) < (window + max(slope_windows)):
         return {
             'status': "Insufficient Data",
-            'score': None,
+            'trap_score': None,
             'label': "⏳ Waiting for more rounds",
             'details': {}
         }
