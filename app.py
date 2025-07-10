@@ -2544,7 +2544,7 @@ if not df.empty:
 
 
     st.subheader("📊 Advanced Trap Modulation Signals Over Time")
-    if not st.session_state['trap_history'].empty:
+    if st.session_state['trap_history'] >= 2:
         fig = plot_advanced_trap_analysis(st.session_state['trap_history'])
         st.plotly_chart(fig, use_container_width=True)
     else:
