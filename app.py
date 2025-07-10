@@ -60,6 +60,12 @@ if 'qfe_accuracy' not in st.session_state:
         'last_checked': -1
     }
 
+if 'trap_history' not in st.session_state:
+    st.session_state['trap_history'] = pd.DataFrame(columns=[
+        'timestamp', 'range_width', 'width_slope', 'entropy',
+        'slope_std', 'trap_score'
+    ])
+
 # ================ CONFIGURATION SIDEBAR ==================
 with st.sidebar:
     st.header("⚙️ QUANTUM PARAMETERS")
@@ -2548,20 +2554,20 @@ if not df.empty:
     width_change_window=5,
     entropy_bins=10
     )
-    if 'trap_history' not in st.session_state:
-        st.session_state['trap_history'] = pd.DataFrame(columns=[
-            'timestamp', 'range_width', 'width_slope', 'entropy',
-            'slope_std', 'trap_score'
-        ])
-
-    if result['score'] is not None:
+    if 'timestamp' in df.columns:
+    ts_value = df['timestamp'].iloc[-1]
+    else:
+        ts_value = len(df) - 1
+        
+    # Append if we have a valid trap score
+    if result['trap_score'] is not None:
         new_row = pd.DataFrame([{
-            'timestamp': df['timestamp'].iloc[-1],
-            'range_width': result['details']['Range Width'],
-            'width_slope': result['details']['Width Slope'],
-            'entropy': result['details']['Entropy'],
-            'slope_std': result['details']['Slope Std'],
-            'trap_score': result['score']
+            'timestamp': ts_value,
+            'range_width': result['details'].get('Range Width', 0),
+            'width_slope': result['details'].get('Width Slope', 0),
+            'entropy': result['details'].get('Entropy', 0),
+            'slope_std': result['details'].get('Slope Std', 0),
+            'trap_score': result['trap_score']
         }])
         st.session_state['trap_history'] = pd.concat(
             [st.session_state['trap_history'], new_row],
