@@ -1360,9 +1360,20 @@ def compute_raw_range_signals(
 
 
 def plot_raw_range_signals(df):
-    if df.empty or 'range_width' not in df:
-        st.warning("No range modulation data yet. Play more rounds.")
-        return
+    if df.empty or len(df) < 2:
+        fig.add_annotation(
+            text="📊 No trap data yet. Play some rounds to see analysis.",
+            showarrow=False,
+            font=dict(size=16),
+            xref='paper', yref='paper', x=0.5, y=0.5
+        )
+        fig.update_layout(
+            title='🔥 Advanced Range Modulation Analysis',
+            xaxis_title='Timestamp',
+            yaxis_title='Value',
+            hovermode="x unified"
+        )
+        return fig
 
     fig = go.Figure()
 
