@@ -2555,7 +2555,7 @@ if not df.empty:
     entropy_bins=10
     )
     if 'timestamp' in df.columns:
-    ts_value = df['timestamp'].iloc[-1]
+        ts_value = df['timestamp'].iloc[-1]
     else:
         ts_value = len(df) - 1
         
