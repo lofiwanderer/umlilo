@@ -2147,10 +2147,10 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     entropy_bins=10
     )
     if 'trap_history' not in st.session_state:
-    st.session_state['trap_history'] = pd.DataFrame(columns=[
-        'timestamp', 'range_width', 'width_slope', 'entropy',
-        'slope_std', 'trap_score'
-    ])
+        st.session_state['trap_history'] = pd.DataFrame(columns=[
+            'timestamp', 'range_width', 'width_slope', 'entropy',
+            'slope_std', 'trap_score'
+        ])
 
     if result['score'] is not None:
         new_row = pd.DataFrame([{
