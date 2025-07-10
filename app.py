@@ -1262,11 +1262,11 @@ def plot_range_regime(df):
         x=df['round_index'],
         y=df['range_center'],
         name='Range Center',
-        line=dict(color='green', width=2, dash='dot')
+        line=dict(color='white', width=2, dash='dot')
     ))
 
     # Regime Markers
-    for regime, color in [('surge_favorable', 'green'), ('trap_zone', 'red')]:
+    for regime, color in [('surge_favorable', 'white'), ('trap_zone', 'red')]:
         regime_df = df[df['regime_state'] == regime]
         if not regime_df.empty:
             fig.add_trace(go.Scatter(
