@@ -2145,33 +2145,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     quantum = QuantumGambit(df).execute_quantum()
     #df = quantum.df
     df = calculate_range_metrics(df, window=RANGE_WINDOW)
-    result = advanced_dynamic_range_trap_detector(
-    df,
-    window=RANGE_WINDOW,
-    slope_windows=[3,5,8,13,21],
-    width_change_window=5,
-    entropy_bins=10
-    )
-    if 'trap_history' not in st.session_state:
-        st.session_state['trap_history'] = pd.DataFrame(columns=[
-            'timestamp', 'range_width', 'width_slope', 'entropy',
-            'slope_std', 'trap_score'
-        ])
-
-    if result['score'] is not None:
-        new_row = pd.DataFrame([{
-            'timestamp': df['timestamp'].iloc[-1],
-            'range_width': result['details']['Range Width'],
-            'width_slope': result['details']['Width Slope'],
-            'entropy': result['details']['Entropy'],
-            'slope_std': result['details']['Slope Std'],
-            'trap_score': result['score']
-        }])
-        st.session_state['trap_history'] = pd.concat(
-            [st.session_state['trap_history'], new_row],
-            ignore_index=True
-        )
-        
+    
     # Return all computed values
     return (df, latest_msi, window_size, recent_df, msi_score, msi_color, latest_tpi, 
             upper_slope, lower_slope, upper_accel, lower_accel, bandwidth, bandwidth_delta, 
@@ -2179,7 +2153,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
             eis, interference, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, 
             micro_pct, micro_phase_label, micro_freq, dominant_freq, phase, gamma_amplitude, 
             micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
-            resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals, quantum,result)
+            resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals, quantum)
 
 
 # =================== MSI CHART PLOTTING ========================
@@ -2419,7 +2393,7 @@ if not df.empty:
      eis, interference, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, 
      micro_pct, micro_phase_label, micro_freq, dominant_freq, phase, gamma_amplitude, 
      micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
-     resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals, quantum_engine, result) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE, RANGE_WINDOW, VOLATILITY_THRESHOLDS)
+     resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals, quantum_engine) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE, RANGE_WINDOW, VOLATILITY_THRESHOLDS)
     
     
     
