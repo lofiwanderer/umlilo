@@ -1303,16 +1303,9 @@ def render_regime_hud(current_regime):
     return
 
 
-def calc_entropy(series, bins=10):
-    """Entropy of the multiplier distribution in the window."""
-    counts, _ = np.histogram(series, bins=bins, density=True)
-    counts = counts[counts > 0]
-    if len(counts) == 0:
-        return 0
-    return -np.sum(counts * np.log(counts))
 
 def compute_raw_range_signals(
-    df,
+    input_df,
     window=RANGE_WINDOW,
     width_change_window=5,
     slope_windows=[3,5,8,13],
@@ -1326,45 +1319,41 @@ def compute_raw_range_signals(
         - Entropy
         - Slope Std (multi-window resonance)
     """
-    if len(df) < (window + max(slope_windows)):
-        return pd.DataFrame()
+    df = input_df[['timestamp', 'multiplier']].copy()
 
-    df = df.copy()
-
-    # Rolling Range Width
-    df['range_width'] = df['multiplier'].rolling(window).apply(
+    # 1. Range Width
+    df['range_width'] = df['multiplier'].rolling(window, min_periods=1).apply(
         lambda x: x.max() - x.min(), raw=True
     )
 
-    # Rolling Range Center
-    df['range_center'] = df['multiplier'].rolling(window).mean()
+    # 2. Range Center
+    df['range_center'] = df['multiplier'].rolling(window, min_periods=1).mean()
 
-    # Entropy
-    df['entropy'] = df['multiplier'].rolling(window).apply(
-        lambda x: calc_entropy(x, bins=entropy_bins), raw=False
-    )
+    # 3. Width Slope (smoothed)
+    df['width_slope'] = df['range_width'].diff().rolling(width_change_window, min_periods=1).mean()
 
-    # Width Change Slope (local trend of range width)
-    width_series = df['range_width']
-    df['width_slope'] = width_series.rolling(width_change_window).apply(
-        lambda x: np.polyfit(np.arange(len(x)), x, 1)[0] if len(x) >= 2 else 0, raw=False
-    )
+    # 4. Center Slope
+    df['center_slope'] = df['range_center'].diff().rolling(width_change_window, min_periods=1).mean()
 
-    # Multi-window slope resonance (std of slopes across Fib windows)
-    slope_std_list = []
-    for idx in range(len(df)):
-        local_slopes = []
-        for w in slope_windows:
-            if idx + 1 >= w:
-                segment = df['multiplier'].iloc[idx + 1 - w : idx + 1]
-                x = np.arange(len(segment))
-                slope = np.polyfit(x, segment, 1)[0]
-                local_slopes.append(slope)
-        if len(local_slopes) > 1:
-            slope_std_list.append(np.std(local_slopes))
-        else:
-            slope_std_list.append(np.nan)
-    df['slope_std'] = slope_std_list
+    # 5. Entropy
+    def calc_entropy(series, bins=entropy_bins):
+        counts, _ = np.histogram(series, bins=bins, density=True)
+        counts = counts[counts > 0]
+        return -np.sum(counts * np.log(counts)) if len(counts) > 0 else 0
+
+    df['entropy'] = df['multiplier'].rolling(window, min_periods=1).apply(calc_entropy, raw=False)
+
+    # 6. Slope Resonance Std
+    fib_windows = [3, 5, 8, 13]
+    slope_cols = []
+    for w in fib_windows:
+        col = f'slope_{w}'
+        df[col] = df['multiplier'].rolling(w, min_periods=1).apply(
+            lambda x: np.polyfit(np.arange(len(x)), x, 1)[0] if len(x) > 1 else 0,
+            raw=False)
+        
+        slope_cols.append(col)
+    df['slope_std'] = df[slope_cols].std(axis=1)
 
     return df
 
@@ -2083,13 +2072,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     quantum = QuantumGambit(df).execute_quantum()
     #df = quantum.df
     df = calculate_range_metrics(df, window=RANGE_WINDOW)
-    df = compute_raw_range_signals(
-    df,
-    window=RANGE_WINDOW,
-    width_change_window=5,
-    slope_windows=[3,5,8,13],
-    entropy_bins=10
-    )
+   
     
     # Return all computed values
     return (df, latest_msi, window_size, recent_df, msi_score, msi_color, latest_tpi, 
@@ -2464,11 +2447,14 @@ if not df.empty:
     df_signal = get_normalized_signal_data(msi_dict)
     fig_signal = plot_normalized_signal_dashboard(df_signal)
     
+    range_signals_df = compute_raw_range_signals(df, window=RANGE_WINDOW)
+    
     # After data analysis:
     current_regime = df['regime_state'].iloc[-1] if not df.empty else 'neutral'
     st.subheader("📊 Advanced Trap Modulation Signals Over Time")
-    plot_raw_range_signals(df)
+    st.plotly_chart(plot_raw_range_signals(range_signals_df), use_container_width=True)
 
+   
     
     # In main dashboard:
     st.plotly_chart(plot_range_regime(df), use_container_width=True)
