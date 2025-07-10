@@ -1341,8 +1341,9 @@ def compute_raw_range_signals(
         counts = counts[counts > 0]
         return -np.sum(counts * np.log(counts)) if len(counts) > 0 else 0
 
-    df['entropy'] = df['multiplier'].rolling(window, min_periods=1).apply(calc_entropy, raw=False)
-
+    df['entropy'] = df['multiplier'].rolling(window).apply(
+        lambda x: calc_entropy(x, bins=entropy_bins), raw=False
+    )
     # 6. Slope Resonance Std
     fib_windows = [3, 5, 8, 13]
     slope_cols = []
