@@ -190,6 +190,7 @@ with st.sidebar:
     VOLATILITY_THRESHOLDS['micro'] = st.number_input("Micro Threshold", value=1.5)
     VOLATILITY_THRESHOLDS['meso'] = st.number_input("Meso Threshold", value=3.0)
     VOLATILITY_THRESHOLDS['macro'] = st.number_input("Macro Threshold", value=5.0)
+     
 # =================== ADVANCED HELPER FUNCTIONS ========================
 @st.cache_data
 def bollinger_bands(series, window, num_std=2):
@@ -1047,7 +1048,7 @@ def plot_normalized_signal_dashboard(df_signal):
     
     return fig
 # ======================= QUANTUM CONSTANTS ============================
-VOLATILITY_THRESHOLDS = {'micro': 1.5, 'meso': 3.0, 'macro': 5.0}
+#VOLATILITY_THRESHOLDS = {'micro': 1.5, 'meso': 3.0, 'macro': 5.0}
 PHASE_SPACE_BINS = 30  # Hilbert transform resolution
 
 
@@ -1729,7 +1730,7 @@ def fractal_anchor_visualizer(df, msi_col="msi", score_col="score", window=8):
 
 # =================== DATA ANALYSIS ========================
 @st.cache_data(show_spinner=False)
-def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THRESHOLDS[], window = selected_msi_windows):
+def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THRESHOLDS, window = selected_msi_windows):
     df = data.copy()
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df["type"] = df["multiplier"].apply(lambda x: "Pink" if x >= pink_threshold else ("Purple" if x >= 2 else "Blue"))
