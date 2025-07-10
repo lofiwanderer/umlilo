@@ -1211,8 +1211,9 @@ VOLATILITY_THRESHOLDS = {
 def calculate_range_metrics(df, window=RANGE_WINDOW):
     df = df.copy()
     
-    if 'timestamp' not in df.columns:
-        df['timestamp'] = np.arange(len(df))  # fallback fake index
+        # Make sure round_index exists and is correct
+    df = df.reset_index(drop=True)
+    df['round_index'] = np.arange(len(df))
 
     # 1. Range Width Volatility
     df['range_width'] = df['multiplier'].rolling(window).apply(
@@ -1225,6 +1226,10 @@ def calculate_range_metrics(df, window=RANGE_WINDOW):
     # 3. Range Center Drift
     df['range_center'] = df['multiplier'].rolling(window).mean()
     df['center_slope'] = df['range_center'].diff()
+
+     # Clean NaNs from rolling
+    df = df.dropna(subset=['range_width', 'range_center', 'width_slope', 'center_slope']).reset_index(drop=True)
+    df['round_index'] = np.arange(len(df))
     
     # 4. Volatility Classification
     conditions = [
@@ -1246,8 +1251,7 @@ def calculate_range_metrics(df, window=RANGE_WINDOW):
         )
     )
 
-    # Drop rows with NA from rolling window
-    df = df.dropna(subset=['range_width', 'range_center', 'width_slope', 'center_slope'])
+  
 
     return df
 
@@ -1257,30 +1261,37 @@ def plot_range_regime(df):
 
     # Range Width
     fig.add_trace(go.Scatter(
-        x=df['timestamp'], y=df['range_width'],
-        name='Range Width', line=dict(color='royalblue', width=2)
+        x=df['round_index'],
+        y=df['range_width'],
+        name='Range Width',
+        line=dict(color='royalblue', width=2)
     ))
 
     # Range Center
     fig.add_trace(go.Scatter(
-        x=df['timestamp'], y=df['range_center'],
-        name='Range Center', line=dict(color='green', width=2, dash='dot')
+        x=df['round_index'],
+        y=df['range_center'],
+        name='Range Center',
+        line=dict(color='green', width=2, dash='dot')
     ))
 
-    # Regime States
+    # Regime Markers
     for regime, color in [('surge_favorable', 'green'), ('trap_zone', 'red')]:
         regime_df = df[df['regime_state'] == regime]
         if not regime_df.empty:
             fig.add_trace(go.Scatter(
-                x=regime_df['timestamp'], y=regime_df['range_center'],
-                mode='markers', name=regime.upper(),
+                x=regime_df['round_index'],
+                y=regime_df['range_center'],
+                mode='markers',
+                name=regime.upper(),
                 marker=dict(color=color, size=10, symbol='diamond')
             ))
 
     fig.update_layout(
         title='🔥 DYNAMIC RANGE REGIME ENGINE',
+        xaxis_title='Round Index',
         yaxis_title='Value',
-        hovermode="x unified",
+        hovermode='x unified',
         legend=dict(orientation="h", yanchor="bottom", y=1.02)
     )
     return fig
@@ -1959,15 +1970,15 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     df['range_center'] = df['multiplier'].rolling(RANGE_WINDOW).mean()
     
     # 2. Regime classification
-    df['regime_state'] = np.where(
-        (df['range_width'].diff() > 0) & (df['range_center'].diff() > 0),
-        'surge_favorable',
-        np.where(
-            (df['range_width'].diff() < 0) & (df['range_center'].diff().abs() < 0.1),
-            'trap_zone',
-            'neutral'
-        )
-    )
+    #df['regime_state'] = np.where(
+     #   (df['range_width'].diff() > 0) & (df['range_center'].diff() > 0),
+      #  'surge_favorable',
+       # np.where(
+        #    (df['range_width'].diff() < 0) & (df['range_center'].diff().abs() < 0.1),
+         #   'trap_zone',
+          #  'neutral'
+        #)
+    #)
     
     # 3. Execute quantum analysis
     quantum = QuantumGambit(df).execute_quantum()
