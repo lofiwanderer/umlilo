@@ -1383,11 +1383,11 @@ def plot_raw_range_signals(df):
         line=dict(color='orange')
     ))
 
-    fig.add_trace(go.Scatter(
-        x=df['timestamp'], y=df['entropy'],
-        name='Entropy',
-        line=dict(color='purple')
-    ))
+    #fig.add_trace(go.Scatter(
+     #   x=df['timestamp'], y=df['entropy'],
+      #  name='Entropy',
+       # line=dict(color='purple')
+    #))
 
     fig.add_trace(go.Scatter(
         x=df['timestamp'], y=df['slope_std'],
