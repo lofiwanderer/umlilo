@@ -1360,7 +1360,9 @@ def compute_raw_range_signals(
 
 
 def plot_raw_range_signals(df):
+    """Plot the raw range modulation signals with Plotly."""
     if df.empty or len(df) < 2:
+        fig = go.Figure()
         fig.add_annotation(
             text="📊 No trap data yet. Play some rounds to see analysis.",
             showarrow=False,
@@ -1377,29 +1379,24 @@ def plot_raw_range_signals(df):
 
     fig = go.Figure()
 
+    # Add traces for each signal
     fig.add_trace(go.Scatter(
         x=df['timestamp'], y=df['range_width'],
         name='Range Width',
         line=dict(color='royalblue', width=2)
-    ))
+    )
 
     fig.add_trace(go.Scatter(
         x=df['timestamp'], y=df['range_center'],
         name='Range Center',
         line=dict(color='white', dash='dot')
-    ))
+    )
 
     fig.add_trace(go.Scatter(
         x=df['timestamp'], y=df['width_slope'],
         name='Width Slope',
         line=dict(color='orange')
-    ))
-
-    #fig.add_trace(go.Scatter(
-     #   x=df['timestamp'], y=df['entropy'],
-      #  name='Entropy',
-       # line=dict(color='purple')
-    #))
+    )
 
     fig.add_trace(go.Scatter(
         x=df['timestamp'], y=df['slope_std'],
@@ -1407,14 +1404,15 @@ def plot_raw_range_signals(df):
         line=dict(color='red')
     ))
 
+    # Update layout
     fig.update_layout(
-        title='📊 Advanced Range Fuckery Modulation Signals',
+        title='📊 Advanced Range Modulation Signals',
         yaxis_title='Metric Value',
         hovermode="x unified",
         legend=dict(orientation="h", yanchor="bottom", y=1.02)
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    return fig
 
 
 @st.cache_data
