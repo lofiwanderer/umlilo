@@ -187,6 +187,11 @@ with st.sidebar:
         options=[3, 5, 8, 13, 21, 34, 55],
         index=3
         )
+    VOLATILITY_THRESHOLDS = {
+    'micro': 1.5,
+    'meso': 3.0,
+    'macro': 5.0
+    }
     VOLATILITY_THRESHOLDS['micro'] = st.number_input("Micro Threshold", value=1.5)
     VOLATILITY_THRESHOLDS['meso'] = st.number_input("Meso Threshold", value=3.0)
     VOLATILITY_THRESHOLDS['macro'] = st.number_input("Macro Threshold", value=5.0)
