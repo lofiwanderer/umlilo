@@ -1311,14 +1311,13 @@ def calc_entropy(series, bins=10):
         return 0
     return -np.sum(counts * np.log(counts))
 
-@st.cache_data
 def compute_raw_range_signals(
     df,
-    window=20,
+    window=RANGE_WINDOW,
     width_change_window=5,
     slope_windows=[3,5,8,13],
     entropy_bins=10
-):
+    ):
     """
     For each round, compute:
         - Range Width
