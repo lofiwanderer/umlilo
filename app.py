@@ -2541,10 +2541,37 @@ if not df.empty:
     
     # After data analysis:
     current_regime = df['regime_state'].iloc[-1] if not df.empty else 'neutral'
+    result = advanced_dynamic_range_trap_detector(
+    df,
+    window=RANGE_WINDOW,
+    slope_windows=[3,5,8,13,21],
+    width_change_window=5,
+    entropy_bins=10
+    )
+    if 'trap_history' not in st.session_state:
+        st.session_state['trap_history'] = pd.DataFrame(columns=[
+            'timestamp', 'range_width', 'width_slope', 'entropy',
+            'slope_std', 'trap_score'
+        ])
+
+    if result['score'] is not None:
+        new_row = pd.DataFrame([{
+            'timestamp': df['timestamp'].iloc[-1],
+            'range_width': result['details']['Range Width'],
+            'width_slope': result['details']['Width Slope'],
+            'entropy': result['details']['Entropy'],
+            'slope_std': result['details']['Slope Std'],
+            'trap_score': result['score']
+        }])
+        st.session_state['trap_history'] = pd.concat(
+            [st.session_state['trap_history'], new_row],
+            ignore_index=True
+        )
+        
 
 
     st.subheader("📊 Advanced Trap Modulation Signals Over Time")
-    if st.session_state['trap_history'] >= 2:
+    if not st.session_state['trap_history'].empty:
         fig = plot_advanced_trap_analysis(st.session_state['trap_history'])
         st.plotly_chart(fig, use_container_width=True)
     else:
