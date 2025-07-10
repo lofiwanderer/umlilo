@@ -1983,7 +1983,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     # 3. Execute quantum analysis
     quantum = QuantumGambit(df).execute_quantum()
     df = quantum.df
-    df = calculate_range_metrics(df, window=RANGE_WINDOW)
+     #df = calculate_range_metrics(df, window=RANGE_WINDOW)
     
     # Return all computed values
     return (df, latest_msi, window_size, recent_df, msi_score, msi_color, latest_tpi, 
@@ -2359,11 +2359,11 @@ if not df.empty:
     fig_signal = plot_normalized_signal_dashboard(df_signal)
     
     # After data analysis:
-    current_regime = df['regime_state'].iloc[-1] if not df.empty else 'neutral'
+     #current_regime = df['regime_state'].iloc[-1] if not df.empty else 'neutral'
     
     # In main dashboard:
-    st.plotly_chart(plot_range_regime(df), use_container_width=True)
-    render_regime_hud(current_regime)
+     #st.plotly_chart(plot_range_regime(df), use_container_width=True)
+     #render_regime_hud(current_regime)
 
     with st.expander("🔎 Fibonacci pressure index+ Range Fuckery Modulation", expanded=False):
         # ============================
