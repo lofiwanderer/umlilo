@@ -2451,7 +2451,8 @@ if not df.empty:
     range_signals_df = compute_raw_range_signals(df, window=RANGE_WINDOW)
     
     # After data analysis:
-    current_regime = df['regime_state'].iloc[-1] if not df.empty else 'neutral'
+    #current_regime = df['regime_state'].iloc[-1] if not df.empty else 'neutral'
+    
     st.subheader("📊 Advanced Trap Modulation Signals Over Time")
     st.plotly_chart(plot_raw_range_signals(range_signals_df), use_container_width=True)
 
