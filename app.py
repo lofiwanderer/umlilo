@@ -187,6 +187,9 @@ with st.sidebar:
         options=[3, 5, 8, 13, 21, 34, 55],
         index=3
         )
+    VOLATILITY_THRESHOLDS['micro'] = st.number_input("Micro Threshold", value=1.5)
+    VOLATILITY_THRESHOLDS['meso'] = st.number_input("Meso Threshold", value=3.0)
+    VOLATILITY_THRESHOLDS['macro'] = st.number_input("Macro Threshold", value=5.0)
 # =================== ADVANCED HELPER FUNCTIONS ========================
 @st.cache_data
 def bollinger_bands(series, window, num_std=2):
@@ -1190,6 +1193,100 @@ def quantum_sidebar():
         st.checkbox("Activate Temporal Weaponization", value=True, key='use_temporal')
         st.checkbox("Enable Entropy Negation", value=True, key='use_entropy')
 
+# =============== DYNAMIC RANGE REGIME ENGINE ===============
+RANGE_WINDOW = 20  # Configurable in sidebar
+VOLATILITY_THRESHOLDS = {
+    'micro': 1.5,
+    'meso': 3.0,
+    'macro': 5.0
+}
+
+@st.cache_data
+def calculate_range_metrics(df, window=RANGE_WINDOW):
+    df = df.copy()
+    # 1. Range Width Volatility
+    df['range_width'] = df['multiplier'].rolling(window).apply(
+        lambda x: x.max() - x.min(), raw=True
+    )
+    
+    # 2. Range Width Slope
+    df['width_slope'] = df['range_width'].diff()
+    
+    # 3. Range Center Drift
+    df['range_center'] = df['multiplier'].rolling(window).mean()
+    df['center_slope'] = df['range_center'].diff()
+    
+    # 4. Volatility Classification
+    conditions = [
+        (df['range_width'] < VOLATILITY_THRESHOLDS['micro']),
+        (df['range_width'] < VOLATILITY_THRESHOLDS['meso']),
+        (df['range_width'] >= VOLATILITY_THRESHOLDS['meso'])
+    ]
+    choices = ['micro', 'meso', 'macro']
+    df['volatility_class'] = np.select(conditions, choices, default='unknown')
+    
+    # 5. Regime State Detection
+    df['regime_state'] = np.where(
+        (df['width_slope'] > 0) & (df['center_slope'] > 0),
+        'surge_favorable',
+        np.where(
+            (df['width_slope'] < 0) & (df['center_slope'].abs() < 0.1),
+            'trap_zone',
+            'neutral'
+        )
+    )
+    
+    return df
+    
+def plot_range_regime(df):
+    fig = go.Figure()
+    
+    # Range Width
+    fig.add_trace(go.Scatter(
+        x=df['timestamp'], y=df['range_width'],
+        name='Range Width', line=dict(color='royalblue', width=2),
+        secondary_y=False
+    ))
+    
+    # Range Center
+    fig.add_trace(go.Scatter(
+        x=df['timestamp'], y=df['range_center'],
+        name='Range Center', line=dict(color='green', width=2, dash='dot'),
+        secondary_y=False
+    ))
+    
+    # Regime States
+    for regime, color in [('surge_favorable', 'green'), ('trap_zone', 'red')]:
+        regime_df = df[df['regime_state'] == regime]
+        if not regime_df.empty:
+            fig.add_trace(go.Scatter(
+                x=regime_df['timestamp'], y=regime_df['range_center'],
+                mode='markers', name=regime.upper(),
+                marker=dict(color=color, size=10, symbol='diamond')
+            ))
+    
+    fig.update_layout(
+        title='🔥 DYNAMIC RANGE REGIME ENGINE',
+        yaxis_title='Value',
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02)
+    )
+    return fig
+
+# =============== DECISION HUD ===============
+def render_regime_hud(current_regime):
+    
+    if current_regime == 'surge_favorable':
+        st.success("✅ FIRE AT WILL")
+    
+    if current_regime == 'trap_zone':
+        st.error("⛔ ABORT ALL ENTRIES")
+            
+    else:
+        st.warning("⚠️ SCOUT ONLY")
+
+    return
+        
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
@@ -1862,6 +1959,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, window = selec
     # 3. Execute quantum analysis
     quantum = QuantumGambit(df).execute_quantum()
     df = quantum.df
+    df = calculate_range_metrics(df, window=RANGE_WINDOW)
     
     # Return all computed values
     return (df, latest_msi, window_size, recent_df, msi_score, msi_color, latest_tpi, 
@@ -2235,6 +2333,13 @@ if not df.empty:
 
     df_signal = get_normalized_signal_data(msi_dict)
     fig_signal = plot_normalized_signal_dashboard(df_signal)
+    
+    # After data analysis:
+    current_regime = df['regime_state'].iloc[-1] if not df.empty else 'neutral'
+    
+    # In main dashboard:
+    st.plotly_chart(plot_range_regime(df), use_container_width=True)
+    render_regime_hud(current_regime)
 
     with st.expander("🔎 Fibonacci pressure index+ Range Fuckery Modulation", expanded=False):
         # ============================
