@@ -1729,7 +1729,7 @@ def fractal_anchor_visualizer(df, msi_col="msi", score_col="score", window=8):
 
 # =================== DATA ANALYSIS ========================
 @st.cache_data(show_spinner=False)
-def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, window = selected_msi_windows):
+def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THRESHOLDS, window = selected_msi_windows):
     df = data.copy()
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df["type"] = df["multiplier"].apply(lambda x: "Pink" if x >= pink_threshold else ("Purple" if x >= 2 else "Blue"))
@@ -2208,7 +2208,7 @@ if not df.empty:
      eis, interference, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, 
      micro_pct, micro_phase_label, micro_freq, dominant_freq, phase, gamma_amplitude, 
      micro_amplitude, micro_phase, micro_cycle_len, micro_position, harmonic_waves, 
-     resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals, quantum_engine) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE, RANGE_WINDOW)
+     resonance_matrix, resonance_score, tension, entropy, resonance_forecast_vals, quantum_engine) = analyze_data(df, PINK_THRESHOLD, WINDOW_SIZE, RANGE_WINDOW, VOLATILITY_THRESHOLDS)
     
     
     
