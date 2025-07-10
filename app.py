@@ -1390,7 +1390,7 @@ def advanced_dynamic_range_trap_detector(
 
     return {
         'status': "OK",
-        'score': round(trap_score, 2),
+        'trap_score': round(trap_score, 2),
         'label': label,
         'details': {
             'Range Width': round(range_width, 2),
