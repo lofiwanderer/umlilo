@@ -60,11 +60,6 @@ if 'qfe_accuracy' not in st.session_state:
         'last_checked': -1
     }
 
-if 'trap_history' not in st.session_state:
-    st.session_state['trap_history'] = pd.DataFrame(columns=[
-        'timestamp', 'range_width', 'width_slope', 'entropy',
-        'slope_std', 'trap_score'
-    ])
 
 # ================ CONFIGURATION SIDEBAR ==================
 with st.sidebar:
@@ -1316,160 +1311,110 @@ def calc_entropy(series, bins=10):
         return 0
     return -np.sum(counts * np.log(counts))
 
-def advanced_dynamic_range_trap_detector(
+@st.cache_data
+def compute_raw_range_signals(
     df,
     window=20,
-    slope_windows=[3,5,8,13,21],
     width_change_window=5,
+    slope_windows=[3,5,8,13],
     entropy_bins=10
 ):
     """
-    Combines dynamic range analysis, entropy, and MSI slope resonance.
-    Returns robust classification of trap vs surge-friendly zones.
+    For each round, compute:
+        - Range Width
+        - Range Center
+        - Width Slope
+        - Entropy
+        - Slope Std (multi-window resonance)
     """
     if len(df) < (window + max(slope_windows)):
-        return {
-            'status': "Insufficient Data",
-            'trap_score': None,
-            'label': "⏳ Waiting for more rounds",
-            'details': {}
-        }
+        return pd.DataFrame()
 
-    recent_data = df['multiplier'].tail(window)
-    range_high = recent_data.max()
-    range_low = recent_data.min()
-    range_width = range_high - range_low
-    range_center = recent_data.mean()
+    df = df.copy()
 
-    # Entropy signal
-    entropy_val = calc_entropy(recent_data, bins=entropy_bins)
+    # Rolling Range Width
+    df['range_width'] = df['multiplier'].rolling(window).apply(
+        lambda x: x.max() - x.min(), raw=True
+    )
 
-    # Slope resonance across Fibonacci windows
-    slopes = []
-    for w in slope_windows:
-        if len(df) >= w + 1:
-            msi_series = df['multiplier'].tail(w)
-            x = np.arange(len(msi_series))
-            slope = np.polyfit(x, msi_series, 1)[0]
-            slopes.append(slope)
+    # Rolling Range Center
+    df['range_center'] = df['multiplier'].rolling(window).mean()
+
+    # Entropy
+    df['entropy'] = df['multiplier'].rolling(window).apply(
+        lambda x: calc_entropy(x, bins=entropy_bins), raw=False
+    )
+
+    # Width Change Slope (local trend of range width)
+    width_series = df['range_width']
+    df['width_slope'] = width_series.rolling(width_change_window).apply(
+        lambda x: np.polyfit(np.arange(len(x)), x, 1)[0] if len(x) >= 2 else 0, raw=False
+    )
+
+    # Multi-window slope resonance (std of slopes across Fib windows)
+    slope_std_list = []
+    for idx in range(len(df)):
+        local_slopes = []
+        for w in slope_windows:
+            if idx + 1 >= w:
+                segment = df['multiplier'].iloc[idx + 1 - w : idx + 1]
+                x = np.arange(len(segment))
+                slope = np.polyfit(x, segment, 1)[0]
+                local_slopes.append(slope)
+        if len(local_slopes) > 1:
+            slope_std_list.append(np.std(local_slopes))
         else:
-            slopes.append(0)
-    slope_std = np.std(slopes)
+            slope_std_list.append(np.nan)
+    df['slope_std'] = slope_std_list
 
-    # Width change slope
-    width_series = df['multiplier'].rolling(window).apply(lambda x: x.max() - x.min(), raw=True)
-    recent_widths = width_series.dropna().tail(width_change_window)
-    if len(recent_widths) >= 2:
-        x_vals = np.arange(len(recent_widths))
-        width_slope = np.polyfit(x_vals, recent_widths, 1)[0]
-    else:
-        width_slope = 0
-
-    # Advanced Trap Score
-    trap_score = 0
-    if range_width < 2.5:
-        trap_score += 0.5
-    if abs(width_slope) < 0.05:
-        trap_score += 0.4
-    if slope_std < 0.35:
-        trap_score += 0.4
-    if entropy_val < 1.4:
-        trap_score += 0.6
-    if entropy_val < 1.1 and range_width < 2.0:
-        trap_score += 0.3  # High-confidence trap tightening
-
-    # Classification
-    if trap_score >= 1.5:
-        label = "⛔ ULTRA TRAP ZONE"
-    elif trap_score >= 1.0:
-        label = "⚠️ HIGH Trap Risk"
-    elif trap_score >= 0.6:
-        label = "⚠️ Moderate Trap Risk"
-    else:
-        label = "✅ Surge-Friendly Zone"
-
-    return {
-        'status': "OK",
-        'trap_score': round(trap_score, 2),
-        'label': label,
-        'details': {
-            'Range Width': round(range_width, 2),
-            'Range Center': round(range_center, 2),
-            'Width Slope': round(width_slope, 4),
-            'Entropy': round(entropy_val, 3),
-            'Slope Std': round(slope_std, 3)
-        }
-    }
+    return df
 
 
-def plot_advanced_trap_analysis(df_history):
-    """
-    Visualizes advanced dynamic range and trap features over time.
-    Assumes df_history has columns:
-    - 'timestamp'
-    - 'range_width'
-    - 'width_slope'
-    - 'entropy'
-    - 'slope_std'
-    - 'trap_score'
-    """
+def plot_raw_range_signals(df):
+    if df.empty or 'range_width' not in df:
+        st.warning("No range modulation data yet. Play more rounds.")
+        return
+
     fig = go.Figure()
 
-    # Range Width
     fig.add_trace(go.Scatter(
-        x=df_history['timestamp'],
-        y=df_history['range_width'],
-        mode='lines',
+        x=df['timestamp'], y=df['range_width'],
         name='Range Width',
         line=dict(color='royalblue', width=2)
     ))
 
-    # Width Slope
     fig.add_trace(go.Scatter(
-        x=df_history['timestamp'],
-        y=df_history['width_slope'],
-        mode='lines',
-        name='Width Slope',
-        line=dict(color='green', dash='dash')
+        x=df['timestamp'], y=df['range_center'],
+        name='Range Center',
+        line=dict(color='green', dash='dot')
     ))
 
-    # Entropy
     fig.add_trace(go.Scatter(
-        x=df_history['timestamp'],
-        y=df_history['entropy'],
-        mode='lines',
-        name='Entropy',
+        x=df['timestamp'], y=df['width_slope'],
+        name='Width Slope',
         line=dict(color='orange')
     ))
 
-    # Slope Std
     fig.add_trace(go.Scatter(
-        x=df_history['timestamp'],
-        y=df_history['slope_std'],
-        mode='lines',
-        name='Slope Resonance Std',
+        x=df['timestamp'], y=df['entropy'],
+        name='Entropy',
         line=dict(color='purple')
     ))
 
-    # Trap Score
     fig.add_trace(go.Scatter(
-        x=df_history['timestamp'],
-        y=df_history['trap_score'],
-        mode='lines+markers',
-        name='Trap Score',
-        line=dict(color='red', width=3)
+        x=df['timestamp'], y=df['slope_std'],
+        name='Slope Std (Resonance)',
+        line=dict(color='red')
     ))
 
     fig.update_layout(
-        title="⚡ Advanced Trap Modulation Analysis",
-        xaxis_title="Time",
-        yaxis_title="Signal Value",
+        title='📊 Advanced Range Fuckery Modulation Signals',
+        yaxis_title='Metric Value',
         hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        height=600
+        legend=dict(orientation="h", yanchor="bottom", y=1.02)
     )
 
-    return fig
+    st.plotly_chart(fig, use_container_width=True)
 
 
 @st.cache_data
@@ -2033,12 +1978,6 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     axis=1
     )
 
-
-   
-                                  
-    
-   
-
    
     
         # Prepare and safely round/format outputs, avoiding NoneType formatting
@@ -2145,6 +2084,13 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     quantum = QuantumGambit(df).execute_quantum()
     #df = quantum.df
     df = calculate_range_metrics(df, window=RANGE_WINDOW)
+    df = compute_raw_range_signals(
+    df,
+    window=RANGE_WINDOW,
+    width_change_window=5,
+    slope_windows=[3,5,8,13],
+    entropy_bins=10
+    )
     
     # Return all computed values
     return (df, latest_msi, window_size, recent_df, msi_score, msi_color, latest_tpi, 
@@ -2521,42 +2467,10 @@ if not df.empty:
     
     # After data analysis:
     current_regime = df['regime_state'].iloc[-1] if not df.empty else 'neutral'
-    result = advanced_dynamic_range_trap_detector(
-    df,
-    window=RANGE_WINDOW,
-    slope_windows=[3,5,8,13,21],
-    width_change_window=5,
-    entropy_bins=10
-    )
-    if 'timestamp' in df.columns:
-        ts_value = df['timestamp'].iloc[-1]
-    else:
-        ts_value = len(df) - 1
-        
-    # Append if we have a valid trap score
-    if result['trap_score'] is not None:
-        new_row = pd.DataFrame([{
-            'timestamp': ts_value,
-            'range_width': result['details'].get('Range Width', 0),
-            'width_slope': result['details'].get('Width Slope', 0),
-            'entropy': result['details'].get('Entropy', 0),
-            'slope_std': result['details'].get('Slope Std', 0),
-            'trap_score': result['trap_score']
-        }])
-        st.session_state['trap_history'] = pd.concat(
-            [st.session_state['trap_history'], new_row],
-            ignore_index=True
-        )
-        
-
-
     st.subheader("📊 Advanced Trap Modulation Signals Over Time")
-    if not st.session_state['trap_history'].empty:
-        fig = plot_advanced_trap_analysis(st.session_state['trap_history'])
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("No trap data yet. Play some rounds to see analysis.")
-        
+    plot_raw_range_signals(df)
+
+    
     # In main dashboard:
     st.plotly_chart(plot_range_regime(df), use_container_width=True)
     render_regime_hud(current_regime)
