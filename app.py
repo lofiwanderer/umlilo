@@ -1210,6 +1210,10 @@ VOLATILITY_THRESHOLDS = {
 @st.cache_data
 def calculate_range_metrics(df, window=RANGE_WINDOW):
     df = df.copy()
+    
+    if 'timestamp' not in df.columns:
+        df['timestamp'] = np.arange(len(df))  # fallback fake index
+
     # 1. Range Width Volatility
     df['range_width'] = df['multiplier'].rolling(window).apply(
         lambda x: x.max() - x.min(), raw=True
@@ -1241,26 +1245,28 @@ def calculate_range_metrics(df, window=RANGE_WINDOW):
             'neutral'
         )
     )
-    
+
+    # Drop rows with NA from rolling window
+    df = df.dropna(subset=['range_width', 'range_center', 'width_slope', 'center_slope'])
+
     return df
+
     
 def plot_range_regime(df):
     fig = go.Figure()
-    
+
     # Range Width
     fig.add_trace(go.Scatter(
         x=df['timestamp'], y=df['range_width'],
-        name='Range Width', line=dict(color='royalblue', width=2),
-        secondary_y=False
+        name='Range Width', line=dict(color='royalblue', width=2)
     ))
-    
+
     # Range Center
     fig.add_trace(go.Scatter(
         x=df['timestamp'], y=df['range_center'],
-        name='Range Center', line=dict(color='green', width=2, dash='dot'),
-        secondary_y=False
+        name='Range Center', line=dict(color='green', width=2, dash='dot')
     ))
-    
+
     # Regime States
     for regime, color in [('surge_favorable', 'green'), ('trap_zone', 'red')]:
         regime_df = df[df['regime_state'] == regime]
@@ -1270,7 +1276,7 @@ def plot_range_regime(df):
                 mode='markers', name=regime.upper(),
                 marker=dict(color=color, size=10, symbol='diamond')
             ))
-    
+
     fig.update_layout(
         title='🔥 DYNAMIC RANGE REGIME ENGINE',
         yaxis_title='Value',
@@ -1278,6 +1284,7 @@ def plot_range_regime(df):
         legend=dict(orientation="h", yanchor="bottom", y=1.02)
     )
     return fig
+
 
 # =============== DECISION HUD ===============
 def render_regime_hud(current_regime):
