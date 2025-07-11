@@ -1418,6 +1418,105 @@ def plot_raw_range_signals(df):
 
     return fig
 
+FIB_WINDOWS = [3, 5, 8, 13, 21, 34]
+
+def compute_multiwindow_atr(df, multiplier_col='multiplier'):
+    results = []
+
+    for w in FIB_WINDOWS:
+        if len(df) < w + 1:
+            continue
+
+        atr_series = df[multiplier_col].rolling(w).apply(lambda x: x.max() - x.min(), raw=True)
+        atr_now = atr_series.iloc[-1]
+        atr_prev = atr_series.iloc[-2] if len(atr_series) > 1 else atr_now
+
+        # Oscillation Phase
+        delta_atr = atr_now - atr_prev
+        phase = delta_atr / (atr_now + 1e-6)  # avoid divide by zero
+
+        results.append({
+            'Window': w,
+            'ATR_Now': round(atr_now, 3),
+            'ATR_Prev': round(atr_prev, 3),
+            'Delta_ATR': round(delta_atr, 3),
+            'Phase': round(phase, 4)
+        })
+
+    return pd.DataFrame(results)
+
+def detect_phase_regime(oscillator_df):
+    # If not enough data, return neutral
+    if oscillator_df.empty or len(oscillator_df) < 2:
+        return 'NEUTRAL', 0.0
+
+    # Short windows vs long windows
+    short_phases = oscillator_df[oscillator_df['Window'] <= 8]['Phase']
+    long_phases = oscillator_df[oscillator_df['Window'] >= 13]['Phase']
+
+    if short_phases.empty or long_phases.empty:
+        return 'NEUTRAL', 0.0
+
+    # Calculate correlation
+    corr = short_phases.corr(long_phases)
+    corr = 0.0 if pd.isna(corr) else corr
+
+    # Alien Regime Classification
+    if short_phases.mean() > 0 and long_phases.mean() > 0 and corr > 0.3:
+        regime = "SURGE_ZONE"
+    elif short_phases.mean() > 0 and long_phases.mean() < 0 and corr < -0.2:
+        regime = "TRAP_ZONE"
+    elif short_phases.mean() < 0 and long_phases.mean() < 0:
+        regime = "EXHAUSTION"
+    else:
+        regime = "NEUTRAL"
+
+    return regime, round(corr, 3)
+
+def plot_atr_oscillator_dashboard(oscillator_df, regime_label, corr_value):
+    if oscillator_df.empty:
+        st.warning("📊 No ATR Oscillator data to display yet.")
+        return
+
+    fig = go.Figure()
+
+    # ATR Now bars
+    fig.add_trace(go.Bar(
+        x=oscillator_df['Window'],
+        y=oscillator_df['ATR_Now'],
+        name='ATR Now',
+        marker_color='royalblue',
+        opacity=0.8
+    ))
+
+    # ATR Delta line
+    fig.add_trace(go.Scatter(
+        x=oscillator_df['Window'],
+        y=oscillator_df['Delta_ATR'],
+        mode='lines+markers',
+        name='Delta ATR',
+        line=dict(color='orange', width=2)
+    ))
+
+    # Phase line
+    fig.add_trace(go.Scatter(
+        x=oscillator_df['Window'],
+        y=oscillator_df['Phase'],
+        mode='lines+markers',
+        name='Phase',
+        line=dict(color='green', dash='dot')
+    ))
+
+    fig.update_layout(
+        title=f'🚀 Multi-Window ATR Oscillator - Regime: {regime_label} (Corr={corr_value})',
+        xaxis_title='Fibonacci Window Size',
+        yaxis_title='ATR / Delta / Phase',
+        hovermode='x unified',
+        legend=dict(orientation='h', yanchor='bottom', y=1.02)
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
 
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
@@ -2465,9 +2564,34 @@ if not df.empty:
     
     # After data analysis:
     #current_regime = df['regime_state'].iloc[-1] if not df.empty else 'neutral'
+
+    # Calculate oscillator
+    oscillator_df = compute_multiwindow_atr(df)
     
-    st.subheader("📊 Advanced Trap Modulation Signals Over Time")
-    st.plotly_chart(plot_raw_range_signals(range_signals_df), use_container_width=True)
+    # Detect regime
+    regime_label, corr_value = detect_phase_regime(oscillator_df)
+    
+    # Display
+    st.subheader("🧬 ALIEN ATR-OSCILLATOR ANALYSIS")
+    st.markdown(f"**Detected Regime:** {regime_label}")
+    st.markdown(f"**Short-Long Phase Correlation:** {corr_value}")
+    
+    plot_atr_oscillator_dashboard(oscillator_df, regime_label, corr_value)
+    
+    # Signal Filtering Example
+    if regime_label == "SURGE_ZONE":
+        st.success("✅ Entry signals ENABLED: Surge Zone Detected")
+    elif regime_label == "TRAP_ZONE":
+        st.error("⛔ Trap Zone Active: Suppress Entries")
+    elif regime_label == "EXHAUSTION":
+        st.warning("⚠️ Exhaustion Zone: Scout Only")
+    else:
+        st.info("ℹ️ Neutral Zone: Play Cautiously")
+
+    
+    with st.expander("📊 Advanced Range Modulation Signals Over Time", expanded=False):
+        st.subheader("📊 Advanced Trap Modulation Signals Over Time")
+        st.plotly_chart(plot_raw_range_signals(range_signals_df), use_container_width=True)
 
    
     
