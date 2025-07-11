@@ -1517,6 +1517,128 @@ def plot_atr_oscillator_dashboard(oscillator_df, regime_label, corr_value):
 
     st.plotly_chart(fig, use_container_width=True)
 
+def compute_atr(series):
+    return series.max() - series.min()
+
+def compute_slope(series):
+    x = np.arange(len(series))
+    if len(series) < 2:
+        return 0
+    return np.polyfit(x, series, 1)[0]
+
+def compute_phase(series):
+    # Upward if last > first, else downward
+    return 1 if series.iloc[-1] > series.iloc[0] else -1
+
+def analyze_multi_window_atr_oscillator(
+    df,
+    multiplier_col='multiplier',
+    windows=[3,5,8,13,21,34]
+):
+    results = []
+
+    for w in windows:
+        if len(df) < w:
+            results.append({
+                'Window': w,
+                'ATR': np.nan,
+                'Slope': np.nan,
+                'Phase': np.nan
+            })
+            continue
+
+        series = df[multiplier_col].tail(w)
+
+        atr = compute_atr(series)
+        slope = compute_slope(series)
+        phase = compute_phase(series)
+
+        results.append({
+            'Window': w,
+            'ATR': round(atr, 3),
+            'Slope': round(slope, 4),
+            'Phase': phase
+        })
+
+    df_result = pd.DataFrame(results)
+
+    # Phase alignment score
+    phase_alignment = df_result['Phase'].sum() / len(df_result.dropna())
+
+    # Dominant cycle = highest ATR
+    dominant_idx = df_result['ATR'].idxmax()
+    dominant_window = df_result.loc[dominant_idx, 'Window'] if not np.isnan(dominant_idx) else None
+
+    return df_result, round(phase_alignment, 3), dominant_window
+
+def detect_phase_cross_intersections(df_result):
+    """
+    Detects where phase directions change between adjacent windows.
+    Returns list of window pairs with crossings.
+    """
+    crossings = []
+    phases = df_result['Phase'].values
+
+    for i in range(1, len(phases)):
+        if np.isnan(phases[i-1]) or np.isnan(phases[i]):
+            continue
+        if phases[i] != phases[i-1]:
+            crossings.append((df_result['Window'].iloc[i-1], df_result['Window'].iloc[i]))
+
+    return crossings
+
+def plot_multi_window_atr_dashboard(df_result, phase_alignment, dominant_window, crossings):
+    fig = go.Figure()
+
+    # ATR Bars
+    fig.add_trace(go.Bar(
+        x=df_result['Window'],
+        y=df_result['ATR'],
+        name='ATR (Amplitude)',
+        marker_color='purple',
+        opacity=0.7
+    ))
+
+    # Slope Line
+    fig.add_trace(go.Scatter(
+        x=df_result['Window'],
+        y=df_result['Slope'],
+        mode='lines+markers',
+        name='Slope (Trend)',
+        line=dict(color='orange', dash='dash'),
+        marker=dict(size=10)
+    ))
+
+    # Phase Markers
+    colors = ['green' if p == 1 else 'red' for p in df_result['Phase']]
+    fig.add_trace(go.Scatter(
+        x=df_result['Window'],
+        y=[0]*len(df_result),
+        mode='markers',
+        marker=dict(color=colors, size=12, symbol='diamond'),
+        name='Phase Direction'
+    ))
+
+    # Cross-Intersections
+    for cross in crossings:
+        fig.add_vrect(
+            x0=cross[0]-0.5, x1=cross[1]+0.5,
+            fillcolor='red', opacity=0.15, line_width=0,
+            annotation_text="Phase Cross", annotation_position="top left"
+        )
+
+    # Layout
+    fig.update_layout(
+        title=f"🚀 Multi-Window ATR Oscillator\nPhase Alignment: {phase_alignment} | Dominant Window: {dominant_window}",
+        xaxis_title="Fibonacci Window Size",
+        yaxis_title="ATR / Slope Values",
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02)
+    )
+
+    return fig
+
+
 
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
@@ -2570,23 +2692,52 @@ if not df.empty:
     
     # Detect regime
     regime_label, corr_value = detect_phase_regime(oscillator_df)
+
+    # Analyze
+    osc_df, phase_alignment, dominant_window = analyze_multi_window_atr_oscillator(
+        df,
+        multiplier_col='multiplier',
+        windows=[3,5,8,13,21,34]
+    )
+    
+    # Cross-intersections
+    crossings = detect_phase_cross_intersections(osc_df)
     
     # Display
-    st.subheader("🧬 ALIEN ATR-OSCILLATOR ANALYSIS")
-    st.markdown(f"**Detected Regime:** {regime_label}")
-    st.markdown(f"**Short-Long Phase Correlation:** {corr_value}")
+    st.subheader("🧭 Multi-Window ATR Oscillator Analysis")
+    st.dataframe(osc_df)
+
+    # Visualization
+    fig_atr = plot_multi_window_atr_dashboard(osc_df, phase_alignment, dominant_window, crossings)
+    st.plotly_chart(fig_atr, use_container_width=True)
     
-    plot_atr_oscillator_dashboard(oscillator_df, regime_label, corr_value)
+    st.markdown(f"**Phase Alignment Score:** {phase_alignment}")
+    st.markdown(f"**Dominant Cycle Window:** {dominant_window}")
+    if crossings:
+        st.markdown(f"**Phase Cross Intersections:** {crossings}")
     
-    # Signal Filtering Example
-    if regime_label == "SURGE_ZONE":
-        st.success("✅ Entry signals ENABLED: Surge Zone Detected")
-    elif regime_label == "TRAP_ZONE":
-        st.error("⛔ Trap Zone Active: Suppress Entries")
-    elif regime_label == "EXHAUSTION":
-        st.warning("⚠️ Exhaustion Zone: Scout Only")
-    else:
-        st.info("ℹ️ Neutral Zone: Play Cautiously")
+    
+    
+
+
+    with st.expander("🧬 ALIEN ATR-OSCILLATOR ANALYSIS", expanded=False):
+    
+        # Display
+        st.subheader("🧬 ALIEN ATR-OSCILLATOR ANALYSIS")
+        st.markdown(f"**Detected Regime:** {regime_label}")
+        st.markdown(f"**Short-Long Phase Correlation:** {corr_value}")
+        
+        plot_atr_oscillator_dashboard(oscillator_df, regime_label, corr_value)
+        
+        # Signal Filtering Example
+        if regime_label == "SURGE_ZONE":
+            st.success("✅ Entry signals ENABLED: Surge Zone Detected")
+        elif regime_label == "TRAP_ZONE":
+            st.error("⛔ Trap Zone Active: Suppress Entries")
+        elif regime_label == "EXHAUSTION":
+            st.warning("⚠️ Exhaustion Zone: Scout Only")
+        else:
+            st.info("ℹ️ Neutral Zone: Play Cautiously")
 
     
     with st.expander("📊 Advanced Range Modulation Signals Over Time", expanded=False):
