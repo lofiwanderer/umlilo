@@ -1677,17 +1677,20 @@ def compute_smoothed_atr_long_df(df, windows, multiplier_col='multiplier', smoot
     result_df = pd.DataFrame.from_records(records)
     return result_df
 
-def combine_smoothed_series_to_longform(atr_dict):
-    frames = []
-    for w, df in atr_dict.items():
-        df2 = df.copy()
-        df2['window'] = w
-        frames.append(df2)
-    if frames:
-        return pd.concat(frames, ignore_index=True)
-    return pd.DataFrame()
-
+def prepare_long_df_for_pivot(long_df, windows, full_round_index):
+    """
+    Ensures all round_index/window pairs exist in long_df for pivot.
+    Missing atr values are filled with 0.
+    """
+    grid = pd.MultiIndex.from_product([full_round_index, windows], names=['round_index', 'window']).to_frame(index=False)
+    merged = pd.merge(grid, long_df, on=['round_index', 'window'], how='left')
+    merged['atr'] = merged['atr'].fillna(0)
+    return merged
+    
 def detect_advanced_crossings(long_df):
+    if long_df.empty:
+        return []
+
     pivot = long_df.pivot(index='round_index', columns='window', values='atr').fillna(0)
     crossings = []
 
@@ -1696,13 +1699,13 @@ def detect_advanced_crossings(long_df):
             for w2 in pivot.columns:
                 if w1 >= w2:
                     continue
-                if ((pivot.iloc[i-1][w1] < pivot.iloc[i-1][w2]) and (pivot.iloc[i][w1] > pivot.iloc[i][w2])) or \
-                   ((pivot.iloc[i-1][w1] > pivot.iloc[i-1][w2]) and (pivot.iloc[i][w1] < pivot.iloc[i][w2])):
+                prev_diff = pivot.iloc[i-1][w1] - pivot.iloc[i-1][w2]
+                curr_diff = pivot.iloc[i][w1] - pivot.iloc[i][w2]
+                if prev_diff * curr_diff < 0:
                     crossings.append({
                         'round_index': pivot.index[i],
-                        'cross': f"F{w1} ↔ F{w2}"
+                        'window_pair': (w1, w2)
                     })
-
     return crossings
 
 
@@ -2866,25 +2869,25 @@ if not df.empty:
     # 1. Compute with smoothing
     smoothed_atr_df = compute_smoothed_atr_long_df(df, windows=[3,5,8,13,21,34])
     
-    # Convert smoothed_atr_df to long_df no matter what it is
-    if isinstance(smoothed_atr_df, dict):
-        long_df = pd.concat(smoothed_atr_df.values(), ignore_index=True)
-    elif isinstance(smoothed_atr_df, (list, np.ndarray)):
-        long_df = pd.concat(smoothed_atr_df, ignore_index=True)
-    elif isinstance(smoothed_atr_df, pd.DataFrame):
-        long_df = smoothed_atr_df.copy()
-    else:
-        raise ValueError(f"Unsupported smoothed_atr_df type: {type(smoothed_atr_df)}")
-        
+    # Ensure pivot safety
+    full_round_index = list(range(df.shape[0]))
+    long_df_clean = prepare_long_df_for_pivot(long_df, FIB_WINDOWS, full_round_index)
+    
+    # Detect crossings
+    crossings = detect_advanced_crossings(long_df_clean)
+    
+    # Plot
+    plot_alien_mwatr_oscillator(long_df_clean, crossings)
+    
     #plot_smoothed_atr_oscillator(smoothed_atr_df)
     #long_df_smooth = combine_smoothed_series_to_longform(atr_smooth_dict)
     #dominant_smooth_df = detect_smoothed_dominant_window(smoothed_atr_df)
 
     
-    crossings = detect_advanced_crossings(long_df )
+    #crossings = detect_advanced_crossings(long_df )
     
     # 2. Plot
-    plot_alien_mwatr_oscillator(long_df , crossings)
+    #plot_alien_mwatr_oscillator(long_df , crossings)
 
 
 
