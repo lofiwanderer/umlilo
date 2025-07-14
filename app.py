@@ -15,6 +15,7 @@ from collections import defaultdict
 from scipy.fft import rfft, rfftfreq
 from scipy.signal import find_peaks, peak_widths
 from scipy.signal import hilbert
+from scipy.signal import savgol_filter
 import math
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import KMeans
@@ -1638,6 +1639,155 @@ def plot_multi_window_atr_dashboard(df_result, phase_alignment, dominant_window,
 
     return fig
 
+def compute_smoothed_atr_series(df, windows, multiplier_col='multiplier', smooth_window=5, poly_order=2):
+    result = {}
+    df = df.copy()
+    df['round_index'] = range(len(df))
+
+    for w in windows:
+        if len(df) < w + smooth_window:
+            continue
+
+        # Rolling ATR
+        atr_series = df[multiplier_col].rolling(w).apply(lambda x: x.max() - x.min(), raw=True)
+        atr_series = atr_series.fillna(method='bfill').fillna(0)
+
+        # Smoothing
+        if len(atr_series) >= smooth_window:
+            atr_smooth = savgol_filter(atr_series, smooth_window, poly_order)
+        else:
+            atr_smooth = atr_series
+
+        # Slope for phase
+        slope_series = np.gradient(atr_smooth)
+        phase_series = np.where(slope_series >= 0, 'BULL', 'BEAR')
+
+        result[w] = pd.DataFrame({
+            'round_index': df['round_index'],
+            'atr': atr_smooth,
+            'raw_atr': atr_series,
+            'slope': slope_series,
+            'phase': phase_series
+        })
+
+    return result
+
+def combine_smoothed_series_to_longform(atr_dict):
+    frames = []
+    for w, df in atr_dict.items():
+        df2 = df.copy()
+        df2['window'] = w
+        frames.append(df2)
+    if frames:
+        return pd.concat(frames, ignore_index=True)
+    return pd.DataFrame()
+
+def detect_advanced_crossings(long_df):
+    crossings = []
+    pivot = long_df.pivot(index='round_index', columns='window', values='atr').fillna(0)
+    windows = sorted(pivot.columns)
+
+    for i in range(len(windows)-1):
+        w1, w2 = windows[i], windows[i+1]
+        series1 = pivot[w1]
+        series2 = pivot[w2]
+        crosses = (series1.shift(1) < series2.shift(1)) & (series1 >= series2)
+        cross_points = pivot.index[crosses.fillna(False)].tolist()
+        for idx in cross_points:
+            crossings.append({
+                'round_index': idx,
+                'window_pair': (w1, w2)
+            })
+    return crossings
+
+
+def detect_smoothed_dominant_window(long_df):
+    if long_df.empty:
+        return pd.DataFrame()
+
+    pivot = long_df.pivot(index='round_index', columns='window', values='atr').fillna(0)
+    dominant = pivot.idxmax(axis=1)
+
+    # Optional smoothing
+    dominant_smooth = dominant.rolling(3, min_periods=1).apply(lambda x: x.mode()[0])
+
+    return pd.DataFrame({
+        'round_index': pivot.index,
+        'dominant_window': dominant_smooth
+    })
+    
+
+def plot_alien_mwatr_oscillator(long_df, crossings=[], dominant_df=None):
+    if long_df.empty:
+        st.warning("⚠️ Not enough data to plot MWATR Oscillator.")
+        return
+
+    fig = go.Figure()
+
+    # Define color mapping
+    phase_colors = {
+        'BULL': '#00ff88',
+        'BEAR': '#ff0066'
+    }
+
+    # Plot smoothed ATR curves
+    for w in sorted(long_df['window'].unique()):
+        df_w = long_df[long_df['window'] == w]
+        fig.add_trace(go.Scatter(
+            x=df_w['round_index'],
+            y=df_w['atr'],
+            mode='lines',
+            name=f"F{w}",
+            line=dict(width=2),
+            hoverinfo='x+y+name',
+            marker=dict(color=df_w['phase'].map(phase_colors))
+        ))
+
+    # Add slope gradient heatmap
+    fig.add_trace(go.Heatmap(
+        x=long_df['round_index'],
+        y=long_df['window'],
+        z=long_df['slope'],
+        colorscale='RdBu',
+        zmid=0,
+        opacity=0.5,
+        colorbar=dict(title='Phase Slope')
+    ))
+
+    # Crossings with arrows
+    for cross in crossings:
+        fig.add_vline(
+            x=cross['round_index'],
+            line_dash='dot',
+            line_color='gold',
+            annotation_text=f"X: F{cross['window_pair'][0]}↔F{cross['window_pair'][1]}",
+            annotation_position='top'
+        )
+
+    # Dominant shading
+    if dominant_df is not None and not dominant_df.empty:
+        for w in dominant_df['dominant_window'].unique():
+            mask = dominant_df['dominant_window'] == w
+            rounds = dominant_df['round_index'][mask]
+            if len(rounds) > 0:
+                fig.add_vrect(
+                    x0=rounds.min(), x1=rounds.max(),
+                    fillcolor='rgba(0,255,136,0.05)',
+                    layer='below',
+                    line_width=0,
+                    annotation_text=f"Dom F{w}",
+                    annotation_position='top left'
+                )
+
+    fig.update_layout(
+        title="🌌 Alien Technomancer MWATR Oscillator",
+        xaxis_title="Round Index",
+        yaxis_title="ATR Amplitude",
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+        hovermode='x unified'
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
 
 
 @st.cache_data
@@ -2717,7 +2867,19 @@ if not df.empty:
         st.markdown(f"**Phase Cross Intersections:** {crossings}")
     
     
+    st.subheader("🌀 ALIEN MWATR OSCILLATOR (Ultra-Mode)")
     
+    FIB_WINDOWS = [3, 5, 8, 13, 21]
+    
+    # 1. Compute with smoothing
+    atr_smooth_dict = compute_smoothed_atr_series(df, FIB_WINDOWS)
+    long_df_smooth = combine_smoothed_series_to_longform(atr_smooth_dict)
+    dominant_smooth_df = detect_smoothed_dominant_window(long_df_smooth)
+    crossings = detect_advanced_crossings(long_df_smooth)
+    
+    # 2. Plot
+    plot_alien_mwatr_oscillator(long_df_smooth, crossings, dominant_smooth_df)
+
 
 
     with st.expander("🧬 ALIEN ATR-OSCILLATOR ANALYSIS", expanded=False):
