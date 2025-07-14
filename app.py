@@ -1688,8 +1688,9 @@ def combine_smoothed_series_to_longform(atr_dict):
     return pd.DataFrame()
 
 def detect_advanced_crossings(long_df):
+     df['round_index'] = range(len(df))
     crossings = []
-    pivot = long_df.pivot(index='round_index', columns='window', values='atr').fillna(0)
+    pivot = long_df.pivot(index= df['round_index'] , columns='window', values='atr').fillna(0)
     windows = sorted(pivot.columns)
 
     for i in range(len(windows)-1):
