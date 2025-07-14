@@ -1722,7 +1722,7 @@ def detect_smoothed_dominant_window(long_df):
     })
     
 
-def plot_alien_mwatr_oscillator(long_df, crossings=[], dominant_df=None):
+def plot_alien_mwatr_oscillator(long_df, crossings=[]):
     if long_df.empty:
         st.warning("⚠️ Not enough data to plot MWATR Oscillator.")
         return
@@ -1769,20 +1769,7 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[], dominant_df=None):
             annotation_position='top'
         )
 
-    # Dominant shading
-    if dominant_df is not None and not dominant_df.empty:
-        for w in dominant_df['dominant_window'].unique():
-            mask = dominant_df['dominant_window'] == w
-            rounds = dominant_df['round_index'][mask]
-            if len(rounds) > 0:
-                fig.add_vrect(
-                    x0=rounds.min(), x1=rounds.max(),
-                    fillcolor='rgba(0,255,136,0.05)',
-                    layer='below',
-                    line_width=0,
-                    annotation_text=f"Dom F{w}",
-                    annotation_position='top left'
-                )
+  
 
     fig.update_layout(
         title="🌌 Alien Technomancer MWATR Oscillator",
@@ -2880,11 +2867,11 @@ if not df.empty:
     smoothed_atr_df = compute_smoothed_atr_long_df(df, windows=[3,5,8,13,21,34])
     #plot_smoothed_atr_oscillator(smoothed_atr_df)
     #long_df_smooth = combine_smoothed_series_to_longform(atr_smooth_dict)
-    dominant_smooth_df = detect_smoothed_dominant_window(smoothed_atr_df)
+    #dominant_smooth_df = detect_smoothed_dominant_window(smoothed_atr_df)
     crossings = detect_advanced_crossings(smoothed_atr_df)
     
     # 2. Plot
-    plot_alien_mwatr_oscillator(smoothed_atr_df, crossings, dominant_smooth_df)
+    plot_alien_mwatr_oscillator(smoothed_atr_df, crossings)
 
 
 
