@@ -2867,9 +2867,11 @@ if not df.empty:
     
     # Detect crossings
     crossings = detect_advanced_crossings(long_df_clean)
-    
-    # Plot
-    plot_alien_mwatr_oscillator(long_df_clean, crossings)
+
+    if N > 10:
+        
+        # Plot
+        plot_alien_mwatr_oscillator(long_df_clean, crossings)
     
     #plot_smoothed_atr_oscillator(smoothed_atr_df)
     #long_df_smooth = combine_smoothed_series_to_longform(atr_smooth_dict)
