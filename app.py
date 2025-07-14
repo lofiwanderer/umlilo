@@ -2865,8 +2865,8 @@ if not df.empty:
     
     # 1. Compute with smoothing
     smoothed_atr_df = compute_smoothed_atr_long_df(df, windows=[3,5,8,13,21,34])
-    long_df = pd.concat(smoothed_atr_df.values(), ignore_index=True
-                        
+    long_df = pd.concat(smoothed_atr_df.values(), ignore_index=True)
+             
     #plot_smoothed_atr_oscillator(smoothed_atr_df)
     #long_df_smooth = combine_smoothed_series_to_longform(atr_smooth_dict)
     #dominant_smooth_df = detect_smoothed_dominant_window(smoothed_atr_df)
