@@ -1751,17 +1751,7 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
             marker=dict(color=df_w['phase'].map(phase_colors))
         ))
 
-    # Add slope gradient heatmap
-    fig.add_trace(go.Heatmap(
-        x=long_df['round_index'],
-        y=long_df['window'],
-        z=long_df['slope'],
-        colorscale='RdBu',
-        zmid=0,
-        opacity=0.5,
-        colorbar=dict(title='Phase Slope')
-    ))
-
+    
     # Crossings with arrows
     for cross in crossings:
         fig.add_vline(
