@@ -2812,10 +2812,10 @@ if not df.empty:
         8: df['msi_8'].dropna().tolist(),
     }
     
-    entry_signal = anti_trap_entry_signal(msi_dict)
+    #entry_signal = anti_trap_entry_signal(msi_dict)
 
-    df_signal = get_normalized_signal_data(msi_dict)
-    fig_signal = plot_normalized_signal_dashboard(df_signal)
+    #df_signal = get_normalized_signal_data(msi_dict)
+    #fig_signal = plot_normalized_signal_dashboard(df_signal)
     
     range_signals_df = compute_raw_range_signals(df, window=RANGE_WINDOW)
     
@@ -2868,10 +2868,10 @@ if not df.empty:
     # Detect crossings
     crossings = detect_advanced_crossings(long_df_clean)
 
-    if N > 10:
+    
         
-        # Plot
-        plot_alien_mwatr_oscillator(long_df_clean, crossings)
+     # Plot
+    plot_alien_mwatr_oscillator(long_df_clean, crossings)
     
     #plot_smoothed_atr_oscillator(smoothed_atr_df)
     #long_df_smooth = combine_smoothed_series_to_longform(atr_smooth_dict)
@@ -2921,9 +2921,9 @@ if not df.empty:
         # ============================
         plot_adaptive_wavefront(wavefront_data)
         
-        st.plotly_chart(fig_signal)
-        st.subheader("🎯 Anti-Trap Signal")
-        st.success(entry_signal if "CLEAN" in entry_signal else entry_signal)
+        #st.plotly_chart(fig_signal)
+        #st.subheader("🎯 Anti-Trap Signal")
+        #st.success(entry_signal if "CLEAN" in entry_signal else entry_signal)
 
     with st.expander("🔎 Multi-Cycle Detector Results", expanded=False):
        
@@ -2944,7 +2944,8 @@ if not df.empty:
        st.subheader("📈 Alignment Score Trend")
 
        if len(st.session_state["alignment_score_history"]) >= 2:
-           st.line_chart(st.session_state["alignment_score_history"])
+           #st.line_chart(st.session_state["alignment_score_history"])
+           st.markdown("_Need at least 2 scores to show trend._")
        else:
            st.markdown("_Need at least 2 scores to show trend._")
 
@@ -2958,7 +2959,7 @@ if not df.empty:
             
     
 
-    with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
+    with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=False):
         fig, ax = plt.subplots(figsize=(10, 4))
         rsi = df["rsi"]
         signal = df["rsi_signal"]
@@ -2981,7 +2982,7 @@ if not df.empty:
         
         ax.set_title("🧠 Trader’s Dynamic Index (RSI BB System)")
         ax.legend()
-        st.pyplot(fig)
+        #st.pyplot(fig)
     
     
 
