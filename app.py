@@ -2864,10 +2864,12 @@ if not df.empty:
     
     st.subheader("🌀 ALIEN MWATR OSCILLATOR (Ultra-Mode)")
     
-    FIB_WINDOWS = [3, 5, 8, 13, 21]
+    FIB_WINDOWS = [3, 5, 8, 13, 21,34]
     
-    # 1. Compute with smoothing
-    smoothed_atr_df = compute_smoothed_atr_long_df(df, windows=[3,5,8,13,21,34])
+    smoothed_atr_df = compute_smoothed_atr_long_df(df, windows=FIB_WINDOWS)
+
+    # Convert the output
+    long_df = smoothed_atr_df.copy()
     
     # Ensure pivot safety
     full_round_index = list(range(df.shape[0]))
