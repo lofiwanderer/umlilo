@@ -1537,12 +1537,15 @@ def analyze_multi_window_atr_oscillator(
     windows=[3,5,8,13,21,34]
 ):
     results = []
+    
+    
 
     for w in windows:
         if len(df) < w:
             results.append({
                 'Window': w,
                 'ATR': np.nan,
+                #'round_index': np.nan,
                 'Slope': np.nan,
                 'Phase': np.nan
             })
@@ -1553,10 +1556,12 @@ def analyze_multi_window_atr_oscillator(
         atr = compute_atr(series)
         slope = compute_slope(series)
         phase = compute_phase(series)
+        #index_slice = df['round_index'].values[-len(atr_series):]
 
         results.append({
             'Window': w,
             'ATR': round(atr, 3),
+            #'round_index': index_slice,
             'Slope': round(slope, 4),
             'Phase': phase
         })
@@ -1639,38 +1644,38 @@ def plot_multi_window_atr_dashboard(df_result, phase_alignment, dominant_window,
 
     return fig
 
-def compute_smoothed_atr_series(df, windows, multiplier_col='multiplier', smooth_window=5, poly_order=2):
-    result = {}
+def compute_smoothed_atr_long_df(df, windows, multiplier_col='multiplier', smooth_window=5, poly_order=2):
+    records = []
     df = df.copy()
     df['round_index'] = range(len(df))
-
+    
     for w in windows:
         if len(df) < w + smooth_window:
             continue
 
-        # Rolling ATR
         atr_series = df[multiplier_col].rolling(w).apply(lambda x: x.max() - x.min(), raw=True)
-        atr_series = atr_series.fillna(method='bfill').fillna(0)
+        atr_series = atr_series.bfill().fillna(0)
 
-        # Smoothing
         if len(atr_series) >= smooth_window:
             atr_smooth = savgol_filter(atr_series, smooth_window, poly_order)
         else:
             atr_smooth = atr_series
 
-        # Slope for phase
         slope_series = np.gradient(atr_smooth)
         phase_series = np.where(slope_series >= 0, 'BULL', 'BEAR')
 
-        result[w] = pd.DataFrame({
-            'round_index': df['round_index'],
-            'atr': atr_smooth,
-            'raw_atr': atr_series,
-            'slope': slope_series,
-            'phase': phase_series
-        })
+        for idx, r_idx in enumerate(df['round_index']):
+            records.append({
+                'round_index': r_idx,
+                'window': w,
+                'atr': atr_smooth[idx],
+                'raw_atr': atr_series.iloc[idx],
+                'slope': slope_series[idx],
+                'phase': phase_series[idx]
+            })
 
-    return result
+    result_df = pd.DataFrame.from_records(records)
+    return result_df
 
 def combine_smoothed_series_to_longform(atr_dict):
     frames = []
@@ -2872,13 +2877,14 @@ if not df.empty:
     FIB_WINDOWS = [3, 5, 8, 13, 21]
     
     # 1. Compute with smoothing
-    atr_smooth_dict = compute_smoothed_atr_series(df, FIB_WINDOWS)
-    long_df_smooth = combine_smoothed_series_to_longform(atr_smooth_dict)
-    dominant_smooth_df = detect_smoothed_dominant_window(long_df_smooth)
-    crossings = detect_advanced_crossings(long_df_smooth)
+    smoothed_atr_df = compute_smoothed_atr_long_df(df, windows=[3,5,8,13,21,34])
+    #plot_smoothed_atr_oscillator(smoothed_atr_df)
+    #long_df_smooth = combine_smoothed_series_to_longform(atr_smooth_dict)
+    dominant_smooth_df = detect_smoothed_dominant_window(smoothed_atr_df)
+    crossings = detect_advanced_crossings(smoothed_atr_df)
     
     # 2. Plot
-    plot_alien_mwatr_oscillator(long_df_smooth, crossings, dominant_smooth_df)
+    plot_alien_mwatr_oscillator(smoothed_atr_df, crossings, dominant_smooth_df)
 
 
 
