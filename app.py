@@ -2907,7 +2907,7 @@ if not df.empty:
     
     with st.expander("📊 Advanced Range Modulation Signals Over Time", expanded=False):
         st.subheader("📊 Advanced Trap Modulation Signals Over Time")
-        st.plotly_chart(plot_raw_range_signals(range_signals_df), use_container_width=True)
+        #st.plotly_chart(plot_raw_range_signals(range_signals_df), use_container_width=True)
 
    
     
