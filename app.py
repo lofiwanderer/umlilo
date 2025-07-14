@@ -1688,23 +1688,21 @@ def combine_smoothed_series_to_longform(atr_dict):
     return pd.DataFrame()
 
 def detect_advanced_crossings(long_df):
-    
-    df['round_index'] = range(len(df))
+    pivot = long_df.pivot(index='round_index', columns='window', values='atr').fillna(0)
     crossings = []
-    pivot = long_df.pivot(index= df['round_index'] , columns='window', values='atr').fillna(0)
-    windows = sorted(pivot.columns)
 
-    for i in range(len(windows)-1):
-        w1, w2 = windows[i], windows[i+1]
-        series1 = pivot[w1]
-        series2 = pivot[w2]
-        crosses = (series1.shift(1) < series2.shift(1)) & (series1 >= series2)
-        cross_points = pivot.index[crosses.fillna(False)].tolist()
-        for idx in cross_points:
-            crossings.append({
-                'round_index': idx,
-                'window_pair': (w1, w2)
-            })
+    for i in range(1, len(pivot)):
+        for w1 in pivot.columns:
+            for w2 in pivot.columns:
+                if w1 >= w2:
+                    continue
+                if ((pivot.iloc[i-1][w1] < pivot.iloc[i-1][w2]) and (pivot.iloc[i][w1] > pivot.iloc[i][w2])) or \
+                   ((pivot.iloc[i-1][w1] > pivot.iloc[i-1][w2]) and (pivot.iloc[i][w1] < pivot.iloc[i][w2])):
+                    crossings.append({
+                        'round_index': pivot.index[i],
+                        'cross': f"F{w1} ↔ F{w2}"
+                    })
+
     return crossings
 
 
