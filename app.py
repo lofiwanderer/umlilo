@@ -1464,32 +1464,39 @@ def compute_smoothed_atr_long_df(df, windows, multiplier_col='multiplier', smoot
     df['round_index'] = range(len(df))
     
     for w in windows:
-        if len(df) < w + smooth_window:
-            continue
+        if len(df) < w:
+            continue  # Skip if window larger than data
 
-        atr_series = df[multiplier_col].rolling(w).apply(lambda x: x.max() - x.min(), raw=True)
-        atr_series = atr_series.bfill().fillna(0)
-
+        # Calculate True Range (max - min) for each window
+        atr_series = df[multiplier_col].rolling(w).apply(
+            lambda x: x.max() - x.min(), 
+            raw=True
+        ).bfill().fillna(0)
+        
+        # Smooth with Savitzky-Golay filter
         if len(atr_series) >= smooth_window:
             atr_smooth = savgol_filter(atr_series, smooth_window, poly_order)
         else:
-            atr_smooth = atr_series
-
+            atr_smooth = atr_series.values
+            
+        # Calculate slope and phase
         slope_series = np.gradient(atr_smooth)
         phase_series = np.where(slope_series >= 0, 'BULL', 'BEAR')
-
+        
+        # Store results
         for idx, r_idx in enumerate(df['round_index']):
             records.append({
                 'round_index': r_idx,
                 'window': w,
-                'atr': atr_smooth[idx],
-                'raw_atr': atr_series.iloc[idx],
-                'slope': slope_series[idx],
-                'phase': phase_series[idx]
+                'atr': atr_smooth[idx] if idx < len(atr_smooth) else 0,
+                'slope': slope_series[idx] if idx < len(slope_series) else 0,
+                'phase': phase_series[idx] if idx < len(phase_series) else 'NEUTRAL'
             })
+    
+    return pd.DataFrame(records)
 
-    result_df = pd.DataFrame.from_records(records)
-    return result_df
+    #result_df = pd.DataFrame.from_records(records)
+    #return result_df
 
 def prepare_long_df_for_pivot(long_df, windows, full_round_index):
     """
@@ -1545,48 +1552,48 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
         return
 
     fig = go.Figure()
-
-    # Define color mapping
-    phase_colors = {
-        'BULL': '#00ff88',
-        'BEAR': '#ff0066'
-    }
-
-    # Plot smoothed ATR curves
-    for w in sorted(long_df['window'].unique()):
-        df_w = long_df[long_df['window'] == w]
-        fig.add_trace(go.Scatter(
-            x=df_w['round_index'],
-            y=df_w['atr'],
-            mode='lines',
-            name=f"F{w}",
-            line=dict(width=2),
-            hoverinfo='x+y+name',
-            marker=dict(color=df_w['phase'].map(phase_colors))
-        ))
-
     
-    # Crossings with arrows
+    # Color mapping for phases
+    phase_colors = {'BULL': '#00ff88', 'BEAR': '#ff0066', 'NEUTRAL': '#888888'}
+    
+    # Plot each Fibonacci window's oscillation
+    for w in sorted(long_df['window'].unique()):
+        window_df = long_df[long_df['window'] == w]
+        
+        fig.add_trace(go.Scatter(
+            x=window_df['round_index'],
+            y=window_df['atr'],
+            mode='lines',
+            name=f'F{w} Osc',
+            line=dict(
+                width=2 + w/5,  # Thicker line for larger windows
+                color=phase_colors[window_df['phase'].iloc[-1]]
+            ),
+            hoverinfo='x+y+name',
+            showlegend=True
+        ))
+    
+    # Mark crossings with vertical lines
     for cross in crossings:
         fig.add_vline(
             x=cross['round_index'],
             line_dash='dot',
             line_color='gold',
-            annotation_text=f"X: F{cross['window_pair'][0]}↔F{cross['window_pair'][1]}",
+            annotation_text=f"X: F{cross['window_pair'][0]}↔F{cross['window_pair'][1]}", 
             annotation_position='top'
         )
-
-  
-
+    
+    # Layout
     fig.update_layout(
-        title="🌌 Alien Technomancer MWATR Oscillator",
-        xaxis_title="Round Index",
-        yaxis_title="ATR Amplitude",
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
-        hovermode='x unified'
+        title='🌌 ALIEN MWATR OSCILLATOR (True Oscillating Range Curves)',
+        xaxis_title='Round Index',
+        yaxis_title='Range Amplitude',
+        hovermode='x unified',
+        legend=dict(orientation='h', y=1.1)
     )
-
+    
     st.plotly_chart(fig, use_container_width=True)
+
 
 
 @st.cache_data
