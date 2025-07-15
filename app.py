@@ -1893,7 +1893,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
             upper_accel = safe_round(latest.get('upper_accel')) if 'upper_accel' in latest else 0
             lower_accel = safe_round(latest.get('lower_accel')) if 'lower_accel' in latest else 0
             bandwidth = safe_round(latest.get('bandwidth')) if 'bandwidth' in latest else 0
-            bandwidth_delta = safe_round(latest.get('bandwidth_delta')) * 100 if 'bandwidth_delta' in latest else 0
+            bandwidth_delta = safe_round(latest.get('bandwidth_delta'))  if 'bandwidth_delta' in latest else 0
                 
         
     
