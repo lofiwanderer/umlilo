@@ -1596,17 +1596,35 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
 
 
 def compute_quantum_entanglement(long_df):
-    """Measures how locked the oscillations are."""
-    pivot = long_df.pivot(index='round_index', columns='window', values='slope')
+    """Measures how locked the oscillations are across windows."""
+    # Pivot the data with proper error handling
+    try:
+        pivot = long_df.pivot(index='round_index', columns='window', values='slope')
+    except:
+        return np.array([])  # Return empty array if pivot fails
+    
+    # Handle case where pivot might be empty or have insufficient data
+    if pivot.empty or len(pivot) < 3:
+        return np.array([0.5]*len(long_df['round_index'].unique()))  # Default neutral value
     
     # Calculate sync score (0-1)
     sync_scores = []
     for i in range(len(pivot)):
-        window_corr = pivot.iloc[i].rolling(3).corr().mean().mean()  # Multi-window correlation
+        # Ensure we have enough data for rolling window
+        if i >= 2:  # Need at least 3 points for rolling(3)
+            try:
+                # Calculate correlation between windows
+                corr_matrix = pivot.iloc[i-2:i+1].corr()
+                window_corr = corr_matrix.mean().mean()  # Average correlation
+            except:
+                window_corr = 0  # Fallback if correlation fails
+        else:
+            window_corr = 0  # Not enough data yet
+            
         sync_scores.append(window_corr)
     
-    # Normalize to 0-1 scale
-    qei = (np.array(sync_scores) - (-1)) / 2  # Convert [-1,1] to [0,1]
+    # Normalize to 0-1 scale (from -1 to 1)
+    qei = (np.array(sync_scores) + 1) / 2  # Convert [-1,1] to [0,1]
     return qei
 
 @st.cache_data
