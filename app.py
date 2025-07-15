@@ -1595,6 +1595,19 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
     st.plotly_chart(fig, use_container_width=True)
 
 
+def compute_quantum_entanglement(long_df):
+    """Measures how locked the oscillations are."""
+    pivot = long_df.pivot(index='round_index', columns='window', values='slope')
+    
+    # Calculate sync score (0-1)
+    sync_scores = []
+    for i in range(len(pivot)):
+        window_corr = pivot.iloc[i].rolling(3).corr().mean().mean()  # Multi-window correlation
+        sync_scores.append(window_corr)
+    
+    # Normalize to 0-1 scale
+    qei = (np.array(sync_scores) - (-1)) / 2  # Convert [-1,1] to [0,1]
+    return qei
 
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
@@ -2414,6 +2427,44 @@ if not df.empty:
         
      # Plot
     plot_alien_mwatr_oscillator(long_df_clean, crossings)
+    
+    # ---- Quantum Entanglement Analysis ----
+    st.subheader("🔗 Quantum Entanglement Index")
+
+
+    # Calculate QEI
+    qei_scores = compute_quantum_entanglement(long_df_clean)
+    current_qei = qei_scores[-1] if len(qei_scores) > 0 else 0
+    with st.expander("🔮 QEI Interpretation Guide"):
+        st.markdown("""
+        | QEI Score | Regime State          | Trading Action                          |
+        |-----------|-----------------------|-----------------------------------------|
+        | 0.8-1.0   | Perfect Entanglement  | ⚡ Max long entries, ride full surges    |
+        | 0.6-0.8   | Strong Correlation    | ✅ Normal entries, take profits earlier  |
+        | 0.4-0.6   | Weak Correlation      | 🟡 Caution - scout positions only        |
+        | 0.0-0.4   | Chaos/Transition      | ❌ Avoid entries, prepare for reversal   |
+        
+        **Pro Tip:** Combine with dominant window:
+        - High QEI + F13/F21 dominant = Mega surge coming
+        - Low QEI + F3/F5 dominant = Likely fakeout
+        """)
+
+    # Add this below the meter
+    if len(qei_scores) > 5:  # Only show if we have enough data
+        trend_fig = go.Figure()
+        trend_fig.add_trace(go.Scatter(
+            x=long_df_clean['round_index'].unique(),
+            y=qei_scores,
+            mode='lines',
+            name='QEI Trend',
+            line=dict(color='#00ffff', width=2)
+        ))
+        trend_fig.update_layout(
+            title='QEI Historical Trend',
+            height=200,
+            margin=dict(l=20, r=20, t=40, b=20)
+        )
+        st.plotly_chart(trend_fig, use_container_width=True)
     
     #plot_smoothed_atr_oscillator(smoothed_atr_df)
     #long_df_smooth = combine_smoothed_series_to_longform(atr_smooth_dict)
