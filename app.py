@@ -1555,6 +1555,9 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
     
     # Color mapping for phases
     phase_colors = {'BULL': '#00ff88', 'BEAR': '#ff0066', 'NEUTRAL': '#888888'}
+    # Safely get the last phase (default to 'NEUTRAL' if NaN)
+    last_phase = window_df['phase'].iloc[-1] if not window_df.empty else 'NEUTRAL'
+    line_color = phase_colors.get(str(last_phase), '#888888')  # Fallback to gray
     
     # Plot each Fibonacci window's oscillation
     for w in sorted(long_df['window'].unique()):
@@ -1567,7 +1570,7 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
             name=f'F{w} Osc',
             line=dict(
                 width=2 + w/5,  # Thicker line for larger windows
-                color=phase_colors[window_df['phase'].iloc[-1]]
+                color=line_color 
             ),
             hoverinfo='x+y+name',
             showlegend=True
