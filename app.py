@@ -169,11 +169,6 @@ with st.sidebar:
 
     st.header("📊 PANEL TOGGLES")
     FAST_ENTRY_MODE = st.checkbox("⚡ Fast Entry Mode", value=False)
-    show_thre = st.checkbox("🌀 THRE Panel", value=True)
-    
-    
-    show_fpm = st.checkbox("🧬 FPM Panel", value=True)
-    show_anchor = st.checkbox("🔗 Fractal Anchor", value=True)
     
     if st.button("🔄 Full Reset", help="Clear all historical data"):
         st.session_state.roundsc = []
@@ -1011,195 +1006,14 @@ def get_normalized_signal_data(msi_dict):
         })
     return pd.DataFrame(data)
 
-def plot_normalized_signal_dashboard(df_signal):
-    fig = go.Figure()
-    
-    # Bars - Normalized MSI
-    fig.add_trace(go.Bar(
-        x=df_signal['Window'],
-        y=df_signal['Normalized_MSI'],
-        name='Normalized MSI',
-        marker_color=df_signal['Trap_Risk'].apply(lambda x: 'red' if x else 'blue'),
-        opacity=0.8
-    ))
-    
-    # Threshold line
-    fig.add_trace(go.Scatter(
-        x=df_signal['Window'],
-        y=df_signal['Threshold'],
-        mode='lines+markers',
-        name='Adaptive Threshold',
-        line=dict(color='gold', dash='dash', width=2),
-        marker=dict(symbol='diamond', size=10)
-    ))
-
-    # Range width overlay (translucent)
-    fig.add_trace(go.Scatter(
-        x=df_signal['Window'],
-        y=df_signal['Range_Width'],
-        mode='lines+markers',
-        name='Range Width',
-        fill='tozeroy',
-        fillcolor='rgba(255,0,0,0.1)',
-        line=dict(color='crimson')
-    ))
-
-    # Layout customization
-    fig.update_layout(
-        title='🔍 Normalized MSI Alignment & Anti-Trap Detection',
-        xaxis_title='Fibonacci Window Size',
-        yaxis_title='Normalized Level (0–1 Scale)',
-        hovermode='x unified',
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
-    )
-    
-    return fig
-# ======================= QUANTUM CONSTANTS ============================
-#VOLATILITY_THRESHOLDS = {'micro': 1.5, 'meso': 3.0, 'macro': 5.0}
-PHASE_SPACE_BINS = 30  # Hilbert transform resolution
-
-
-# ======================= QUANTUM ENGINE ===============================
-class QuantumGambit:
-    def __init__(self, df):
-        self.df = df.copy()
-        self.phase_space = None
-        
-        self.entropy_state = None
-        self.temporal_signatures = None
-        
-    def hilbert_phase_space(self):
-        """Transform data into Hilbert phase space for trap detection"""
-        if len(self.df) < 10: return self.df
-        
-        # Hilbert transform for instantaneous phase
-        analytic_signal = hilbert(self.df['multiplier'].values)
-        self.df['instant_phase'] = np.unwrap(np.angle(analytic_signal))
-        
-        # Phase velocity (regime change detector)
-        self.df['phase_velocity'] = np.gradient(self.df['instant_phase'])
-        
-        # Phase acceleration (trap predictor)
-        self.df['phase_accel'] = np.gradient(self.df['phase_velocity'])
-        
-        # Detect compression traps
-        self.df['trap_signature'] = (self.df['phase_velocity'].rolling(5).std() < 0.08) & \
-                                   (self.df['range_width'].diff() < 0)
-        return self.df
-    
-    def adaptive_fibonacci(self, current_regime):
-        """Regime-aware Fibonacci levels"""
-        base_levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
-        
-        if current_regime == 'trap_compression':
-            return [l * 0.82 for l in base_levels]
-        elif current_regime == 'surge_favorable':
-            return [l * 1.18 for l in base_levels]
-        return base_levels
-    
-    
-    
-    def entropy_negation(self):
-        """Combat adaptive entropy with reverse Shannon coding"""
-        entropy = stats.entropy(pd.cut(self.df['multiplier'], bins=10).value_counts(normalize=True))
-        
-        if entropy < 1.5:  # Low entropy = predictable trap
-            return 'INVERT'
-        elif entropy > 2.8:  # High entropy = genuine randomness
-            return 'TRUST'
-        return 'NEUTRAL'
-    
-    def temporal_weaponization(self):
-        """Detect time-based trap patterns"""
-        if 'timestamp' not in self.df: return {}
-        
-        # Create 30-second time bins
-        self.df['time_bin'] = (self.df['timestamp'].astype(int) // 10**9) % 30
-        
-        # Cluster analysis of trap timing
-        if len(self.df) < 10:
-            return {}
-        trap_times = self.df.loc[self.df['trap_signature'], 'time_bin'].values
-        if len(trap_times) > 5:
-            kmeans = KMeans(n_clusters=3).fit(trap_times.reshape(-1,1))
-            cluster_centers = sorted(kmeans.cluster_centers_.flatten())
-            return {'trap_clusters': cluster_centers}
-        return {}
-    
-    def execute_quantum(self):
-        """Run full quantum analysis suite"""
-        self.df = self.hilbert_phase_space()
-        
-        self.entropy_state = self.entropy_negation()
-        self.temporal_signatures = self.temporal_weaponization()
-        return self
 
 
 
 
-# ======================= UI ENHANCEMENTS =============================
-def plot_phase_space(df):
-    """Holographic phase space visualization"""
-    if 'instant_phase' not in df or len(df) < 10: return
-    
-    fig = go.Figure()
-    
-    # Phase space trajectory
-    fig.add_trace(go.Scatter3d(
-        x=df['timestamp'],
-        y=df['instant_phase'],
-        z=df['phase_velocity'],
-        mode='lines+markers',
-        marker=dict(
-            size=4,
-            color=df['multiplier'],
-            colorscale='Viridis',
-            showscale=True
-        ),
-        line=dict(color='darkblue', width=2)
-    ))
-    
-    # Trap signatures
-    trap_df = df[df['trap_signature']]
-    if not trap_df.empty:
-        fig.add_trace(go.Scatter3d(
-            x=trap_df['timestamp'],
-            y=trap_df['instant_phase'],
-            z=trap_df['phase_velocity'],
-            mode='markers',
-            marker=dict(
-                size=8,
-                color='red',
-                symbol='x'
-            ),
-            name='TRAP ZONES'
-        ))
-        # Add forecast to phase space plot
-        
-    
-    fig.update_layout(
-        title='🌌 HILBERT PHASE SPACE (Trap Detection)',
-        scene=dict(
-            xaxis_title='Time',
-            yaxis_title='Instant Phase',
-            zaxis_title='Phase Velocity'
-        ),
-        height=600
-    )
-    st.plotly_chart(fig, use_container_width=True)
 
 
 
-# ======================= SIDEBAR ENHANCEMENTS ========================
-def quantum_sidebar():
-    with st.sidebar:
-        st.header("⚡ QUANTUM PARAMETERS")
-        
-        
-        st.number_input("Micro Volatility Threshold", value=VOLATILITY_THRESHOLDS['micro'], key='micro_thresh')
-        st.number_input("Meso Volatility Threshold", value=VOLATILITY_THRESHOLDS['meso'], key='meso_thresh')
-        st.checkbox("Activate Temporal Weaponization", value=True, key='use_temporal')
-        st.checkbox("Enable Entropy Negation", value=True, key='use_entropy')
+
 
 # =============== DYNAMIC RANGE REGIME ENGINE ===============
 RANGE_WINDOW = 20  # Configurable in sidebar
@@ -1913,106 +1727,9 @@ def resonance_forecast(harmonic_waves, resonance_matrix, steps=10):
 
 
 
-# =================== UI COMPONENTS ========================
 
 
-def string_metrics_panel(tension, entropy, resonance_score):
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric("String Tension", f"{tension:.4f}", 
-                 help="Variance in harmonic amplitudes - higher tension indicates unstable state")
-    
-    with col2:
-        st.metric("Harmonic Entropy", f"{entropy:.4f}",
-                 help="Information entropy of harmonic distribution - lower entropy predicts stability")
-    
-    with col3:
-        st.metric("Resonance Coherence", f"{resonance_score:.4f}",
-                 help="Phase alignment between harmonics - higher coherence predicts constructive interference")
 
-def classify_next_round(forecast, tension, entropy, resonance_score):
-    if forecast is None or len(forecast) == 0:
-        return "❓ Unknown", "⚠️ No forecast", 0
-    
-    energy_index = np.tanh(forecast[0])
-    classification = "❓ Unknown"
-    
-    if energy_index > 0.8 and tension < 0.2 and entropy < 1.5:
-        classification = "💖 Pink Surge Expected"
-    elif energy_index > 0.4:
-        classification = "🟣 Probable Purple Round"
-    elif -0.4 <= energy_index <= 0.4:
-        classification = "⚪ Neutral Drift Zone"
-    elif energy_index < -0.8 and tension < 0.15:
-        classification = "⚠️ Collapse Risk (Blue Train)"
-    elif energy_index < -0.4:
-        classification = "🔵 Likely Blue / Pullback"
-
-    if resonance_score > 0.7:
-        if energy_index > 0.8: action = "🔫 Sniper Entry — Surge Incoming"
-        elif energy_index < -0.8: action = "❌ Abort Entry — Blue Collapse"
-        else: action = "🧭 Cautious Scout — Mild Fluctuation"
-    else:
-        action = "⚠️ Unstable Harmonics — Avoid Entry"
-
-    return classification, action, energy_index
-
-def thre_panel(df):
-    st.subheader("🔬 True Harmonic Resonance Engine (THRE)")
-    if len(df) < 20: 
-        st.warning("Need at least 20 rounds to compute THRE.")
-        return df, None, None, []
-        
-    scores = df["score"].fillna(0).values
-    N = len(scores)
-    T = 1
-    yf = rfft(scores - np.mean(scores))
-    xf = rfftfreq(N, T)
-    mask = (xf > 0) & (xf < 0.5)
-    freqs = xf[mask]
-    amps = np.abs(yf[mask])
-    phases = np.angle(yf[mask])
-    harmonic_matrix = np.zeros((N, len(freqs)))
-    
-    for i, (f, p) in enumerate(zip(freqs, phases)):
-        harmonic_matrix[:, i] = np.sin(2 * np.pi * f * np.arange(N) + p)
-    
-    composite_signal = (harmonic_matrix * amps).sum(axis=1) if amps.size > 0 else np.zeros(N)
-    normalized_signal = (composite_signal - np.mean(composite_signal)) / np.std(composite_signal) if np.std(composite_signal) > 0 else np.zeros(N)
-    smooth_rds = pd.Series(normalized_signal).rolling(3, min_periods=1).mean()
-    rds_delta = np.gradient(smooth_rds)
-    
-    fig, ax = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
-    ax[0].plot(df["timestamp"], smooth_rds, label="THRE Resonance", color='cyan')
-    ax[0].axhline(1.5, linestyle='--', color='green', alpha=0.5)
-    ax[0].axhline(0.5, linestyle='--', color='blue', alpha=0.3)
-    ax[0].axhline(-0.5, linestyle='--', color='orange', alpha=0.3)
-    ax[0].axhline(-1.5, linestyle='--', color='red', alpha=0.5)
-    ax[0].set_title("Composite Harmonic Resonance Strength")
-    ax[0].legend()
-    
-    ax[1].plot(df["timestamp"], rds_delta, label="Δ Resonance Slope", color='purple')
-    ax[1].axhline(0, linestyle=':', color='gray')
-    ax[1].set_title("RDS Inflection Detector")
-    ax[1].legend()
-    
-    st.pyplot(fig)
-    
-    latest_rds = smooth_rds.iloc[-1] if len(smooth_rds) > 0 else 0
-    latest_delta = rds_delta[-1] if len(rds_delta) > 0 else 0
-    
-    st.metric("🧠 Resonance Strength", f"{latest_rds:.3f}")
-    st.metric("📉 Δ Slope", f"{latest_delta:.3f}")
-    
-    if latest_rds > 1.5: st.success("💥 High Constructive Stack — Pink Burst Risk ↑")
-    elif latest_rds > 0.5: st.info("🟣 Purple Zone — Harmonically Supported")
-    elif latest_rds < -1.5: st.error("🌪️ Collapse Zone — Blue Train Likely")
-    elif latest_rds < -0.5: st.warning("⚠️ Destructive Micro-Waves — High Risk")
-    else: st.info("⚖️ Neutral Zone — Mid-Range Expected")
-    
-    return (df, latest_rds, latest_delta, smooth_rds)
-    
 @st.cache_data   
 def compute_surge_probability(thre_val, delta_slope, fnr_index):
     # Normalize inputs
@@ -2031,189 +1748,6 @@ def compute_surge_probability(thre_val, delta_slope, fnr_index):
 
 
 
-def fpm_panel(df, msi_col="msi", score_col="score", window_sizes=[5, 8, 13]):
-    st.subheader("🧬 Fractal Pulse Matcher Panel (FPM)")
-
-    if len(df) < max(window_sizes) + 5:
-        st.warning("Not enough historical rounds to match fractal sequences.")
-        return
-
-    df = df.copy()
-    df["round_type"] = df["score"].apply(lambda s: "P" if s == 2 else ("p" if s == 1 else "B"))
-
-    for win in window_sizes:
-        current_seq = df.tail(win).reset_index(drop=True)
-
-        # Encode current pattern
-        current_pattern = current_seq["round_type"].tolist()
-        current_slope = np.gradient(current_seq[msi_col].fillna(0).values)
-        current_fft = np.abs(rfft(current_slope)) if len(current_slope) > 0 else np.array([])
-
-        best_match = None
-        best_score = -np.inf
-        matched_seq = None
-        next_outcome = None
-
-        # Slide through history
-        for i in range(0, len(df) - win - 3):
-            hist_seq = df.iloc[i:i+win]
-            hist_pattern = hist_seq["round_type"].tolist()
-            hist_slope = np.gradient(hist_seq[msi_col].fillna(0).values)
-            hist_fft = np.abs(rfft(hist_slope)) if len(hist_slope) > 0 else np.array([])
-
-            # Compare slope shape using cosine similarity if both FFTs have data
-            sim_score = 0
-            if len(current_fft) > 0 and len(hist_fft) > 0:
-                # Check if the lengths match; if not, use the smaller length for both
-                min_len = min(len(current_fft), len(hist_fft))
-                if min_len > 0:
-                    sim_score = cosine_similarity([current_fft[:min_len]], [hist_fft[:min_len]])[0][0]
-
-            # Compare round pattern similarity
-            pattern_match = sum([a == b for a, b in zip(current_pattern, hist_pattern)]) / win
-
-            # Combined matching score
-            total_score = 0.6 * sim_score + 0.4 * pattern_match
-
-            if total_score > best_score:
-                best_score = total_score
-                best_match = hist_pattern
-                matched_seq = hist_seq
-                # Look at what happened next
-                if i + win + 3 <= len(df):
-                    next_seq = df.iloc[i+win:i+win+3]
-                    next_outcome = next_seq["round_type"].tolist() if len(next_seq) > 0 else []
-
-        # === Display Results ===
-        st.markdown(f"Fractal Match: Last {win} Rounds")
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.markdown(f"**Current Pattern (Last {win}):**")
-            st.text(" ".join(current_pattern))
-            st.markdown(f"**MSI Slope:** {np.round(current_slope, 2)}")
-
-        with col2:
-            st.markdown(f"**Best Historical Match:**")
-            st.text(" ".join(best_match) if best_match else "N/A")
-            st.markdown(f"**Match Score:** {best_score:.3f}")
-
-        if next_outcome and len(next_outcome) > 0:
-            st.success(f"📡 Projected Next Rounds: {' '.join(next_outcome)}")
-            # Simple forecast classifier
-            if next_outcome.count("P") + next_outcome.count("p") >= 2:
-                st.markdown("🔮 Forecast: **💥 Surge Mirror**")
-                st.session_state.last_fractal_match = "Pink"
-            elif next_outcome.count("B") >= 2:
-                st.markdown("⚠️ Forecast: **Blue Reversal / Collapse**")
-                st.session_state.last_fractal_match = "Blue"
-            else:
-                st.markdown("🧘 Forecast: **Stable / Mixed Pulse**")
-                st.session_state.last_fractal_match = "Purple"
-        else:
-            st.session_state.last_fractal_match = None
-            
-@st.cache_data
-def fractal_anchor_visualizer(df, msi_col="msi", score_col="score", window=8):
-    st.subheader("🔗 Fractal Anchoring Visualizer")
-
-    if len(df) < window + 10:
-        st.warning("Insufficient data for visual fractal anchoring.")
-        return
-
-    df = df.copy()
-    df["type"] = df["score"].apply(lambda s: "P" if s == 2 else ("p" if s == 1 else "B"))
-
-    # Encode recent fragment
-    recent_seq = df.tail(window)
-    recent_vec = recent_seq[msi_col].fillna(0).values
-    recent_types = recent_seq["type"].tolist()
-
-    best_score = -np.inf
-    best_start = None
-    best_future_types = []
-
-    for i in range(len(df) - window - 3):
-        hist_seq = df.iloc[i:i+window]
-        hist_vec = hist_seq[msi_col].fillna(0).values
-        hist_types = hist_seq["type"].tolist()
-
-        if len(hist_vec) != window:
-            continue
-
-        # Cosine similarity between shapes
-        sim_score = 0
-        if len(recent_vec) > 0 and len(hist_vec) > 0:
-            sim_score = cosine_similarity([recent_vec], [hist_vec])[0][0]
-
-        type_match = sum([a == b for a, b in zip(hist_types, recent_types)]) / window
-        total_score = 0.6 * sim_score + 0.4 * type_match
-
-        if total_score > best_score:
-            best_score = total_score
-            best_start = i
-            if i + window + 3 <= len(df):
-                best_future_types = df.iloc[i+window:i+window+3]["type"].tolist()
-
-    if best_start is None:
-        st.warning("No matching historical pattern found.")
-        return
-
-    # === Prepare plot ===
-    fig = plt.figure(figsize=(10, 4))
-    gs = gridspec.GridSpec(1, 1)
-    ax = fig.add_subplot(gs[0])
-
-    # Historical pattern
-    hist_fragment = df.iloc[best_start:best_start+window]
-    hist_times = np.arange(-window, 0)
-    hist_vals = hist_fragment[msi_col].fillna(0).values
-    hist_types = hist_fragment["type"].tolist()
-    ax.plot(hist_times, hist_vals, color='gray', linewidth=2, label='Matched Past')
-
-    # Current pattern
-    curr_vals = recent_seq[msi_col].fillna(0).values
-    ax.plot(hist_times, curr_vals, color='blue', linewidth=2, linestyle='--', label='Current')
-
-    # Forecast next steps
-    if best_start + window + 3 <= len(df):
-        proj_seq = df.iloc[best_start + window : best_start + window + 3]
-        proj_vals = proj_seq[msi_col].fillna(0).values
-        proj_times = np.arange(1, len(proj_vals)+1)
-        ax.plot(proj_times, proj_vals, color='green', linewidth=2, label='Projected Next')
-
-        # Round type markers
-        for t, y in zip(proj_times, proj_vals):
-            ax.scatter(t, y, s=100, alpha=0.7,
-                       c='purple' if y > 0 else 'red',
-                       edgecolors='black', label='Forecast Round' if t == 1 else "")
-
-    # Decorate plot
-    ax.axhline(0, linestyle='--', color='black', alpha=0.5)
-    ax.set_xticks(list(hist_times) + list(proj_times) if 'proj_times' in locals() else list(hist_times))
-    ax.set_title("📡 Visual Fractal Anchor")
-    ax.set_xlabel("Relative Time (Rounds)")
-    ax.set_ylabel("MSI Value")
-    ax.legend()
-    plot_slot = st.empty()
-    with plot_slot.container():
-        st.pyplot(fig)
-
-    # Echo Signal Summary
-    st.metric("🧬 Fractal Match Score", f"{best_score:.3f}")
-    if best_future_types:
-        st.success(f"📈 Forecasted Round Types: {' '.join(best_future_types)}")
-        if best_future_types.count("P") + best_future_types.count("p") >= 2:
-            st.info("🔮 Forecast: Surge Mirror Likely")
-            st.session_state.last_anchor_type = "Pink"
-        elif best_future_types.count("B") >= 2:
-            st.warning("⚠️ Blue Collapse Forecast")
-            st.session_state.last_anchor_type = "Blue"
-        else:
-            st.info("🧘 Mixed or Neutral Pattern Incoming")
-            st.session_state.last_anchor_type = "Purple"
-    else:
-        st.session_state.last_anchor_type = "N/A"
 
 # =================== DATA ANALYSIS ========================
 @st.cache_data(show_spinner=False)
@@ -2838,18 +2372,19 @@ if not df.empty:
     # Cross-intersections
     crossings = detect_phase_cross_intersections(osc_df)
     
-    # Display
-    st.subheader("🧭 Multi-Window ATR Oscillator Analysis")
-    st.dataframe(osc_df)
-
-    # Visualization
-    fig_atr = plot_multi_window_atr_dashboard(osc_df, phase_alignment, dominant_window, crossings)
-    st.plotly_chart(fig_atr, use_container_width=True)
+    with st.expander("🧭 Multi-Window ATR Oscillator Analysis", expanded=False):
+        # Display
+        st.subheader("🧭 Multi-Window ATR Oscillator Analysis")
+        st.dataframe(osc_df)
     
-    st.markdown(f"**Phase Alignment Score:** {phase_alignment}")
-    st.markdown(f"**Dominant Cycle Window:** {dominant_window}")
-    if crossings:
-        st.markdown(f"**Phase Cross Intersections:** {crossings}")
+        # Visualization
+        fig_atr = plot_multi_window_atr_dashboard(osc_df, phase_alignment, dominant_window, crossings)
+        st.plotly_chart(fig_atr, use_container_width=True)
+        
+        st.markdown(f"**Phase Alignment Score:** {phase_alignment}")
+        st.markdown(f"**Dominant Cycle Window:** {dominant_window}")
+        if crossings:
+            st.markdown(f"**Phase Cross Intersections:** {crossings}")
     
     
     st.subheader("🌀 ALIEN MWATR OSCILLATOR (Ultra-Mode)")
@@ -2880,33 +2415,11 @@ if not df.empty:
     
     #crossings = detect_advanced_crossings(long_df )
     
-    # 2. Plot
-    #plot_alien_mwatr_oscillator(long_df , crossings)
-
-
-
-    with st.expander("🧬 ALIEN ATR-OSCILLATOR ANALYSIS", expanded=False):
-    
-        # Display
-        st.subheader("🧬 ALIEN ATR-OSCILLATOR ANALYSIS")
-        st.markdown(f"**Detected Regime:** {regime_label}")
-        st.markdown(f"**Short-Long Phase Correlation:** {corr_value}")
-        
-        plot_atr_oscillator_dashboard(oscillator_df, regime_label, corr_value)
-        
-        # Signal Filtering Example
-        if regime_label == "SURGE_ZONE":
-            st.success("✅ Entry signals ENABLED: Surge Zone Detected")
-        elif regime_label == "TRAP_ZONE":
-            st.error("⛔ Trap Zone Active: Suppress Entries")
-        elif regime_label == "EXHAUSTION":
-            st.warning("⚠️ Exhaustion Zone: Scout Only")
-        else:
-            st.info("ℹ️ Neutral Zone: Play Cautiously")
+   
 
     
-    with st.expander("📊 Advanced Range Modulation Signals Over Time", expanded=False):
-        st.subheader("📊 Advanced Trap Modulation Signals Over Time")
+    #with st.expander("📊 Advanced Range Modulation Signals Over Time", expanded=False):
+        #st.subheader("📊 Advanced Trap Modulation Signals Over Time")
         #st.plotly_chart(plot_raw_range_signals(range_signals_df), use_container_width=True)
 
    
@@ -2921,7 +2434,7 @@ if not df.empty:
         # ============================
         plot_adaptive_wavefront(wavefront_data)
         
-        #st.plotly_chart(fig_signal)
+       
         #st.subheader("🎯 Anti-Trap Signal")
         #st.success(entry_signal if "CLEAN" in entry_signal else entry_signal)
 
@@ -2959,44 +2472,14 @@ if not df.empty:
             
     
 
-    with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=False):
-        fig, ax = plt.subplots(figsize=(10, 4))
-        rsi = df["rsi"]
-        signal = df["rsi_signal"]
-        upper_band = df["rsi_upper"]
-        lower_band = df["rsi_lower"]
-        timestamps = df["timestamp"]
-        recs_margin = 1.5
-        
-        ax.plot(df["timestamp"], df["rsi"], label="RSI", color='black', linewidth=1.5)
-        ax.plot(df["timestamp"], df["rsi_signal"], label="Signal Line", color='orange', linestyle='--')
-        ax.plot(df["timestamp"], df["rsi_upper"], color='green', linestyle='--', alpha=0.5, label="RSI Upper Band")
-        ax.plot(df["timestamp"], df["rsi_lower"], color='red', linestyle='--', alpha=0.5, label="RSI Lower Band")
-        ax.fill_between(df["timestamp"], df["rsi_lower"], df["rsi_upper"], color='purple', alpha=0.1)
-        
-        ax.axhline(50, color='black', linestyle=':')  # Neutral RSI zone
-        ax.axhline(70, color='green', linestyle=':')  # Overbought
-        ax.axhline(30, color='red', linestyle=':')    # Oversold
-
-        
-        
-        ax.set_title("🧠 Trader’s Dynamic Index (RSI BB System)")
-        ax.legend()
-        #st.pyplot(fig)
-    
+   
     
 
         
 
             
 
-    # === QUANTUM STRING DASHBOARD ===
-    
-    # === SHOW THRE PANEL IF ENABLED ===
-    if show_thre: 
-        with st.expander("🔬 True Harmonic Resonance Engine (THRE)", expanded=False):
-            (df, latest_rds, latest_delta, smooth_rds) = thre_panel(df)
-            
+ 
        
         
              
@@ -3007,15 +2490,6 @@ if not df.empty:
     # === SHOW RQCF PANEL IF ENABLED ===
     
     
-    # === SHOW FPM PANEL IF ENABLED ===
-    if show_fpm: 
-        with st.expander("🧬 Fractal Pulse Matcher Panel (FPM)", expanded=False):
-            fpm_panel(df)
-    
-    # === SHOW FRACTAL ANCHOR IF ENABLED ===
-    if show_anchor: 
-        with st.expander("🔗 Fractal Anchoring Visualizer", expanded=False):
-            fractal_anchor_visualizer(df)
     
     # === DECISION HUD PANEL ===
     
