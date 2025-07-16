@@ -25,7 +25,7 @@ from matplotlib import gridspec
 #from morlet_phase_enhancement import morlet_phase_panel
 
 # ======================= CONFIG ==========================
-st.set_page_config(page_title="CYA Quantum Tracker", layout="wide", page_icon="🔥",memo_clear_on_change=True,optimize_rerun=True)
+st.set_page_config(page_title="CYA Quantum Tracker", layout="wide", page_icon="🔥")
 st.title("🔥 CYA MOMENTUM TRACKER: v1000 Lite")
 
 # Create a container for the floating add round button
