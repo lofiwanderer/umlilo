@@ -996,7 +996,7 @@ def compute_raw_range_signals(
 
     return df
 
-@st.cache(ttl=600, show_spinner=False, allow_output_mutation=True)
+@st.cache_data(ttl=600, show_spinner=False, allow_output_mutation=True)
 def plot_raw_range_signals(df):
     """Plot the raw range modulation signals with Plotly."""
     if df.empty or len(df) < 2:
@@ -1083,7 +1083,8 @@ def compute_multiwindow_atr(df, multiplier_col='multiplier'):
         })
 
     return pd.DataFrame(results)
-@st.cache
+    
+@st.cache_data
 def detect_phase_regime(oscillator_df):
     # If not enough data, return neutral
     if oscillator_df.empty or len(oscillator_df) < 2:
@@ -1112,7 +1113,7 @@ def detect_phase_regime(oscillator_df):
 
     return regime, round(corr, 3)
 
-@st.cache(ttl=600, show_spinner=False, allow_output_mutation=True)
+@st.cache_data(ttl=600, show_spinner=False, allow_output_mutation=True)
 def plot_atr_oscillator_dashboard(oscillator_df, regime_label, corr_value):
     if oscillator_df.empty:
         st.warning("📊 No ATR Oscillator data to display yet.")
@@ -1170,7 +1171,7 @@ def compute_phase(series):
     # Upward if last > first, else downward
     return 1 if series.iloc[-1] > series.iloc[0] else -1
     
-@st.cache(ttl=600, show_spinner=False, allow_output_mutation=True)
+@st.cache_data(ttl=600, show_spinner=False, allow_output_mutation=True)
 def analyze_multi_window_atr_oscillator(
     df,
     multiplier_col='multiplier',
@@ -1233,7 +1234,7 @@ def detect_phase_cross_intersections(df_result):
 
     return crossings
     
-@st.cache(ttl=600, show_spinner=False, allow_output_mutation=True)
+@st.cache_data(ttl=600, show_spinner=False, allow_output_mutation=True)
 def plot_multi_window_atr_dashboard(df_result, phase_alignment, dominant_window, crossings):
     fig = go.Figure()
 
@@ -1373,7 +1374,7 @@ def detect_smoothed_dominant_window(long_df):
         'dominant_window': dominant_smooth
     })
     
-@st.cache(allow_output_mutation=True)
+@st.cache_data(allow_output_mutation=True)
 def plot_alien_mwatr_oscillator(long_df, crossings=[]):
     if long_df.empty:
         st.warning("⚠️ Not enough data to plot MWATR Oscillator.")
