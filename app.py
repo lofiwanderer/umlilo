@@ -692,7 +692,7 @@ def compute_fib_alignment_score(df, fib_threshold=10.0, lookback_window=34, tole
 
     return round(alignment_score, 3), gaps
 
-@st.cache_data(ttl=600)
+
 class QuantumFibonacciEntanglement:
     def __init__(self, multiplier_sequence: list):
         self.multipliers = multiplier_sequence
