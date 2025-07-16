@@ -25,8 +25,8 @@ from matplotlib import gridspec
 #from morlet_phase_enhancement import morlet_phase_panel
 
 # ======================= CONFIG ==========================
-st.set_page_config(page_title="CYA Quantum Tracker", layout="wide")
-st.title("🔥 CYA MOMENTUM TRACKER: Phase 1 + 2 + 3 + 4")
+st.set_page_config(page_title="CYA Quantum Tracker", layout="wide", page_icon="🔥",experimental_memo_clear_on_change=True,experimental_optimize_rerun=True)
+st.title("🔥 CYA MOMENTUM TRACKER: v1000 Lite")
 
 # Create a container for the floating add round button
 floating_container = st.empty()
@@ -692,6 +692,7 @@ def compute_fib_alignment_score(df, fib_threshold=10.0, lookback_window=34, tole
 
     return round(alignment_score, 3), gaps
 
+@st.cache_data(ttl=600)
 class QuantumFibonacciEntanglement:
     def __init__(self, multiplier_sequence: list):
         self.multipliers = multiplier_sequence
@@ -937,7 +938,8 @@ def plot_adaptive_wavefront(wavefront_data):
     )
 
     st.plotly_chart(fig, use_container_width=True)
-
+    
+@st.cache_data(ttl=600, show_spinner=False)
 def normalize_msi(msi_series, window_size):
     if len(msi_series) < window_size:
         return 0.5  # Default midpoint if not enough data
@@ -951,7 +953,8 @@ def normalize_msi(msi_series, window_size):
     
     normalized = (msi_series[-1] - min_val) / range_width
     return max(0, min(1, normalized))  # Bound to [0,1]
-
+    
+@st.cache_data(ttl=600, show_spinner=False)
 def dynamic_threshold(range_width):
     if range_width < 0.5:
         return 0.618
@@ -1024,6 +1027,7 @@ VOLATILITY_THRESHOLDS = {
 }
 
 @st.cache_data
+@st.cache_data(ttl=600, show_spinner=False)
 def calculate_range_metrics(df, window=20):
     df = df.copy()
     df = df.reset_index(drop=True)
@@ -1104,6 +1108,7 @@ def plot_range_regime(df):
 
 
 # =============== DECISION HUD ===============
+@st.cache_data(ttl=600, show_spinner=False)
 def render_regime_hud(current_regime):
     
     if current_regime == 'surge_favorable':
@@ -1118,7 +1123,7 @@ def render_regime_hud(current_regime):
     return
 
 
-
+@st.cache_data(ttl=600, show_spinner=False)
 def compute_raw_range_signals(
     input_df,
     window=RANGE_WINDOW,
@@ -1235,6 +1240,7 @@ def plot_raw_range_signals(df):
 
 FIB_WINDOWS = [3, 5, 8, 13, 21, 34]
 
+@st.cache_data(ttl=600, show_spinner=False)
 def compute_multiwindow_atr(df, multiplier_col='multiplier'):
     results = []
 
@@ -1458,6 +1464,7 @@ def plot_multi_window_atr_dashboard(df_result, phase_alignment, dominant_window,
 
     return fig
 
+@st.cache_data(ttl=600, show_spinner=False)
 def compute_smoothed_atr_long_df(df, windows, multiplier_col='multiplier', smooth_window=5, poly_order=2):
     records = []
     df = df.copy()
