@@ -2230,11 +2230,11 @@ if not df.empty:
     # Assume you have pandas dataframe df with MSI columns:
     # df['msi_3'], df['msi_5'], df['msi_8']
     
-    msi_dict = {
-        3: df['msi_3'].dropna().tolist(),
-        5: df['msi_5'].dropna().tolist(),
-        8: df['msi_8'].dropna().tolist(),
-    }
+    #msi_dict = {
+    #    3: df['msi_3'].dropna().tolist(),
+    #    5: df['msi_5'].dropna().tolist(),
+    #    8: df['msi_8'].dropna().tolist(),
+    #}
     
     #entry_signal = anti_trap_entry_signal(msi_dict)
 
@@ -2276,27 +2276,27 @@ if not df.empty:
         if crossings:
             st.markdown(f"**Phase Cross Intersections:** {crossings}")
     
-    """
-    st.subheader("🌀 ALIEN MWATR OSCILLATOR (Ultra-Mode)")
     
-    FIB_WINDOWS = [3, 5, 8, 13, 21,34]
+    #st.subheader("🌀 ALIEN MWATR OSCILLATOR (Ultra-Mode)")
     
-    smoothed_atr_df = compute_smoothed_atr_long_df(df, windows=FIB_WINDOWS)
+    #FIB_WINDOWS = [3, 5, 8, 13, 21,34]
+    
+    #smoothed_atr_df = compute_smoothed_atr_long_df(df, windows=FIB_WINDOWS)
 
     # Convert the output
-    long_df = smoothed_atr_df.copy()
+    #long_df = smoothed_atr_df.copy()
     
     # Ensure pivot safety
-    full_round_index = list(range(df.shape[0]))
-    long_df_clean = prepare_long_df_for_pivot(long_df, FIB_WINDOWS, full_round_index)
+    #full_round_index = list(range(df.shape[0]))
+    #long_df_clean = prepare_long_df_for_pivot(long_df, FIB_WINDOWS, full_round_index)
     
     # Detect crossings
-    crossings = detect_advanced_crossings(long_df_clean)
-    """
+    #crossings = detect_advanced_crossings(long_df_clean)
+    
     
         
      # Plot
-    plot_alien_mwatr_oscillator(long_df_clean, crossings)
+    #plot_alien_mwatr_oscillator(long_df_clean, crossings)
     
     
 
