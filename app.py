@@ -1430,6 +1430,93 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
 
 
 
+def compute_momentum_slope_series(mult_series, window):
+    slopes = []
+    for i in range(len(mult_series)):
+        if i < window:
+            slopes.append(0)
+            continue
+        y = mult_series[i - window:i]
+        x = np.arange(window)
+        slope = np.polyfit(x, y, 1)[0]
+        slopes.append(round(slope, 4))
+    return np.array(slopes)
+
+def multi_window_momentum_oscillator(df, fib_windows=[3, 5, 8, 13, 21, 34], multiplier_col='multiplier'):
+    df = df.copy()
+    df['round_index'] = range(len(df))
+    records = []
+
+    for w in fib_windows:
+        if len(df) < w + 2:
+            continue
+
+        series = df[multiplier_col]
+        slopes = compute_momentum_slope_series(series, w)
+        atr = series.rolling(w).apply(lambda x: x.max() - x.min(), raw=True).fillna(method='bfill').fillna(0)
+        half_atr = atr / 2
+
+        for i in range(len(series)):
+            slope = slopes[i]
+            width = half_atr.iloc[i]
+
+            # Normalize slope inside ±half_atr
+            norm = slope / width if width != 0 else 0
+
+            # Signal classification
+            if abs(slope) > width:
+                signal = 'breakout'
+            elif abs(slope) < width * 0.3:
+                signal = 'compression'
+            else:
+                signal = 'within'
+
+            records.append({
+                'round_index': df['round_index'].iloc[i],
+                'window': w,
+                'atr': atr.iloc[i],
+                'slope': slope,
+                'normalized': round(norm, 4),
+                'signal': signal
+            })
+
+    return pd.DataFrame.from_records(records)
+    
+
+def plot_multi_window_momentum_oscillator(long_df):
+    if long_df.empty:
+        st.warning("⚠️ Not enough data to plot MWMO.")
+        return
+
+    fig = go.Figure()
+    color_map = {
+        'breakout': '#FFD700',
+        'within': '#00ff88',
+        'compression': '#8888ff'
+    }
+
+    for w in sorted(long_df['window'].unique()):
+        df_w = long_df[long_df['window'] == w]
+        fig.add_trace(go.Scatter(
+            x=df_w['round_index'],
+            y=df_w['normalized'],
+            mode='lines',
+            name=f"F{w}",
+            line=dict(width=2),
+            marker=dict(color=[color_map[s] for s in df_w['signal']])
+        ))
+
+    fig.update_layout(
+        title="🌐 Multi-Window Momentum Oscillator (MWMO)",
+        xaxis_title="Round Index",
+        yaxis_title="Normalized Slope (relative to ATR)",
+        hovermode='x unified',
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+        height=600
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
 
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
@@ -2189,7 +2276,7 @@ if not df.empty:
         if crossings:
             st.markdown(f"**Phase Cross Intersections:** {crossings}")
     
-    
+    """
     st.subheader("🌀 ALIEN MWATR OSCILLATOR (Ultra-Mode)")
     
     FIB_WINDOWS = [3, 5, 8, 13, 21,34]
@@ -2205,7 +2292,7 @@ if not df.empty:
     
     # Detect crossings
     crossings = detect_advanced_crossings(long_df_clean)
-
+    """
     
         
      # Plot
@@ -2213,14 +2300,11 @@ if not df.empty:
     
     
 
-   
-    #plot_smoothed_atr_oscillator(smoothed_atr_df)
-    #long_df_smooth = combine_smoothed_series_to_longform(atr_smooth_dict)
-    #dominant_smooth_df = detect_smoothed_dominant_window(smoothed_atr_df)
-
+    st.subheader("🔀 Multi-Window Momentum Oscillator")
+    FIB_WINDOWS = [3, 5, 8, 13, 21, 34]
     
-    #crossings = detect_advanced_crossings(long_df )
-    
+    momentum_df = multi_window_momentum_oscillator(df, fib_windows=FIB_WINDOWS)
+    plot_multi_window_momentum_oscillator(momentum_df)
    
 
     
