@@ -1498,6 +1498,131 @@ def plot_qmo(df, windows=[3, 5, 8, 13]):
     )
     return fig
 
+def quantum_harmonic_oscillator(df, windows=[3, 5, 8, 13, 21]):
+    """
+    Advanced oscillator combining:
+    - Normalized momentum (-1 to 1)
+    - Range width energy (0 to 2)
+    - Phase synchronization score (0 to 1)
+    """
+    results = []
+    
+    for w in windows:
+        # 1. Range Width Calculation
+        high = df['multiplier'].rolling(w).max()
+        low = df['multiplier'].rolling(w).min()
+        range_width = (high - low).fillna(0)
+        
+        # 2. Momentum Slope Calculation
+        momentum = df['multiplier'].rolling(w).apply(
+            lambda x: np.polyfit(np.arange(len(x)), x, 1)[0] if len(x) > 1 else 0,
+            raw=False
+        )
+        
+        # 3. Normalize Momentum to Range
+        norm_momentum = momentum / (range_width + 1e-6)  # Avoid division by zero
+        norm_momentum = np.clip(norm_momentum, -1.5, 1.5)  # Cap extreme values
+        
+        # 4. Range Energy (Smoothed)
+        range_energy = savgol_filter(range_width, window_length=w//2+1, polyorder=2)
+        
+        # 5. Phase Synchronization (0-1)
+        if w > windows[0]:  # Compare to next smaller window
+            prev_w = windows[windows.index(w)-1]
+            phase_diff = np.abs(norm_momentum - results[-1]['norm_momentum'])
+            sync = 1 - np.tanh(phase_diff * 2)  # 1=perfect sync, 0=chaos
+        else:
+            sync = np.ones(len(df))
+            
+        results.append({
+            'window': w,
+            'norm_momentum': norm_momentum,
+            'range_energy': range_energy,
+            'phase_sync': sync
+        })
+    
+    return results
+
+def plot_quantum_harmonic_oscillator(qho_results, df):
+    """3D Visualization of Momentum-Energy-Synchronization"""
+    fig = go.Figure()
+    
+    # Add traces for each window
+    for res in qho_results:
+        w = res['window']
+        
+        # Combined oscillator value
+        oscillator = res['norm_momentum'] * res['range_energy'] * res['phase_sync']
+        
+        fig.add_trace(go.Scatter(
+            x=df.index,
+            y=oscillator,
+            name=f'F{w} QHO',
+            line=dict(width=1 + w/5),
+            hoverinfo='x+y+name',
+            customdata=np.stack((
+                res['norm_momentum'],
+                res['range_energy'],
+                res['phase_sync']
+            ), axis=-1),
+            hovertemplate=(
+                "Round: %{x}<br>"
+                "QHO: %{y:.2f}<br>"
+                "Momentum: %{customdata[0]:.2f}<br>"
+                "Range Energy: %{customdata[1]:.2f}<br>"
+                "Phase Sync: %{customdata[2]:.2f}"
+            )
+        ))
+    
+    # Add regime zones
+    fig.add_hrect(y0=-0.5, y1=0.5, line_width=0, fillcolor="green", opacity=0.1, 
+                 annotation_text="Stable Zone", annotation_position="top left")
+    fig.add_hrect(y0=0.5, y1=1.5, line_width=0, fillcolor="blue", opacity=0.1,
+                 annotation_text="Expansion", annotation_position="top left")
+    fig.add_hrect(y0=-1.5, y1=-0.5, line_width=0, fillcolor="red", opacity=0.1,
+                 annotation_text="Contraction", annotation_position="bottom left")
+    
+    fig.update_layout(
+        title='🌀 Quantum Harmonic Oscillator (Momentum × Energy × Sync)',
+        yaxis_title='Oscillator Value',
+        hovermode='x unified'
+    )
+    return fig
+
+def generate_trading_signals(qho_results, last_n=3):
+    """Generate actionable signals from QHO"""
+    signals = []
+    latest = {res['window']: res for res in qho_results}
+    
+    # 1. Detect Stable Zones (All windows in [-0.5, 0.5])
+    stable = all(
+        np.mean(np.abs(latest[w]['norm_momentum'][-last_n:])) < 0.5 
+        for w in [3, 5, 8]
+    )
+    
+    # 2. Detect Harmonic Expansion (F5 & F8 synchronized > 0.7)
+    expansion = (
+        np.mean(latest[5]['phase_sync'][-last_n:]) > 0.7 and
+        np.mean(latest[8]['range_energy'][-last_n:]) > 
+        np.mean(latest[3]['range_energy'][-last_n:])
+    )
+    
+    # 3. Detect Compression Traps (High sync but negative momentum)
+    trap = (
+        np.mean(latest[5]['phase_sync'][-last_n:]) > 0.8 and
+        np.mean(latest[5]['norm_momentum'][-last_n:]) < -0.6
+    )
+    
+    # Generate signals
+    if stable:
+        signals.append("💎 STABLE ZONE - SCOUT FOR BREAKOUT")
+    if expansion:
+        signals.append("🚀 HARMONIC EXPANSION - ENTER AT 1.01X")
+    if trap:
+        signals.append("⚠️ COMPRESSION TRAP - AVOID ENTRIES")
+        
+    return signals if signals else ["⚖️ NEUTRAL - MONITOR"]
+
 
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
@@ -2312,7 +2437,21 @@ if not df.empty:
 
 
     # === DECISION HUD PANEL ===
+    qho_results = quantum_harmonic_oscillator(df)
     
+    # Plot
+    fig = plot_quantum_harmonic_oscillator(qho_results, df)
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Signals
+    signals = generate_trading_signals(qho_results)
+    for sig in signals:
+        if "🚀" in sig:
+            st.success(sig)
+        elif "⚠️" in sig:
+            st.error(sig)
+        else:
+            st.info(sig)
     
     # === RRQI STATUS ===
     st.metric("🧠 RRQI", rrqi_val, delta="Last 30 rounds")
