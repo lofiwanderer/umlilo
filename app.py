@@ -1499,38 +1499,39 @@ def plot_qmo(df, windows=[3, 5, 8, 13]):
     return fig
 
 def quantum_harmonic_oscillator(df, windows=[3, 5, 8, 13, 21]):
-    """
-    Advanced oscillator combining:
-    - Normalized momentum (-1 to 1)
-    - Range width energy (0 to 2)
-    - Phase synchronization score (0 to 1)
-    """
+    """Safe implementation with window length validation"""
     results = []
     
     for w in windows:
         # 1. Range Width Calculation
-        high = df['multiplier'].rolling(w).max()
-        low = df['multiplier'].rolling(w).min()
+        high = df['multiplier'].rolling(w, min_periods=1).max()
+        low = df['multiplier'].rolling(w, min_periods=1).min()
         range_width = (high - low).fillna(0)
         
         # 2. Momentum Slope Calculation
-        momentum = df['multiplier'].rolling(w).apply(
+        momentum = df['multiplier'].rolling(w, min_periods=2).apply(
             lambda x: np.polyfit(np.arange(len(x)), x, 1)[0] if len(x) > 1 else 0,
             raw=False
-        )
+        ).fillna(0)
         
         # 3. Normalize Momentum to Range
-        norm_momentum = momentum / (range_width + 1e-6)  # Avoid division by zero
-        norm_momentum = np.clip(norm_momentum, -1.5, 1.5)  # Cap extreme values
+        norm_momentum = momentum / (range_width.replace(0, 1e-6))  # Prevent div/0
+        norm_momentum = np.clip(norm_momentum, -1.5, 1.5)
         
-        # 4. Range Energy (Smoothed)
-        range_energy = savgol_filter(range_width, window_length=w//2+1, polyorder=2)
-        
-        # 5. Phase Synchronization (0-1)
-        if w > windows[0]:  # Compare to next smaller window
-            prev_w = windows[windows.index(w)-1]
+        # 4. SAFE Range Energy Smoothing
+        if w >= 5:  # Only smooth windows ≥5
+            range_energy = savgol_filter(
+                range_width,
+                window_length=max(3, w//2+1),  # Ensures window_length > polyorder
+                polyorder=min(2, max(1, w//3))  # Adaptive polyorder
+            )
+        else:
+            range_energy = range_width.values  # Raw for small windows
+            
+        # 5. Phase Synchronization
+        if results:  # Compare to previous window
             phase_diff = np.abs(norm_momentum - results[-1]['norm_momentum'])
-            sync = 1 - np.tanh(phase_diff * 2)  # 1=perfect sync, 0=chaos
+            sync = 1 - np.tanh(phase_diff * 2)
         else:
             sync = np.ones(len(df))
             
