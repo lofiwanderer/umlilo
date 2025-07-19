@@ -1297,36 +1297,32 @@ def compute_smoothed_atr_long_df(df, windows, multiplier_col='multiplier', smoot
     df['round_index'] = range(len(df))
     
     for w in windows:
-        if len(df) < w:
-            continue  # Skip if window larger than data
+        if len(df) < w + smooth_window:
+            continue
 
-        # Calculate True Range (max - min) for each window
-        atr_series = df[multiplier_col].rolling(w).apply(
-            lambda x: x.max() - x.min(), 
-            raw=True
-        ).bfill().fillna(0)
-        
-        # Smooth with Savitzky-Golay filter
+        atr_series = df[multiplier_col].rolling(w).apply(lambda x: x.max() - x.min(), raw=True)
+        atr_series = atr_series.bfill().fillna(0)
+
         if len(atr_series) >= smooth_window:
             atr_smooth = savgol_filter(atr_series, smooth_window, poly_order)
         else:
-            atr_smooth = atr_series.values
-            
-        # Calculate slope and phase
+            atr_smooth = atr_series
+
         slope_series = np.gradient(atr_smooth)
         phase_series = np.where(slope_series >= 0, 'BULL', 'BEAR')
-        
-        # Store results
+
         for idx, r_idx in enumerate(df['round_index']):
             records.append({
                 'round_index': r_idx,
                 'window': w,
-                'atr': atr_smooth[idx] if idx < len(atr_smooth) else 0,
-                'slope': slope_series[idx] if idx < len(slope_series) else 0,
-                'phase': phase_series[idx] if idx < len(phase_series) else 'NEUTRAL'
+                'atr': atr_smooth[idx],
+                'raw_atr': atr_series.iloc[idx],
+                'slope': slope_series[idx],
+                'phase': phase_series[idx]
             })
-    
-    return pd.DataFrame(records)
+
+    result_df = pd.DataFrame.from_records(records)
+    return result_df
 
     #result_df = pd.DataFrame.from_records(records)
     #return result_df
@@ -1407,15 +1403,7 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
             showlegend=True
         ))
     
-    # Mark crossings with vertical lines
-    for cross in crossings:
-        fig.add_vline(
-            x=cross['round_index'],
-            line_dash='dot',
-            line_color='gold',
-            annotation_text=f"X: F{cross['window_pair'][0]}↔F{cross['window_pair'][1]}", 
-            annotation_position='top'
-        )
+    
     
     # Layout
     fig.update_layout(
@@ -1434,118 +1422,6 @@ def compute_range_width(df, window, col='multiplier'):
     high = df[col].rolling(window, min_periods=1).max()
     low  = df[col].rolling(window, min_periods=1).min()
     return (high - low).fillna(0)
-
-def compute_msi_momentum(df, window, col='multiplier'):
-    """
-    MSI-style momentum: rolling sum of round scores over `window`.
-    Score mapping: pink ≥10 → +2, purple ≥2 → +1, blue <2 → –1.
-    """
-    # map multipliers to scores
-    scores = df[col].apply(lambda x: 2 if x >= 10 else (1 if x >= 2 else -1))
-    # rolling sum
-    return scores.rolling(window, min_periods=1).sum().fillna(0)
-
-
-def normalize_momentum(msi_series, range_width):
-    """
-    Normalize MSI momentum to ±1 by dividing by range_width.
-    If range_width==0, result is 0 to avoid div-by-zero.
-    """
-    norm = []
-    for msi, rng in zip(msi_series, range_width):
-        if rng == 0:
-            norm.append(0.0)
-        else:
-            val = msi / (rng if rng != 0 else 1)
-            # clamp to [-1, 1]
-            norm.append(max(min(val, 1.0), -1.0))
-    return np.array(norm)
-
-def classify_signal(normalized):
-    """
-    Classify each point:
-     • breakout: |norm| ≥ 1
-     • compression: |norm| ≤ 0.3
-     • within: otherwise
-    """
-    sig = []
-    for v in normalized:
-        if abs(v) >= 1.0:
-            sig.append('breakout')
-        elif abs(v) <= 0.3:
-            sig.append('compression')
-        else:
-            sig.append('within')
-    return sig
-
-def build_qmo_longform(df, fib_windows=[3,5,8,13], col='multiplier'):
-    """
-    Returns long-form DF with columns:
-      round_index, window, atr, msi, normalized, signal
-    """
-    records = []
-    df = df.copy()
-    df['round_index'] = range(len(df))
-
-    for w in fib_windows:
-        # compute series
-        atr  = compute_range_width(df, w, col)
-        msi  = compute_msi_momentum(df, w, col)
-        norm = normalize_momentum(msi, atr)
-        sig  = classify_signal(norm)
-
-        for i in range(len(df)):
-            records.append({
-                'round_index': df.at[i, 'round_index'],
-                'window': w,
-                'atr':  round(atr.iat[i], 3),
-                'msi':  round(msi.iat[i], 3),
-                'normalized': round(norm[i], 4),
-                'signal': sig[i]
-            })
-
-    return pd.DataFrame.from_records(records)
-
-
-def plot_qmo_stacked(long_df):
-    """
-    Stacked oscillator plot: one line per Fibonacci window,
-    colored by signal, range boundaries hidden for clarity.
-    """
-    if long_df.empty:
-        st.warning("⚠️ Not enough data to plot Quantum Momentum Oscillator.")
-        return
-
-    fig = go.Figure()
-    color_map = {
-        'breakout': '#FFD700',    # gold
-        'within':   '#00ff88',    # green
-        'compression': '#8888ff'  # blue
-    }
-
-    for w in sorted(long_df['window'].unique()):
-        dfw = long_df[long_df['window']==w]
-        fig.add_trace(go.Scatter(
-            x=dfw['round_index'],
-            y=dfw['normalized'],
-            mode='lines',
-            name=f"F{w}",
-            line=dict(width=2),
-            marker=dict(color=[ color_map[s] for s in dfw['signal'] ]),
-            hovertemplate="Round %{x}<br>F"+str(w)+": %{y:.3f}<br>Signal: %{text}",
-            text=dfw['signal']
-        ))
-
-    fig.update_layout(
-        title="🌊 Quantum Momentum Oscillator (Normalized to Range)",
-        xaxis_title="Round Index",
-        yaxis_title="Normalized Momentum [-1…1]",
-        hovermode='x unified',
-        legend=dict(orientation='h', y=1.1),
-        height=600
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
 
 
 
@@ -2309,18 +2185,18 @@ if not df.empty:
             st.markdown(f"**Phase Cross Intersections:** {crossings}")
     
     
-    #st.subheader("🌀 ALIEN MWATR OSCILLATOR (Ultra-Mode)")
+    st.subheader("🌀 ALIEN MWATR OSCILLATOR (Ultra-Mode)")
     
-    #FIB_WINDOWS = [3, 5, 8, 13, 21,34]
+    FIB_WINDOWS = [3, 5, 8, 13, 21,34]
     
-    #smoothed_atr_df = compute_smoothed_atr_long_df(df, windows=FIB_WINDOWS)
+    smoothed_atr_df = compute_smoothed_atr_long_df(df, windows=FIB_WINDOWS)
 
     # Convert the output
-    #long_df = smoothed_atr_df.copy()
+    long_df = smoothed_atr_df.copy()
     
     # Ensure pivot safety
-    #full_round_index = list(range(df.shape[0]))
-    #long_df_clean = prepare_long_df_for_pivot(long_df, FIB_WINDOWS, full_round_index)
+    full_round_index = list(range(df.shape[0]))
+    long_df_clean = prepare_long_df_for_pivot(long_df, FIB_WINDOWS, full_round_index)
     
     # Detect crossings
     #crossings = detect_advanced_crossings(long_df_clean)
@@ -2328,18 +2204,14 @@ if not df.empty:
     
         
      # Plot
-    #plot_alien_mwatr_oscillator(long_df_clean, crossings)
+    plot_alien_mwatr_oscillator(long_df_clean)
     
     
 
     
     FIB_WINDOWS = [3, 5, 8, 13, 21, 34]
     
-    st.subheader("🌌 Quantum Momentum Oscillator")
-    FIBo_WINDOWS = [3,5,8,13]
-
-    qmo_df = build_qmo_longform(df, fib_windows=FIBo_WINDOWS, col='multiplier')
-    plot_qmo_stacked(qmo_df)
+    
     
     #with st.expander("📊 Advanced Range Modulation Signals Over Time", expanded=False):
         #st.subheader("📊 Advanced Trap Modulation Signals Over Time")
