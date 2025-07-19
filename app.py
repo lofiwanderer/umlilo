@@ -2223,7 +2223,13 @@ if not df.empty:
     #fig_signal = plot_normalized_signal_dashboard(df_signal)
     
     range_signals_df = compute_raw_range_signals(df, window=RANGE_WINDOW)
-    
+    for w in FIB_WINDOWS:
+        if len(df) < w :
+            continue
+
+        df['range_width']  = df[multiplier_col].rolling(w).apply(lambda x: x.max() - x.min(), raw=True)
+        #atr_series = atr_series.bfill().fillna(0)
+        
     # After data analysis:
     #current_regime = df['regime_state'].iloc[-1] if not df.empty else 'neutral'
 
@@ -2285,7 +2291,7 @@ if not df.empty:
     FIB_WINDOWS = [3, 5, 8, 13, 21, 34]
     
     # After range width calculation
-    qor_signal, qor_score = generate_qor_signal(range_signals_df)
+    qor_signal, qor_score = generate_qor_signal(df)
     
     # Visualize with quantum theme
     st.subheader("🌌 QUANTUM OSCILLATION RESONANCE ENGINE")
