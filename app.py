@@ -1423,7 +1423,80 @@ def compute_range_width(df, window, col='multiplier'):
     low  = df[col].rolling(window, min_periods=1).min()
     return (high - low).fillna(0)
 
+def multi_scale_hilbert(signal, windows=[3,5,8,13,21]):
+    results = {}
+    for window in windows:
+        analytic_signal = hilbert(signal[-window:])
+        results[window] = {
+            'amplitude': np.abs(analytic_signal),
+            'phase': np.unwrap(np.angle(analytic_signal))
+        }
+    return results
 
+def detect_phase_locking(hilbert_results):
+    lock_points = []
+    windows = sorted(hilbert_results.keys())
+    
+    for i in range(len(windows)-1):
+        w1, w2 = windows[i], windows[i+1]
+        phase_diff = hilbert_results[w1]['phase'][-1] - hilbert_results[w2]['phase'][-1]
+        
+        # Golden ratio phase locking condition
+        if abs(phase_diff % (2*np.pi)) < np.pi/8:  # 22.5° tolerance
+            lock_points.append({
+                'window_pair': (w1, w2),
+                'phase_diff': phase_diff,
+                'energy_ratio': hilbert_results[w1]['amplitude'][-1] / hilbert_results[w2]['amplitude'][-1]
+            })
+    
+    return lock_points
+
+def compute_resonance_matrix(lock_points):
+    if not lock_points: 
+        return 0.0
+    
+    # Fibonacci-weighted resonance score
+    weights = {3:0.1, 5:0.2, 8:0.3, 13:0.7, 21:1.0}
+    total = 0
+    max_score = 0
+    
+    for point in lock_points:
+        w1, w2 = point['window_pair']
+        score = weights.get(w2, 1.0) * (1 - abs(np.sin(point['phase_diff'])))
+        total += score
+        max_score += weights.get(w2, 1.0)
+    
+    return total / max_score if max_score > 0 else 0
+
+def generate_qor_signal(df):
+    # Get range width and compute oscillations
+    range_width = df['range_width'].values
+    hilbert_results = multi_scale_hilbert(range_width)
+    lock_points = detect_phase_locking(hilbert_results)
+    resonance = compute_resonance_matrix(lock_points)
+    
+    # Current volatility state
+    vol_state = "COMPRESSION" if df['range_width'].iloc[-1] < VOLATILITY_THRESHOLDS['micro'] else \
+               "TRANSITION" if df['range_width'].iloc[-1] < VOLATILITY_THRESHOLDS['meso'] else \
+               "EXPANSION"
+    
+    # Quantum prediction rules
+    if resonance > 0.85:
+        if vol_state == "COMPRESSION":
+            return "⚡ QUANTUM IMPLOSION IMMINENT - MAX ENTRY", resonance
+        else:
+            return "🌪️ HYPER-EXPANSION WARNING - STAND CLEAR", resonance
+            
+    elif resonance > 0.7:
+        return "🌀 RESONANCE BUILDUP - PREPARE STRIKE", resonance
+        
+    elif resonance < 0.3:
+        if vol_state == "EXPANSION":
+            return "❌ ENTROPY COLLAPSE - EXIT IMMEDIATELY", resonance
+        else:
+            return "🕳️ SINGULARITY FORMING - AVOID TRADES", resonance
+            
+    return "⚖️ QUANTUM EQUILIBRIUM - MONITOR", resonance
 
 
 @st.cache_data
@@ -1795,8 +1868,8 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
 
      # ===== QUANTUM ENHANCEMENTS =====
     # 1. Range metrics
-    df['range_width'] = df['multiplier'].rolling(RANGE_WINDOW).apply(lambda x: x.max() - x.min(), raw=True)
-    df['range_center'] = df['multiplier'].rolling(RANGE_WINDOW).mean()
+    #df['range_width'] = df['multiplier'].rolling(RANGE_WINDOW).apply(lambda x: x.max() - x.min(), raw=True)
+    #df['range_center'] = df['multiplier'].rolling(RANGE_WINDOW).mean()
     
     # 2. Regime classification
     #df['regime_state'] = np.where(
@@ -2211,7 +2284,56 @@ if not df.empty:
     
     FIB_WINDOWS = [3, 5, 8, 13, 21, 34]
     
+    # After range width calculation
+    qor_signal, qor_score = generate_qor_signal(df)
     
+    # Visualize with quantum theme
+    st.subheader("🌌 QUANTUM OSCILLATION RESONANCE ENGINE")
+    col1, col2 = st.columns([1,2])
+    
+    with col1:
+        st.metric("RESONANCE SCORE", f"{qor_score:.2f}")
+        st.metric("PHASE STATE", qor_signal.split(" - ")[0])
+    
+    with col2:
+        # Create holographic resonance visualization
+        fig = go.Figure()
+        
+        # Add Fibonacci oscillator traces
+        windows = [3,5,8,13,21]
+        colors = ['#ff00cc', '#cc00ff', '#9900ff', '#6600ff', '#3300ff']
+        for i, window in enumerate(windows):
+            phase = np.linspace(0, 2*np.pi, window)
+            fig.add_trace(go.Scatterpolar(
+                r=[1]*window,
+                theta=phase*(180/np.pi),
+                mode='lines+markers',
+                name=f'F{window} Oscillator',
+                line=dict(color=colors[i], width=2),
+                marker=dict(size=8)
+            ))
+        
+        # Add phase lock connections
+        lock_points = detect_phase_locking(multi_scale_hilbert(df['range_width'].values))
+        for point in lock_points:
+            w1, w2 = point['window_pair']
+            fig.add_trace(go.Scatterpolar(
+                r=[0.5, 1.0],
+                theta=[0, point['phase_diff']*(180/np.pi)],
+                mode='lines',
+                line=dict(color='cyan', width=1+point['energy_ratio']*4),
+                showlegend=False
+            ))
+        
+        fig.update_layout(
+            polar=dict(
+                radialaxis=dict(visible=False),
+                angularaxis=dict(rotation=90, direction="clockwise")
+            ),
+            showlegend=True,
+            height=400
+        )
+        st.plotly_chart(fig, use_container_width=True)
     
     #with st.expander("📊 Advanced Range Modulation Signals Over Time", expanded=False):
         #st.subheader("📊 Advanced Trap Modulation Signals Over Time")
