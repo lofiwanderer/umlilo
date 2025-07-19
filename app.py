@@ -1429,77 +1429,117 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
     st.plotly_chart(fig, use_container_width=True)
 
 
-def compute_range_width(df, window):
-    """Calculate true range width per window."""
-    highs = df['multiplier'].rolling(window).max()
-    lows = df['multiplier'].rolling(window).min()
-    return (highs - lows).fillna(0)
+def compute_range_width(df, window, col='multiplier'):
+    """Range width = rolling high – rolling low, zero-filled."""
+    high = df[col].rolling(window, min_periods=1).max()
+    low  = df[col].rolling(window, min_periods=1).min()
+    return (high - low).fillna(0)
+
+def compute_msi_momentum(df, window, col='multiplier'):
+    """
+    MSI-style momentum: rolling sum of round scores over `window`.
+    Score mapping: pink ≥10 → +2, purple ≥2 → +1, blue <2 → –1.
+    """
+    # map multipliers to scores
+    scores = df[col].apply(lambda x: 2 if x >= 10 else (1 if x >= 2 else -1))
+    # rolling sum
+    return scores.rolling(window, min_periods=1).sum().fillna(0)
 
 
-def compute_momentum_wave(df, window):
-    """Track MSI-style momentum score inside moving window."""
-    momentum = np.zeros(len(df))
-    weights = np.linspace(1.0, 0.5, window)  # Recency bias
-
-    for i in range(window, len(df)):
-        window_data = df['multiplier'].iloc[i-window:i].values
-
-        scores = []
-        for m in window_data:
-            if m >= 10:
-                scores.append(2)
-            elif m >= 2:
-                scores.append(1)
-            else:
-                scores.append(-1)
-
-        momentum[i] = np.dot(scores, weights)
-
-    return momentum
-
-
-def normalize_to_range_width(momentum, range_widths):
-    """Constrain MSI within [-1, 1] based on range expansion."""
-    normalized = []
-    for m, r in zip(momentum, range_widths):
-        if r == 0:
-            normalized.append(0)
+def normalize_momentum(msi_series, range_width):
+    """
+    Normalize MSI momentum to ±1 by dividing by range_width.
+    If range_width==0, result is 0 to avoid div-by-zero.
+    """
+    norm = []
+    for msi, rng in zip(msi_series, range_width):
+        if rng == 0:
+            norm.append(0.0)
         else:
-            bounded = max(min(m, r), -r)  # Clip to -range to +range
-            normalized.append(bounded / r)
-    return np.array(normalized)
+            val = msi / (rng if rng != 0 else 1)
+            # clamp to [-1, 1]
+            norm.append(max(min(val, 1.0), -1.0))
+    return np.array(norm)
+
+def classify_signal(normalized):
+    """
+    Classify each point:
+     • breakout: |norm| ≥ 1
+     • compression: |norm| ≤ 0.3
+     • within: otherwise
+    """
+    sig = []
+    for v in normalized:
+        if abs(v) >= 1.0:
+            sig.append('breakout')
+        elif abs(v) <= 0.3:
+            sig.append('compression')
+        else:
+            sig.append('within')
+    return sig
+
+def build_qmo_longform(df, fib_windows=[3,5,8,13], col='multiplier'):
+    """
+    Returns long-form DF with columns:
+      round_index, window, atr, msi, normalized, signal
+    """
+    records = []
+    df = df.copy()
+    df['round_index'] = range(len(df))
+
+    for w in fib_windows:
+        # compute series
+        atr  = compute_range_width(df, w, col)
+        msi  = compute_msi_momentum(df, w, col)
+        norm = normalize_momentum(msi, atr)
+        sig  = classify_signal(norm)
+
+        for i in range(len(df)):
+            records.append({
+                'round_index': df.at[i, 'round_index'],
+                'window': w,
+                'atr':  round(atr.iat[i], 3),
+                'msi':  round(msi.iat[i], 3),
+                'normalized': round(norm[i], 4),
+                'signal': sig[i]
+            })
+
+    return pd.DataFrame.from_records(records)
 
 
-def plot_qmo(df, windows=[3, 5, 8, 13]):
-    """Visualize QMO waves in relation to range width envelopes."""
+def plot_qmo_stacked(long_df):
+    """
+    Stacked oscillator plot: one line per Fibonacci window,
+    colored by signal, range boundaries hidden for clarity.
+    """
+    if long_df.empty:
+        st.warning("⚠️ Not enough data to plot Quantum Momentum Oscillator.")
+        return
+
     fig = go.Figure()
+    color_map = {
+        'breakout': '#FFD700',    # gold
+        'within':   '#00ff88',    # green
+        'compression': '#8888ff'  # blue
+    }
 
-    for w in windows:
-        range_width = compute_range_width(df, w)
-        momentum = compute_momentum_wave(df, w)
-        normalized = normalize_to_range_width(momentum, range_width)
-
+    for w in sorted(long_df['window'].unique()):
+        dfw = long_df[long_df['window']==w]
         fig.add_trace(go.Scatter(
-            x=df.index,
-            y=normalized,
-            name=f'F{w} QMO',
-            line=dict(width=1 + w/6),
-            hoverinfo='x+y+name'
+            x=dfw['round_index'],
+            y=dfw['normalized'],
+            mode='lines',
+            name=f"F{w}",
+            line=dict(width=2),
+            marker=dict(color=[ color_map[s] for s in dfw['signal'] ]),
+            hovertemplate="Round %{x}<br>F"+str(w)+": %{y:.3f}<br>Signal: %{text}",
+            text=dfw['signal']
         ))
 
-        # Optional: Plot range width envelope for reference (hidden by default)
-        fig.add_trace(go.Scatter(
-            x=df.index,
-            y=range_width,
-            name=f'F{w} Range Width',
-            line=dict(dash='dot', color='gray'),
-            visible='legendonly'
-        ))
-
-    fig.add_hline(y=0, line_dash="solid", line_color="white")
     fig.update_layout(
-        title='🌊 Quantum Momentum Oscillator (QMO v1.5)',
-        yaxis_title='Normalized Momentum [-1, 1]',
+        title="🌊 Quantum Momentum Oscillator (Normalized to Range)",
+        xaxis_title="Round Index",
+        yaxis_title="Normalized Momentum [-1…1]",
         hovermode='x unified',
         legend=dict(orientation='h', y=1.1),
         height=600
@@ -1508,135 +1548,6 @@ def plot_qmo(df, windows=[3, 5, 8, 13]):
     st.plotly_chart(fig, use_container_width=True)
 
 
-def quantum_harmonic_oscillator(df, windows=[3, 5, 8, 13, 21]):
-    """Safe implementation with window length validation"""
-    results = []
-    
-    for w in windows:
-        # 1. Range Width Calculation
-        high = df['multiplier'].rolling(w, min_periods=1).max()
-        low = df['multiplier'].rolling(w, min_periods=1).min()
-        range_width = (high - low).fillna(0)
-        
-        # 2. Momentum Slope Calculation
-        momentum = np.zeros(len(df))
-        for i in range(1, len(df)):
-            # Score each round: Pink=2, Purple=1, Blue=-1
-            score = 2 if df['multiplier'].iloc[i] >= 10 else (1 if df['multiplier'].iloc[i] >= 2 else -1)
-            # Weight by position in window (recent rounds matter more)
-            weight = 1.5 - (0.5 * (i % window) / window)  
-            momentum[i] = momentum[i-1] + (score * weight)
-
-        
-        # 3. Normalize Momentum to Range
-        norm_momentum = momentum / (range_width.replace(0, 1e-6))  # Prevent div/0
-        norm_momentum = np.clip(norm_momentum, -1.5, 1.5)
-        
-        # 4. SAFE Range Energy Smoothing
-        if w >= 5:  # Only smooth windows ≥5
-            range_energy = savgol_filter(
-                range_width,
-                window_length=max(3, w//2+1),  # Ensures window_length > polyorder
-                polyorder=min(2, max(1, w//3))  # Adaptive polyorder
-            )
-        else:
-            range_energy = range_width.values  # Raw for small windows
-            
-        # 5. Phase Synchronization
-        if results:  # Compare to previous window
-            phase_diff = np.abs(norm_momentum - results[-1]['norm_momentum'])
-            sync = 1 - np.tanh(phase_diff * 2)
-        else:
-            sync = np.ones(len(df))
-            
-        results.append({
-            'window': w,
-            'norm_momentum': norm_momentum,
-            'range_energy': range_energy,
-            'phase_sync': sync
-        })
-    
-    return results
-
-def plot_quantum_harmonic_oscillator(qho_results, df):
-    """3D Visualization of Momentum-Energy-Synchronization"""
-    fig = go.Figure()
-    
-    # Add traces for each window
-    for res in qho_results:
-        w = res['window']
-        
-        # Combined oscillator value
-        oscillator = res['norm_momentum'] * res['range_energy'] * res['phase_sync']
-        
-        fig.add_trace(go.Scatter(
-            x=df.index,
-            y=oscillator,
-            name=f'F{w} QHO',
-            line=dict(width=1 + w/5),
-            hoverinfo='x+y+name',
-            customdata=np.stack((
-                res['norm_momentum'],
-                res['range_energy'],
-                res['phase_sync']
-            ), axis=-1),
-            hovertemplate=(
-                "Round: %{x}<br>"
-                "QHO: %{y:.2f}<br>"
-                "Momentum: %{customdata[0]:.2f}<br>"
-                "Range Energy: %{customdata[1]:.2f}<br>"
-                "Phase Sync: %{customdata[2]:.2f}"
-            )
-        ))
-    
-    # Add regime zones
-    fig.add_hrect(y0=-0.5, y1=0.5, line_width=0, fillcolor="green", opacity=0.1, 
-                 annotation_text="Stable Zone", annotation_position="top left")
-    fig.add_hrect(y0=0.5, y1=1.5, line_width=0, fillcolor="blue", opacity=0.1,
-                 annotation_text="Expansion", annotation_position="top left")
-    fig.add_hrect(y0=-1.5, y1=-0.5, line_width=0, fillcolor="red", opacity=0.1,
-                 annotation_text="Contraction", annotation_position="bottom left")
-    
-    fig.update_layout(
-        title='🌀 Quantum Harmonic Oscillator (Momentum × Energy × Sync)',
-        yaxis_title='Oscillator Value',
-        hovermode='x unified'
-    )
-    return fig
-
-def generate_trading_signals(qho_results, last_n=3):
-    """Generate actionable signals from QHO"""
-    signals = []
-    latest = {res['window']: res for res in qho_results}
-    
-    # 1. Detect Stable Zones (All windows in [-0.5, 0.5])
-    stable = all(
-        np.mean(np.abs(latest[w]['norm_momentum'][-last_n:])) < 0.5 
-        for w in [3, 5, 8]
-    )
-    
-    # 2. Detect Harmonic Expansion (F5 & F8 synchronized > 0.7)
-    expansion = (
-        np.mean(latest[5]['phase_sync'][-last_n:]) > 0.7 and
-        np.mean(latest[8]['range_energy'][-last_n:]) > 
-        np.mean(latest[3]['range_energy'][-last_n:])
-    )
-    
-    # 3. Detect Compression Traps (High sync but negative momentum)
-    trap = (
-        np.mean(latest[5]['phase_sync'][-last_n:]) > 0.8 and
-        np.mean(latest[5]['norm_momentum'][-last_n:]) < -0.6
-    )
-    
-    # Generate signals
-    if stable:
-        signals.append("💎 STABLE ZONE - SCOUT FOR BREAKOUT")
-    if expansion:
-        signals.append("🚀 HARMONIC EXPANSION - ENTER AT 1.01X")
-    if trap:
-        signals.append("⚠️ COMPRESSION TRAP - AVOID ENTRIES")
-        
-    return signals if signals else ["⚖️ NEUTRAL - MONITOR"]
 
 
 @st.cache_data
@@ -2424,9 +2335,11 @@ if not df.empty:
     
     FIB_WINDOWS = [3, 5, 8, 13, 21, 34]
     
-    # In your main app:
-    st.subheader("🚀 Quantum Momentum Oscillator v1.5")
-    plot_qmo(df, windows=[3, 5, 8, 13])
+    st.subheader("🌌 Quantum Momentum Oscillator")
+    FIBo_WINDOWS = [3,5,8,13]
+
+    qmo_df = build_qmo_longform(df, fib_windows=FIBo_WINDOWS, col='multiplier')
+    plot_qmo_stacked(qmo_df)
     
     #with st.expander("📊 Advanced Range Modulation Signals Over Time", expanded=False):
         #st.subheader("📊 Advanced Trap Modulation Signals Over Time")
