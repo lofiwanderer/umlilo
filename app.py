@@ -2227,7 +2227,7 @@ if not df.empty:
         if len(df) < w :
             continue
 
-        df['range_width']  = df[multiplier_col].rolling(w).apply(lambda x: x.max() - x.min(), raw=True)
+        df['range_width']  = df['multiplier'].rolling(w).apply(lambda x: x.max() - x.min(), raw=True)
         #atr_series = atr_series.bfill().fillna(0)
         
     # After data analysis:
