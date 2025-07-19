@@ -2285,7 +2285,7 @@ if not df.empty:
     FIB_WINDOWS = [3, 5, 8, 13, 21, 34]
     
     # After range width calculation
-    qor_signal, qor_score = generate_qor_signal(df)
+    qor_signal, qor_score = generate_qor_signal(range_signals_df)
     
     # Visualize with quantum theme
     st.subheader("🌌 QUANTUM OSCILLATION RESONANCE ENGINE")
