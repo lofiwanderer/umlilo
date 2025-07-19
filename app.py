@@ -1429,74 +1429,74 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
     st.plotly_chart(fig, use_container_width=True)
 
 
-def compute_range_width(df, window):
-    """Calculate normalized range width for a given window"""
-    highs = df['multiplier'].rolling(window).max()
-    lows = df['multiplier'].rolling(window).min()
-    return (highs - lows).fillna(0)
+def compute_true_momentum(df, window):
+    """Calculate accumulated momentum with directional bias"""
+    momentum = np.zeros(len(df))
+    for i in range(1, len(df)):
+        # Score each round: Pink=2, Purple=1, Blue=-1
+        score = 2 if df['multiplier'].iloc[i] >= 10 else (1 if df['multiplier'].iloc[i] >= 2 else -1)
+        # Weight by position in window (recent rounds matter more)
+        weight = 1.5 - (0.5 * (i % window) / window)  
+        momentum[i] = momentum[i-1] + (score * weight)
+    
+    # Normalize within window
+    max_momentum = max(1, momentum.max())  # Prevent division by zero
+    return momentum / max_momentum
 
-def compute_momentum_slope(df, window):
-    """Calculate momentum slope within range boundaries"""
-    slopes = []
-    for i in range(len(df)):
-        if i < window:
-            slopes.append(0)
-            continue
-            
-        y = df['multiplier'].iloc[i-window:i].values
-        x = np.arange(len(y))
-        slope = np.polyfit(x, y, 1)[0] if len(y) > 1 else 0
-        slopes.append(slope)
-    return np.array(slopes)
+def compute_range_aware_momentum(df, window):
+    """Combine momentum with range constraints"""
+    # Get true momentum
+    raw_momentum = compute_true_momentum(df, window)
+    
+    # Get range boundaries
+    high = df['multiplier'].rolling(window).max().fillna(0)
+    low = df['multiplier'].rolling(window).min().fillna(0)
+    range_width = (high - low).replace(0, 1)  # Avoid division by zero
+    
+    # Constrain momentum by range
+    constrained = raw_momentum * range_width
+    return constrained / max(1, constrained.max())  # Normalize to [0,1]
 
-def normalize_to_range(values, range_widths):
-    """Constrain momentum values within -range_width to +range_width"""
-    normalized = []
-    for val, rng in zip(values, range_widths):
-        if rng == 0:
-            normalized.append(0)
-        else:
-            bounded = max(min(val, rng), -rng)
-            normalized.append(bounded / rng)  # Scale to [-1, 1]
-    return np.array(normalized)
-
-def plot_qmo(df, windows=[3, 5, 8, 13]):
-    """Plot the Quantum Momentum Oscillator"""
+def plot_true_momentum_oscillator(df, windows=[3, 5, 8, 13]):
+    """Visualize range-constrained momentum accumulation"""
     fig = go.Figure()
     
-    # Calculate components for each window
     for w in windows:
-        range_width = compute_range_width(df, w)
-        momentum = compute_momentum_slope(df, w)
-        normalized = normalize_to_range(momentum, range_width)
+        momentum = compute_range_aware_momentum(df, w)
         
-        # Plot momentum wave
         fig.add_trace(go.Scatter(
             x=df.index,
-            y=normalized,
+            y=momentum,
             name=f'F{w} Momentum',
             line=dict(width=1 + w/5),
-            hoverinfo='x+y+name'
-        ))
-        
-        # Plot range boundaries
-        fig.add_trace(go.Scatter(
-            x=df.index,
-            y=range_width,
-            name=f'F{w} Range',
-            line=dict(dash='dot', width=0.5),
-            visible='legendonly'
+            hoverinfo='x+y+name',
+            customdata=np.stack((
+                df['multiplier'].rolling(w).mean().fillna(0),
+                df['multiplier'].rolling(w).std().fillna(0)
+            ), axis=-1),
+            hovertemplate=(
+                "Round: %{x}<br>"
+                "Momentum: %{y:.2f}<br>"
+                "Avg Multiplier: %{customdata[0]:.2f}<br>"
+                "Volatility: %{customdata[1]:.2f}"
+            )
         ))
     
-    # Add zero line and styling
-    fig.add_hline(y=0, line_dash="solid", line_color="white")
+    # Add regime zones
+    fig.add_hrect(y0=0.7, y1=1.0, fillcolor="green", opacity=0.1, 
+                 annotation_text="Bullish Zone", annotation_position="top left")
+    fig.add_hrect(y0=0.3, y1=0.7, fillcolor="yellow", opacity=0.1,
+                 annotation_text="Neutral Zone")
+    fig.add_hrect(y0=0.0, y1=0.3, fillcolor="red", opacity=0.1,
+                 annotation_text="Bearish Zone")
+    
     fig.update_layout(
-        title='🌊 Quantum Momentum Oscillator',
-        yaxis_title='Normalized Momentum (-1 to 1)',
-        hovermode='x unified',
-        legend=dict(orientation='h', y=1.1)
+        title='🚀 True Momentum Oscillator (Range-Constrained)',
+        yaxis_title='Momentum Strength (0-1)',
+        hovermode='x unified'
     )
     return fig
+
 
 def quantum_harmonic_oscillator(df, windows=[3, 5, 8, 13, 21]):
     """Safe implementation with window length validation"""
@@ -1509,10 +1509,14 @@ def quantum_harmonic_oscillator(df, windows=[3, 5, 8, 13, 21]):
         range_width = (high - low).fillna(0)
         
         # 2. Momentum Slope Calculation
-        momentum = df['multiplier'].rolling(w, min_periods=2).apply(
-            lambda x: np.polyfit(np.arange(len(x)), x, 1)[0] if len(x) > 1 else 0,
-            raw=False
-        ).fillna(0)
+        momentum = np.zeros(len(df))
+        for i in range(1, len(df)):
+            # Score each round: Pink=2, Purple=1, Blue=-1
+            score = 2 if df['multiplier'].iloc[i] >= 10 else (1 if df['multiplier'].iloc[i] >= 2 else -1)
+            # Weight by position in window (recent rounds matter more)
+            weight = 1.5 - (0.5 * (i % window) / window)  
+            momentum[i] = momentum[i-1] + (score * weight)
+
         
         # 3. Normalize Momentum to Range
         norm_momentum = momentum / (range_width.replace(0, 1e-6))  # Prevent div/0
@@ -2411,10 +2415,9 @@ if not df.empty:
     FIB_WINDOWS = [3, 5, 8, 13, 21, 34]
     
     # In your main app:
-    st.subheader("🌊 Quantum Momentum Waves")
-    momentum_fig = plot_qmo(df, FIB_WINDOWS)
-    st.plotly_chart(momentum_fig, use_container_width=True)
-
+    st.subheader("✨True Momentum Analysis")
+    mom_fig = plot_true_momentum_oscillator(df)
+    st.plotly_chart(mom_fig, use_container_width=True)
     
     #with st.expander("📊 Advanced Range Modulation Signals Over Time", expanded=False):
         #st.subheader("📊 Advanced Trap Modulation Signals Over Time")
