@@ -1430,72 +1430,83 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
 
 
 def compute_range_width(df, window):
-    """Calculate normalized range width for a given window"""
+    """Calculate true range width per window."""
     highs = df['multiplier'].rolling(window).max()
     lows = df['multiplier'].rolling(window).min()
     return (highs - lows).fillna(0)
 
-def compute_momentum_slope(df, window):
-    momentum = np.zeros(len(df))
-    for i in range(1, len(df)):
-        # Score each round: Pink=2, Purple=1, Blue=-1
-        score = 2 if df['multiplier'].iloc[i] >= 10 else (1 if df['multiplier'].iloc[i] >= 2 else -1)
-        # Weight by position in window (recent rounds matter more)
-        weight = 1.5 - (0.5 * (i % window) / window)  
-        momentum[i] = momentum[i-1] + (score * weight)
-    
-    # Normalize within window
-    max_momentum = max(1, momentum.max())  # Prevent division by zero
-    return momentum / max_momentum
 
-def normalize_to_range(values, range_widths):
-    """Constrain momentum values within -range_width to +range_width"""
+def compute_momentum_wave(df, window):
+    """Track MSI-style momentum score inside moving window."""
+    momentum = np.zeros(len(df))
+    weights = np.linspace(1.0, 0.5, window)  # Recency bias
+
+    for i in range(window, len(df)):
+        window_data = df['multiplier'].iloc[i-window:i].values
+
+        scores = []
+        for m in window_data:
+            if m >= 10:
+                scores.append(2)
+            elif m >= 2:
+                scores.append(1)
+            else:
+                scores.append(-1)
+
+        momentum[i] = np.dot(scores, weights)
+
+    return momentum
+
+
+def normalize_to_range_width(momentum, range_widths):
+    """Constrain MSI within [-1, 1] based on range expansion."""
     normalized = []
-    for val, rng in zip(values, range_widths):
-        if rng == 0:
+    for m, r in zip(momentum, range_widths):
+        if r == 0:
             normalized.append(0)
         else:
-            bounded = max(min(val, rng), -rng)
-            normalized.append(bounded / rng)  # Scale to [-1, 1]
+            bounded = max(min(m, r), -r)  # Clip to -range to +range
+            normalized.append(bounded / r)
     return np.array(normalized)
 
+
 def plot_qmo(df, windows=[3, 5, 8, 13]):
-    """Plot the Quantum Momentum Oscillator"""
+    """Visualize QMO waves in relation to range width envelopes."""
     fig = go.Figure()
-    
-    # Calculate components for each window
+
     for w in windows:
         range_width = compute_range_width(df, w)
-        momentum = compute_momentum_slope(df, w)
-        normalized = normalize_to_range(momentum, range_width)
-        
-        # Plot momentum wave
+        momentum = compute_momentum_wave(df, w)
+        normalized = normalize_to_range_width(momentum, range_width)
+
         fig.add_trace(go.Scatter(
             x=df.index,
             y=normalized,
-            name=f'F{w} Momentum',
-            line=dict(width=1 + w/5),
+            name=f'F{w} QMO',
+            line=dict(width=1 + w/6),
             hoverinfo='x+y+name'
         ))
-        
-        # Plot range boundaries
+
+        # Optional: Plot range width envelope for reference (hidden by default)
         fig.add_trace(go.Scatter(
             x=df.index,
             y=range_width,
-            name=f'F{w} Range',
-            line=dict(dash='dot', width=0.5),
+            name=f'F{w} Range Width',
+            line=dict(dash='dot', color='gray'),
             visible='legendonly'
         ))
-    
-    # Add zero line and styling
+
     fig.add_hline(y=0, line_dash="solid", line_color="white")
     fig.update_layout(
-        title='🌊 Quantum Momentum Oscillator',
-        yaxis_title='Normalized Momentum (-1 to 1)',
+        title='🌊 Quantum Momentum Oscillator (QMO v1.5)',
+        yaxis_title='Normalized Momentum [-1, 1]',
         hovermode='x unified',
-        legend=dict(orientation='h', y=1.1)
+        legend=dict(orientation='h', y=1.1),
+        height=600
     )
-    return fig
+
+    st.plotly_chart(fig, use_container_width=True)
+
 
 def quantum_harmonic_oscillator(df, windows=[3, 5, 8, 13, 21]):
     """Safe implementation with window length validation"""
@@ -2414,9 +2425,8 @@ if not df.empty:
     FIB_WINDOWS = [3, 5, 8, 13, 21, 34]
     
     # In your main app:
-    st.subheader("🌊 Quantum Momentum Waves")
-    momentum_fig = plot_qmo(df, FIB_WINDOWS)
-    st.plotly_chart(momentum_fig, use_container_width=True)
+    st.subheader("🚀 Quantum Momentum Oscillator v1.5")
+    plot_qmo(df, windows=[3, 5, 8, 13])
     
     #with st.expander("📊 Advanced Range Modulation Signals Over Time", expanded=False):
         #st.subheader("📊 Advanced Trap Modulation Signals Over Time")
