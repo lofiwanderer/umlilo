@@ -1300,17 +1300,25 @@ def compute_smoothed_atr_long_df(df, windows, multiplier_col='multiplier', smoot
         if len(df) < w + smooth_window:
             continue
 
-        atr_series = df[multiplier_col].rolling(w).apply(lambda x: x.max() - x.min(), raw=True)
-        atr_series = atr_series.bfill().fillna(0)
-
+        # Calculate range components
+        high = df[multiplier_col].rolling(w).max()
+        low = df[multiplier_col].rolling(w).min()
+        center = (high + low) / 2
+        atr_series = high - low  # Range width
+        
+        # Calculate phase based on center position relative to mean
+        phase_series = np.where(center > center.rolling(21, min_periods=1).mean(), 'BULL', 'BEAR')
+        
+        # Apply smoothing
         if len(atr_series) >= smooth_window:
             atr_smooth = savgol_filter(atr_series, smooth_window, poly_order)
+            center_smooth = savgol_filter(center, smooth_window, poly_order)
         else:
             atr_smooth = atr_series
+            center_smooth = center
 
         slope_series = np.gradient(atr_smooth)
-        phase_series = np.where(slope_series >= 0, 'BULL', 'BEAR')
-
+        
         for idx, r_idx in enumerate(df['round_index']):
             records.append({
                 'round_index': r_idx,
@@ -1318,7 +1326,8 @@ def compute_smoothed_atr_long_df(df, windows, multiplier_col='multiplier', smoot
                 'atr': atr_smooth[idx],
                 'raw_atr': atr_series.iloc[idx],
                 'slope': slope_series[idx],
-                'phase': phase_series[idx]
+                'phase': phase_series[idx],
+                'center': center_smooth[idx] if idx < len(center_smooth) else center.iloc[idx]
             })
 
     result_df = pd.DataFrame.from_records(records)
@@ -1383,31 +1392,66 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
 
     fig = go.Figure()
     
-    # Color mapping for phases
-    phase_colors = {'BULL': '#00ff88', 'BEAR': '#ff0066', 'NEUTRAL': '#888888'}
-   
+    # Enhanced color mapping with phase awareness
+    phase_colors = {
+        'BULL': '#00ff88', 
+        'BEAR': '#ff0066',
+        'NEUTRAL': '#888888'
+    }
     
-    # Plot each Fibonacci window's oscillation
+    # Plot each Fibonacci window's oscillation with phase coloring
     for w in sorted(long_df['window'].unique()):
         window_df = long_df[long_df['window'] == w]
         
-        fig.add_trace(go.Scatter(
-            x=window_df['round_index'],
-            y=window_df['atr'],
-            mode='lines',
-            name=f'F{w} Osc',
-            line=dict(
-                width=2 + w/5 # Thicker line for larger windows
-            ),
-            hoverinfo='x+y+name',
-            showlegend=True
-        ))
+        # Create segments for each phase to allow different coloring
+        phases = window_df['phase'].unique()
+        
+        for phase in phases:
+            phase_df = window_df[window_df['phase'] == phase]
+            
+            fig.add_trace(go.Scatter(
+                x=phase_df['round_index'],
+                y=phase_df['atr'],
+                mode='lines',
+                name=f'F{w} {phase}',
+                line=dict(
+                    width=2 + w/5,
+                    color=phase_colors.get(phase, '#888888')
+                ),
+                hoverinfo='x+y+name',
+                customdata=np.stack((
+                    phase_df['center'],
+                    phase_df['phase'],
+                    phase_df['slope']
+                ), axis=-1),
+                hovertemplate=(
+                    "Round: %{x}<br>"
+                    "Range: %{y:.2f}<br>"
+                    "Center: %{customdata[0]:.2f}<br>"
+                    "Phase: %{customdata[1]}<br>"
+                    "Slope: %{customdata[2]:.2f}"
+                ),
+                showlegend=True
+            ))
     
+    # Add phase transition markers
+    for w in sorted(long_df['window'].unique()):
+        window_df = long_df[long_df['window'] == w]
+        transitions = window_df[window_df['phase'] != window_df['phase'].shift(1)].index
+        
+        for t in transitions:
+            if t > 0:
+                fig.add_vline(
+                    x=window_df.loc[t, 'round_index'],
+                    line_dash='dot',
+                    line_color=phase_colors.get(window_df.loc[t, 'phase'], '#888888'),
+                    annotation_text=f"F{w} Flip",
+                    annotation_position="top"
+                )
     
-    
-    # Layout
+    # Layout with enhanced title
     fig.update_layout(
-        title='🌌 ALIEN MWATR OSCILLATOR (True Oscillating Range Curves)',
+        title='🌌 ALIEN MWATR OSCILLATOR with Quantum Phase Detection',
         xaxis_title='Round Index',
         yaxis_title='Range Amplitude',
         hovermode='x unified',
@@ -1416,87 +1460,13 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
     
     st.plotly_chart(fig, use_container_width=True)
 
-
 def compute_range_width(df, window, col='multiplier'):
     """Range width = rolling high – rolling low, zero-filled."""
     high = df[col].rolling(window, min_periods=1).max()
     low  = df[col].rolling(window, min_periods=1).min()
     return (high - low).fillna(0)
 
-def multi_scale_hilbert(signal, windows=[3,5,8,13,21]):
-    results = {}
-    for window in windows:
-        analytic_signal = hilbert(signal[-window:])
-        results[window] = {
-            'amplitude': np.abs(analytic_signal),
-            'phase': np.unwrap(np.angle(analytic_signal))
-        }
-    return results
 
-def detect_phase_locking(hilbert_results):
-    lock_points = []
-    windows = sorted(hilbert_results.keys())
-    
-    for i in range(len(windows)-1):
-        w1, w2 = windows[i], windows[i+1]
-        phase_diff = hilbert_results[w1]['phase'][-1] - hilbert_results[w2]['phase'][-1]
-        
-        # Golden ratio phase locking condition
-        if abs(phase_diff % (2*np.pi)) < np.pi/8:  # 22.5° tolerance
-            lock_points.append({
-                'window_pair': (w1, w2),
-                'phase_diff': phase_diff,
-                'energy_ratio': hilbert_results[w1]['amplitude'][-1] / hilbert_results[w2]['amplitude'][-1]
-            })
-    
-    return lock_points
-
-def compute_resonance_matrix(lock_points):
-    if not lock_points: 
-        return 0.0
-    
-    # Fibonacci-weighted resonance score
-    weights = {3:0.1, 5:0.2, 8:0.3, 13:0.7, 21:1.0}
-    total = 0
-    max_score = 0
-    
-    for point in lock_points:
-        w1, w2 = point['window_pair']
-        score = weights.get(w2, 1.0) * (1 - abs(np.sin(point['phase_diff'])))
-        total += score
-        max_score += weights.get(w2, 1.0)
-    
-    return total / max_score if max_score > 0 else 0
-
-def generate_qor_signal(df):
-    # Get range width and compute oscillations
-    range_width = df['range_width'].values
-    hilbert_results = multi_scale_hilbert(range_width)
-    lock_points = detect_phase_locking(hilbert_results)
-    resonance = compute_resonance_matrix(lock_points)
-    
-    # Current volatility state
-    vol_state = "COMPRESSION" if df['range_width'].iloc[-1] < VOLATILITY_THRESHOLDS['micro'] else \
-               "TRANSITION" if df['range_width'].iloc[-1] < VOLATILITY_THRESHOLDS['meso'] else \
-               "EXPANSION"
-    
-    # Quantum prediction rules
-    if resonance > 0.85:
-        if vol_state == "COMPRESSION":
-            return "⚡ QUANTUM IMPLOSION IMMINENT - MAX ENTRY", resonance
-        else:
-            return "🌪️ HYPER-EXPANSION WARNING - STAND CLEAR", resonance
-            
-    elif resonance > 0.7:
-        return "🌀 RESONANCE BUILDUP - PREPARE STRIKE", resonance
-        
-    elif resonance < 0.3:
-        if vol_state == "EXPANSION":
-            return "❌ ENTROPY COLLAPSE - EXIT IMMEDIATELY", resonance
-        else:
-            return "🕳️ SINGULARITY FORMING - AVOID TRADES", resonance
-            
-    return "⚖️ QUANTUM EQUILIBRIUM - MONITOR", resonance
 
 
 @st.cache_data
@@ -2290,56 +2260,7 @@ if not df.empty:
     
     FIB_WINDOWS = [3, 5, 8, 13, 21, 34]
     
-    # After range width calculation
-    qor_signal, qor_score = generate_qor_signal(df)
     
-    # Visualize with quantum theme
-    st.subheader("🌌 QUANTUM OSCILLATION RESONANCE ENGINE")
-    col1, col2 = st.columns([1,2])
-    
-    with col1:
-        st.metric("RESONANCE SCORE", f"{qor_score:.2f}")
-        st.metric("PHASE STATE", qor_signal.split(" - ")[0])
-    
-    with col2:
-        # Create holographic resonance visualization
-        fig = go.Figure()
-        
-        # Add Fibonacci oscillator traces
-        windows = [3,5,8,13,21]
-        colors = ['#ff00cc', '#cc00ff', '#9900ff', '#6600ff', '#3300ff']
-        for i, window in enumerate(windows):
-            phase = np.linspace(0, 2*np.pi, window)
-            fig.add_trace(go.Scatterpolar(
-                r=[1]*window,
-                theta=phase*(180/np.pi),
-                mode='lines+markers',
-                name=f'F{window} Oscillator',
-                line=dict(color=colors[i], width=2),
-                marker=dict(size=8)
-            ))
-        
-        # Add phase lock connections
-        lock_points = detect_phase_locking(multi_scale_hilbert(df['range_width'].values))
-        for point in lock_points:
-            w1, w2 = point['window_pair']
-            fig.add_trace(go.Scatterpolar(
-                r=[0.5, 1.0],
-                theta=[0, point['phase_diff']*(180/np.pi)],
-                mode='lines',
-                line=dict(color='cyan', width=1+point['energy_ratio']*4),
-                showlegend=False
-            ))
-        
-        fig.update_layout(
-            polar=dict(
-                radialaxis=dict(visible=False),
-                angularaxis=dict(rotation=90, direction="clockwise")
-            ),
-            showlegend=True,
-            height=400
-        )
-        st.plotly_chart(fig, use_container_width=True)
     
     #with st.expander("📊 Advanced Range Modulation Signals Over Time", expanded=False):
         #st.subheader("📊 Advanced Trap Modulation Signals Over Time")
