@@ -1444,8 +1444,8 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
                 fig.add_vline(
                     x=window_df.loc[t, 'round_index'],
                     line_dash='dot',
-                    line_color=phase_colors.get(window_df.loc[t, 'phase'], '#888888'),
-                    line_opacity=0.8,
+                    line_color=adjust_brightness(phase_colors.get(window_df.loc[t, 'phase'], '#888888')),
+                    
                     line=dict(
                     width=5),
                 )
