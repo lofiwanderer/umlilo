@@ -1468,7 +1468,87 @@ def compute_range_width(df, window, col='multiplier'):
     return (high - low).fillna(0)
 
 
+def compute_range_components(df, window):
+    """
+    Calculate range center, width, and phase for a given window
+    Returns: (range_center, range_width, phase)
+    """
+    high = df['multiplier'].rolling(window, min_periods=1).max()
+    low = df['multiplier'].rolling(window, min_periods=1).min()
+    center = (high + low) / 2
+    width = high - low
+    
+    # Dynamic phase detection
+    phase = np.where(center > center.mean(), 'BULL', 'BEAR')
+    return center, width, phase
 
+def detect_phase_transitions(phases):
+    """Identify points where phase flips between BULL/BEAR"""
+    flips = []
+    for i in range(1, len(phases)):
+        if phases[i] != phases[i-1]:
+            flips.append(i)
+    return flips
+
+def plot_quantum_range_oscillator(df, windows=[3, 5, 8, 13]):
+    fig = go.Figure()
+    
+    # Color mapping
+    phase_colors = {'BULL': '#00ff88', 'BEAR': '#ff0066'}
+    
+    for w in windows:
+        center, width, phase = compute_range_components(df, w)
+        
+        # Plot range width with phase coloring
+        fig.add_trace(go.Scatter(
+            x=df.index,
+            y=width,
+            name=f'F{w} Range',
+            line=dict(width=2 + w/5, color=phase_colors[phase[-1]]),
+            mode='lines',
+            customdata=np.stack((center, phase), axis=-1),
+            hovertemplate=(
+                "Round: %{x}<br>"
+                "Width: %{y:.2f}<br>"
+                "Center: %{customdata[0]:.2f}<br>"
+                "Phase: %{customdata[1]}"
+            )
+        ))
+        
+        # Mark phase transitions
+        transitions = detect_phase_transitions(phase)
+        for t in transitions:
+            fig.add_vline(
+                x=df.index[t],
+                line_dash='dot',
+                line_color=phase_colors[phase[t]],
+                annotation_text=f"F{w} Flip",
+                annotation_position="top"
+            )
+    
+    # Add dynamic Bollinger-style bands
+    mean_width = width.rolling(21).mean()
+    std_width = width.rolling(21).std()
+    fig.add_trace(go.Scatter(
+        x=df.index,
+        y=mean_width + 2*std_width,
+        line=dict(color='gray', dash='dot'),
+        name='Upper Band'
+    ))
+    fig.add_trace(go.Scatter(
+        x=df.index,
+        y=mean_width - 2*std_width,
+        line=dict(color='gray', dash='dot'),
+        name='Lower Band'
+    ))
+    
+    fig.update_layout(
+        title='🌀 Quantum Range Phase Oscillator',
+        yaxis_title='Range Width',
+        hovermode='x unified',
+        showlegend=True
+    )
+    return fig
 
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
@@ -2262,6 +2342,9 @@ if not df.empty:
     FIB_WINDOWS = [3, 5, 8, 13, 21, 34]
     
     
+    st.subheader("Quantum Range Phase Analysis")
+    fig = plot_quantum_range_oscillator(df)
+    st.plotly_chart(fig, use_container_width=True)
     
     #with st.expander("📊 Advanced Range Modulation Signals Over Time", expanded=False):
         #st.subheader("📊 Advanced Trap Modulation Signals Over Time")
