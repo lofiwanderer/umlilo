@@ -1445,8 +1445,7 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
                     x=window_df.loc[t, 'round_index'],
                     line_dash='dot',
                     line_color=phase_colors.get(window_df.loc[t, 'phase'], '#888888'),
-                    annotation_text=f"F{w} Flip",
-                    annotation_position="top"
+                    
                 )
     
     # Layout with enhanced title
