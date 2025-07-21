@@ -1409,30 +1409,30 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
         for phase in phases:
             phase_df = window_df[window_df['phase'] == phase]
             
-        fig.add_trace(go.Scatter(
-                x=window_df['round_index'],
-                y=window_df['atr'],
-                mode='lines',
-                name=f'F{w} {phase}',
-                line=dict(
-                    width=2 + w/5,
-                    color=phase_colors.get(phase, '#888888')
-                ),
-                hoverinfo='x+y+name',
-                customdata=np.stack((
-                    phase_df['center'],
-                    phase_df['phase'],
-                    phase_df['slope']
-                ), axis=-1),
-                hovertemplate=(
-                    "Round: %{x}<br>"
-                    "Range: %{y:.2f}<br>"
-                    "Center: %{customdata[0]:.2f}<br>"
-                    "Phase: %{customdata[1]}<br>"
-                    "Slope: %{customdata[2]:.2f}"
-                ),
-                showlegend=True
-            ))
+            fig.add_trace(go.Scatter(
+                    x=window_df['round_index'],
+                    y=window_df['atr'],
+                    mode='lines',
+                    name=f'F{w} {phase}',
+                    line=dict(
+                        width=2 + w/5,
+                        color=phase_colors.get(phase, '#888888')
+                    ),
+                    hoverinfo='x+y+name',
+                    customdata=np.stack((
+                        phase_df['center'],
+                        phase_df['phase'],
+                        phase_df['slope']
+                    ), axis=-1),
+                    hovertemplate=(
+                        "Round: %{x}<br>"
+                        "Range: %{y:.2f}<br>"
+                        "Center: %{customdata[0]:.2f}<br>"
+                        "Phase: %{customdata[1]}<br>"
+                        "Slope: %{customdata[2]:.2f}"
+                    ),
+                    showlegend=True
+                ))
         
     # Add phase transition markers
     for w in sorted(long_df['window'].unique()):
