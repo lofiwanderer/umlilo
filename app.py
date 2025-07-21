@@ -1399,42 +1399,67 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
         'NEUTRAL': '#888888'
     }
     
-    # Plot each Fibonacci window's oscillation with phase coloring
+    # Plot each Fibonacci window's oscillation as single trace with segment coloring
     for w in sorted(long_df['window'].unique()):
-        window_df = long_df[long_df['window'] == w]
+        window_df = long_df[long_df['window'] == w].sort_values('round_index')
         
-        # Create segments for each phase to allow different coloring
-        phases = window_df['phase'].unique()
+        # Create continuous line segments with color changes at phase transitions
+        segments = []
+        current_phase = None
+        segment_start = 0
         
-        for phase in phases:
-            phase_df = window_df[window_df['phase'] == phase]
-            
-        fig.add_trace(go.Scatter(
-                    x=phase_df['round_index'],
-                    y=phase_df['atr'],
-                    mode='lines',
-                    name=f'F{w} {phase}',
-                    line=dict(
-                        width=2 + w/5,
-                        color=phase_colors.get(phase, '#888888')
-                    ),
-                    hoverinfo='x+y+name',
-                    customdata=np.stack((
-                        phase_df['center'],
-                        phase_df['phase'],
-                        phase_df['slope']
-                    ), axis=-1),
-                    hovertemplate=(
-                        "Round: %{x}<br>"
-                        "Range: %{y:.2f}<br>"
-                        "Center: %{customdata[0]:.2f}<br>"
-                        "Phase: %{customdata[1]}<br>"
-                        "Slope: %{customdata[2]:.2f}"
-                    ),
-                    showlegend=True
-                ))    
+        for i in range(len(window_df)):
+            if window_df['phase'].iloc[i] != current_phase:
+                if current_phase is not None:
+                    # Add the completed segment
+                    segment_df = window_df.iloc[segment_start:i]
+                    segments.append({
+                        'x': segment_df['round_index'],
+                        'y': segment_df['atr'],
+                        'phase': current_phase,
+                        'window': w
+                    })
+                current_phase = window_df['phase'].iloc[i]
+                segment_start = i
         
-    # Add phase transition markers
+        # Add the final segment
+        if segment_start < len(window_df):
+            segment_df = window_df.iloc[segment_start:]
+            segments.append({
+                'x': segment_df['round_index'],
+                'y': segment_df['atr'],
+                'phase': current_phase,
+                'window': w
+            })
+        
+        # Plot each segment with the appropriate color
+        for seg in segments:
+            fig.add_trace(go.Scatter(
+                x=seg['x'],
+                y=seg['y'],
+                mode='lines',
+                name=f'F{seg["window"]}',
+                line=dict(
+                    width=2 + w/5,
+                    color=phase_colors.get(seg['phase'], '#888888')
+                ),
+                hoverinfo='x+y+name',
+                customdata=np.stack((
+                    window_df.loc[seg['x'].index, 'center'],
+                    window_df.loc[seg['x'].index, 'phase'],
+                    window_df.loc[seg['x'].index, 'slope']
+                ), axis=-1),
+                hovertemplate=(
+                    "Round: %{x}<br>"
+                    "Range: %{y:.2f}<br>"
+                    "Center: %{customdata[0]:.2f}<br>"
+                    "Phase: %{customdata[1]}<br>"
+                    "Slope: %{customdata[2]:.2f}"
+                ),
+                showlegend=True if seg == segments[0] else False  # Only show legend once per window
+            ))
+    
+    # Add phase transition markers (unchanged)
     for w in sorted(long_df['window'].unique()):
         window_df = long_df[long_df['window'] == w]
         transitions = window_df[window_df['phase'] != window_df['phase'].shift(1)].index
@@ -1444,10 +1469,10 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
                 fig.add_vline(
                     x=window_df.loc[t, 'round_index'],
                     line_dash='dot',
-                    line_color=phase_colors.get(window_df.loc[t, 'phase'], '#888888'),
-                    
-                    line=dict(
-                    width=5),
+                    line_color=adjust_brightness(phase_colors.get(window_df.loc[t, 'phase'], '#888888'), 1.5),
+                    line_width=2,
+                    annotation_text=f"F{w} Flip",
+                    annotation_position="top"
                 )
     
     # Layout with enhanced title
