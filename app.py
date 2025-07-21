@@ -1409,14 +1409,14 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
         for phase in phases:
             phase_df = window_df[window_df['phase'] == phase]
             
-            fig.add_trace(go.Scatter(
+         fig.add_trace(go.Scatter(
                     x=window_df['round_index'],
                     y=window_df['atr'],
                     mode='lines',
                     name=f'F{w} {phase}',
                     line=dict(
                         width=2 + w/5,
-                        color=phase_colors.get(phase, '#888888')
+                        color=phase_colors[phase[-1]]
                     ),
                     hoverinfo='x+y+name',
                     customdata=np.stack((
@@ -1432,7 +1432,7 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
                         "Slope: %{customdata[2]:.2f}"
                     ),
                     showlegend=True
-                ))
+                ))   
         
     # Add phase transition markers
     for w in sorted(long_df['window'].unique()):
