@@ -1419,35 +1419,35 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
     
     # Plot each Fibonacci window's oscillation with phase coloring
     for w in sorted(long_df['window'].unique()):
-    window_df = long_df[long_df['window'] == w]
-
-    phase_segments = get_phase_segments(window_df)
-
-    for phase, seg_df in phase_segments:
-        fig.add_trace(go.Scatter(
-            x=seg_df['round_index'],
-            y=seg_df['atr'],
-            mode='lines',
-            name=f'F{w}' if phase == phase_segments[0][0] else None,  # Only show legend once per window
-            line=dict(
-                width=2 + w/5,
-                color=phase_colors.get(phase, '#888888')
-            ),
-            hoverinfo='x+y+name',
-            customdata=np.stack((
-                seg_df['center'],
-                seg_df['phase'],
-                seg_df['slope']
-            ), axis=-1),
-            hovertemplate=(
-                "Round: %{x}<br>"
-                "Range: %{y:.2f}<br>"
-                "Center: %{customdata[0]:.2f}<br>"
-                "Phase: %{customdata[1]}<br>"
-                "Slope: %{customdata[2]:.2f}"
-            ),
-            showlegend=(phase == phase_segments[0][0])  # Prevent duplicate legends
-        ))
+        window_df = long_df[long_df['window'] == w]
+    
+        phase_segments = get_phase_segments(window_df)
+    
+        for phase, seg_df in phase_segments:
+            fig.add_trace(go.Scatter(
+                x=seg_df['round_index'],
+                y=seg_df['atr'],
+                mode='lines',
+                name=f'F{w}' if phase == phase_segments[0][0] else None,  # Only show legend once per window
+                line=dict(
+                    width=2 + w/5,
+                    color=phase_colors.get(phase, '#888888')
+                ),
+                hoverinfo='x+y+name',
+                customdata=np.stack((
+                    seg_df['center'],
+                    seg_df['phase'],
+                    seg_df['slope']
+                ), axis=-1),
+                hovertemplate=(
+                    "Round: %{x}<br>"
+                    "Range: %{y:.2f}<br>"
+                    "Center: %{customdata[0]:.2f}<br>"
+                    "Phase: %{customdata[1]}<br>"
+                    "Slope: %{customdata[2]:.2f}"
+                ),
+                showlegend=(phase == phase_segments[0][0])  # Prevent duplicate legends
+            ))
     
     # Add phase transition markers
     for w in sorted(long_df['window'].unique()):
