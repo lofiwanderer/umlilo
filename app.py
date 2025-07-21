@@ -1542,7 +1542,7 @@ def detect_phase_transitions(phases):
             flips.append(i)
     return flips
 
-def plot_quantum_range_oscillator(df, windows=[3, 5, 8, 13]):
+def plot_quantum_range_oscillator(df, windows=[3, 5, 8, 13,21,34]):
     fig = go.Figure()
     
     # Color mapping
