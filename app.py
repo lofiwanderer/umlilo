@@ -1417,27 +1417,62 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
         'NEUTRAL': '#888888'
     }
     
-    # Plot each Fibonacci window's oscillation with phase coloring
+    # Plot each Fibonacci window's oscillation as single trace with segment coloring
     for w in sorted(long_df['window'].unique()):
-        window_df = long_df[long_df['window'] == w]
-    
-        phase_segments = get_phase_segments(window_df)
-    
-        for phase, seg_df in phase_segments:
+        window_df = long_df[long_df['window'] == w].sort_values('round_index').copy()
+        
+        # Reset index for proper segment comparison
+        window_df.reset_index(drop=True, inplace=True)
+        
+        # Create continuous line segments with color changes at phase transitions
+        segments = []
+        current_phase = None
+        segment_start = 0
+        
+        for i in range(len(window_df)):
+            if window_df.at[i, 'phase'] != current_phase:
+                if current_phase is not None:
+                    # Add the completed segment
+                    segment_df = window_df.iloc[segment_start:i]
+                    segments.append({
+                        'x': segment_df['round_index'],
+                        'y': segment_df['atr'],
+                        'phase': current_phase,
+                        'window': w,
+                        'start_idx': segment_start,
+                        'end_idx': i
+                    })
+                current_phase = window_df.at[i, 'phase']
+                segment_start = i
+        
+        # Add the final segment
+        if segment_start < len(window_df):
+            segment_df = window_df.iloc[segment_start:]
+            segments.append({
+                'x': segment_df['round_index'],
+                'y': segment_df['atr'],
+                'phase': current_phase,
+                'window': w,
+                'start_idx': segment_start,
+                'end_idx': len(window_df)
+            })
+        
+        # Plot each segment with the appropriate color
+        for seg_idx, seg in enumerate(segments):
             fig.add_trace(go.Scatter(
-                x=seg_df['round_index'],
-                y=seg_df['atr'],
+                x=seg['x'],
+                y=seg['y'],
                 mode='lines',
-                name=f'F{w}' if phase == phase_segments[0][0] else None,  # Only show legend once per window
+                name=f'F{seg["window"]}',
                 line=dict(
                     width=2 + w/5,
-                    color=phase_colors.get(phase, '#888888')
+                    color=phase_colors.get(seg['phase'], '#888888')
                 ),
                 hoverinfo='x+y+name',
                 customdata=np.stack((
-                    seg_df['center'],
-                    seg_df['phase'],
-                    seg_df['slope']
+                    window_df.loc[seg['start_idx']:seg['end_idx'], 'center'],
+                    window_df.loc[seg['start_idx']:seg['end_idx'], 'phase'],
+                    window_df.loc[seg['start_idx']:seg['end_idx'], 'slope']
                 ), axis=-1),
                 hovertemplate=(
                     "Round: %{x}<br>"
@@ -1446,7 +1481,7 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
                     "Phase: %{customdata[1]}<br>"
                     "Slope: %{customdata[2]:.2f}"
                 ),
-                showlegend=(phase == phase_segments[0][0])  # Prevent duplicate legends
+                showlegend=True if seg_idx == 0 else False  # Only show legend for first segment
             ))
     
     # Add phase transition markers
@@ -1460,8 +1495,8 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
                     x=window_df.loc[t, 'round_index'],
                     line_dash='dot',
                     line_color=phase_colors.get(window_df.loc[t, 'phase'], '#888888'),
-                    annotation_text=f"F{w} Flip",
-                    annotation_position="top"
+                    line_width=2,
+                    
                 )
     
     # Layout with enhanced title
@@ -1474,6 +1509,7 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
     )
     
     st.plotly_chart(fig, use_container_width=True)
+
 
 
 
