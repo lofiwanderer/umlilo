@@ -1410,8 +1410,8 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
             phase_df = window_df[window_df['phase'] == phase]
             
         fig.add_trace(go.Scatter(
-                    x=window_df['round_index'],
-                    y=window_df['atr'],
+                    x=phase_df['round_index'],
+                    y=phase_df['atr'],
                     mode='lines',
                     name=f'F{w} {phase}',
                     line=dict(
