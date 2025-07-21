@@ -1416,7 +1416,7 @@ def plot_alien_mwatr_oscillator(long_df, crossings=[]):
                     name=f'F{w} {phase}',
                     line=dict(
                         width=2 + w/5,
-                        color=phase_colors[phase[-1]]
+                        color=phase_colors.get(window_df.loc[t, 'phase'], '#888888')
                     ),
                     hoverinfo='x+y+name',
                     customdata=np.stack((
