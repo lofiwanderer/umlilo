@@ -1612,21 +1612,40 @@ def compute_volatility_components(df, window):
         lambda x: 0 if x[0]*x[1] > 0 else 1, raw=True
     )).rolling(window).mean()
     
+    # Convert to pandas Series if not already
+    if not isinstance(direction_changes, pd.Series):
+        direction_changes = pd.Series(direction_changes, index=df.index)
+    
     # Normalized volatility width
     vol_width = direction_changes.rolling(window).std() * np.sqrt(window)
     
     # Volatility center (dynamic equilibrium line)
-    vol_center = savgol_filter(direction_changes, window*2+1, 3)
+    vol_center = pd.Series(
+        savgol_filter(direction_changes.fillna(0), 
+        window*2+1, 
+        3),
+        index=direction_changes.index
+    )
+    
+    # Ensure we have pandas Series for rolling operations
+    if not isinstance(vol_center, pd.Series):
+        vol_center = pd.Series(vol_center, index=direction_changes.index)
+    
+    # Calculate rolling mean and std first
+    rolling_mean = vol_center.rolling(21, min_periods=1).mean()
+    rolling_std = vol_center.rolling(21, min_periods=1).std()
     
     # Phase detection using volatility regimes
-    phase = np.where(
-        (vol_center > vol_center.rolling(21).mean() + 0.1*vol_center.std()), 
-        'TRAP', 
-        np.where(
-            vol_center < vol_center.rolling(21).mean() - 0.1*vol_center.std(),
-            'STABLE',
-            'TRANSITION'
-        )
+    phase = np.select(
+        [
+            vol_center > (rolling_mean + 0.1*rolling_std),
+            vol_center < (rolling_mean - 0.1*rolling_std)
+        ],
+        [
+            'TRAP',
+            'STABLE'
+        ],
+        default='TRANSITION'
     )
     
     # Direction stability score (0-1)
@@ -1635,11 +1654,29 @@ def compute_volatility_components(df, window):
     return vol_center, vol_width, phase, stability
 
 def detect_volatility_squeezes(vol_width, window):
-    """Identify volatility compression/expansion zones"""
-    z_score = (vol_width - vol_width.rolling(50).mean()) / vol_width.rolling(50).std()
-    squeezes = np.where(z_score < -1.5, 'COMPRESSION',
-                      np.where(z_score > 1.5, 'EXPANSION', 'NORMAL'))
-    return squeezes
+    """More robust squeeze detection"""
+    if not isinstance(vol_width, pd.Series):
+        vol_width = pd.Series(vol_width)
+    
+    # Use robust scaling (median/IQR instead of mean/std)
+    median = vol_width.rolling(50, min_periods=1).median()
+    iqr = (vol_width.rolling(50, min_periods=1).quantile(0.75) - 
+           vol_width.rolling(50, min_periods=1).quantile(0.25))
+    
+    # Modified z-score
+    modified_z = (vol_width - median) / (iqr * 0.7413)
+    
+    return np.select(
+        [
+            modified_z < -1.5,
+            modified_z > 1.5
+        ],
+        [
+            'COMPRESSION',
+            'EXPANSION'
+        ],
+        default='NORMAL'
+    )
 
 def plot_quantum_volatility_oscillator(df, windows=[3, 5, 8, 13, 21, 34]):
     fig = go.Figure()
