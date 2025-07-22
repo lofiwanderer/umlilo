@@ -1604,52 +1604,63 @@ def plot_quantum_range_oscillator(df, windows=[3, 5, 8, 13,21,34]):
 
 def compute_volatility_components(df, window):
     """
-    Calculate advanced volatility metrics using MSI as base
+    Calculate advanced volatility metrics with robust smoothing
     Returns: (vol_center, vol_width, phase, direction_stability)
     """
     # MSI-based volatility calculation
     direction_changes = np.abs(df['multiplier'].diff().rolling(2).apply(
         lambda x: 0 if x[0]*x[1] > 0 else 1, raw=True
-    )).rolling(window).mean()
+    )).fillna(0)
     
-    # Convert to pandas Series if not already
-    if not isinstance(direction_changes, pd.Series):
-        direction_changes = pd.Series(direction_changes, index=df.index)
+    # Ensure we have enough data for calculations
+    if len(direction_changes) < 3:  # Minimum data points for any meaningful analysis
+        empty = pd.Series(np.nan, index=df.index)
+        return empty, empty, pd.Series(['TRANSITION']*len(df), index=df.index), empty
+    
+    # Adaptive Savitzky-Golay filter
+    def safe_savgol(series, window_length, polyorder):
+        """Handle edge cases for Savitzky-Golay filter"""
+        if len(series) < window_length:
+            # Fall back to simpler smoothing if not enough data
+            return series.rolling(min(len(series), 3), min_periods=1).mean()
+        try:
+            return savgol_filter(series, window_length, polyorder)
+        except ValueError:
+            # If still fails, use expanding mean
+            return series.expanding().mean()
     
     # Normalized volatility width
-    vol_width = direction_changes.rolling(window).std() * np.sqrt(window)
+    vol_width = direction_changes.rolling(window, min_periods=1).std() * np.sqrt(window)
     
-    # Volatility center (dynamic equilibrium line)
+    # Volatility center with safe smoothing
+    smooth_window = min(window*2+1, len(direction_changes))  # Don't exceed data length
     vol_center = pd.Series(
-        savgol_filter(direction_changes.fillna(0), 
-        window*2+1, 
-        3),
+        safe_savgol(direction_changes.values, smooth_window, 3),
         index=direction_changes.index
     )
     
-    # Ensure we have pandas Series for rolling operations
-    if not isinstance(vol_center, pd.Series):
-        vol_center = pd.Series(vol_center, index=direction_changes.index)
-    
-    # Calculate rolling mean and std first
+    # Calculate rolling metrics with minimum periods
     rolling_mean = vol_center.rolling(21, min_periods=1).mean()
     rolling_std = vol_center.rolling(21, min_periods=1).std()
     
     # Phase detection using volatility regimes
-    phase = np.select(
-        [
-            vol_center > (rolling_mean + 0.1*rolling_std),
-            vol_center < (rolling_mean - 0.1*rolling_std)
-        ],
-        [
-            'TRAP',
-            'STABLE'
-        ],
-        default='TRANSITION'
+    phase = pd.Series(
+        np.select(
+            [
+                vol_center > (rolling_mean + 0.1*rolling_std),
+                vol_center < (rolling_mean - 0.1*rolling_std)
+            ],
+            [
+                'TRAP',
+                'STABLE'
+            ],
+            default='TRANSITION'
+        ),
+        index=vol_center.index
     )
     
     # Direction stability score (0-1)
-    stability = 1 - direction_changes.rolling(window).mean()
+    stability = 1 - direction_changes.rolling(window, min_periods=1).mean()
     
     return vol_center, vol_width, phase, stability
 
