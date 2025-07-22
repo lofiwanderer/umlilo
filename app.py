@@ -1666,7 +1666,7 @@ def plot_quantum_volatility_oscillator(df, windows=[3, 5, 8, 13, 21, 34]):
             x=df.index,
             y=width,
             name=f'F{w} Vol',
-            line=dict(width=2 + np.log(w),  # Logarithmic scaling for visibility
+            line=dict(width=2 + np.log(w)),  # Logarithmic scaling for visibility
             mode='lines',
             customdata=np.stack((center, phase, stability, squeezes), axis=-1),
             hovertemplate=(
