@@ -1602,6 +1602,123 @@ def plot_quantum_range_oscillator(df, windows=[3, 5, 8, 13,21,34]):
     )
     return fig
 
+def compute_volatility_components(df, window):
+    """
+    Calculate advanced volatility metrics using MSI as base
+    Returns: (vol_center, vol_width, phase, direction_stability)
+    """
+    # MSI-based volatility calculation
+    direction_changes = np.abs(df['multiplier'].diff().rolling(2).apply(
+        lambda x: 0 if x[0]*x[1] > 0 else 1, raw=True
+    )).rolling(window).mean()
+    
+    # Normalized volatility width
+    vol_width = direction_changes.rolling(window).std() * np.sqrt(window)
+    
+    # Volatility center (dynamic equilibrium line)
+    vol_center = savgol_filter(direction_changes, window*2+1, 3)
+    
+    # Phase detection using volatility regimes
+    phase = np.where(
+        (vol_center > vol_center.rolling(21).mean() + 0.1*vol_center.std()), 
+        'TRAP', 
+        np.where(
+            vol_center < vol_center.rolling(21).mean() - 0.1*vol_center.std(),
+            'STABLE',
+            'TRANSITION'
+        )
+    )
+    
+    # Direction stability score (0-1)
+    stability = 1 - direction_changes.rolling(window).mean()
+    
+    return vol_center, vol_width, phase, stability
+
+def detect_volatility_squeezes(vol_width, window):
+    """Identify volatility compression/expansion zones"""
+    z_score = (vol_width - vol_width.rolling(50).mean()) / vol_width.rolling(50).std()
+    squeezes = np.where(z_score < -1.5, 'COMPRESSION',
+                      np.where(z_score > 1.5, 'EXPANSION', 'NORMAL'))
+    return squeezes
+
+def plot_quantum_volatility_oscillator(df, windows=[3, 5, 8, 13, 21, 34]):
+    fig = go.Figure()
+    
+    # Advanced color mapping
+    phase_colors = {
+        'TRAP': '#ff0066',      # High volatility (trap zones)
+        'STABLE': '#00ff88',    # Low volatility (trending)
+        'TRANSITION': '#ffcc00' # Warning zones
+    }
+    
+    squeeze_colors = {
+        'COMPRESSION': '#9900ff',
+        'EXPANSION': '#00ffff',
+        'NORMAL': 'rgba(0,0,0,0)'
+    }
+    
+    for w in windows:
+        center, width, phase, stability = compute_volatility_components(df, w)
+        squeezes = detect_volatility_squeezes(width, w)
+        
+        # Plot volatility width with phase coloring
+        fig.add_trace(go.Scatter(
+            x=df.index,
+            y=width,
+            name=f'F{w} Vol',
+            line=dict(width=2 + np.log(w),  # Logarithmic scaling for visibility
+            mode='lines',
+            customdata=np.stack((center, phase, stability, squeezes), axis=-1),
+            hovertemplate=(
+                "Round: %{x}<br>"
+                "Vol Width: %{y:.4f}<br>"
+                "Vol Center: %{customdata[0]:.4f}<br>"
+                "Phase: %{customdata[1]}<br>"
+                "Stability: %{customdata[2]:.2%}<br>"
+                "Squeeze: %{customdata[3]}"
+            )
+        ))
+        
+        # Add squeeze background
+        for squeeze_type in ['COMPRESSION', 'EXPANSION']:
+            fig.add_trace(go.Scatter(
+                x=df.index,
+                y=width.where(squeezes == squeeze_type),
+                fill='tozeroy',
+                mode='none',
+                name=f'F{w} {squeeze_type}',
+                fillcolor=squeeze_colors[squeeze_type],
+                opacity=0.15,
+                showlegend=False
+            ))
+    
+    # Add volatility bands
+    mean_width = width.rolling(21).mean()
+    fig.add_trace(go.Scatter(
+        x=df.index,
+        y=mean_width + 2*width.rolling(21).std(),
+        line=dict(color='#666666', dash='dot'),
+        name='Volatility Upper Band'
+    ))
+    fig.add_trace(go.Scatter(
+        x=df.index,
+        y=np.maximum(mean_width - 2*width.rolling(21).std(), 0),
+        line=dict(color='#666666', dash='dot'),
+        name='Volatility Lower Band'
+    ))
+    
+    fig.update_layout(
+        title='🌀 Quantum Volatility Phase Oscillator - Trap Detection System',
+        yaxis_title='Volatility Oscillation',
+        hovermode='x unified',
+        showlegend=True,
+        plot_bgcolor='rgba(10,10,20,0.9)',
+        paper_bgcolor='rgba(10,10,20,1)',
+        font=dict(color='white')
+    )
+    
+    return fig
+
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
@@ -2343,28 +2460,28 @@ if not df.empty:
     regime_label, corr_value = detect_phase_regime(oscillator_df)
 
     # Analyze
-    osc_df, phase_alignment, dominant_window = analyze_multi_window_atr_oscillator(
-        df,
-        multiplier_col='multiplier',
-        windows=[3,5,8,13,21,34]
-    )
+    #osc_df, phase_alignment, dominant_window = analyze_multi_window_atr_oscillator(
+        #df,
+        #multiplier_col='multiplier',
+        #windows=[3,5,8,13,21,34]
+    #)
     
     # Cross-intersections
-    crossings = detect_phase_cross_intersections(osc_df)
+    #crossings = detect_phase_cross_intersections(osc_df)
     
-    with st.expander("🧭 Multi-Window ATR Oscillator Analysis", expanded=False):
+    #with st.expander("🧭 Multi-Window ATR Oscillator Analysis", expanded=False):
         # Display
-        st.subheader("🧭 Multi-Window ATR Oscillator Analysis")
-        st.dataframe(osc_df)
+        #st.subheader("🧭 Multi-Window ATR Oscillator Analysis")
+        #st.dataframe(osc_df)
     
         # Visualization
-        fig_atr = plot_multi_window_atr_dashboard(osc_df, phase_alignment, dominant_window, crossings)
-        st.plotly_chart(fig_atr, use_container_width=True)
+        #fig_atr = plot_multi_window_atr_dashboard(osc_df, phase_alignment, dominant_window, crossings)
+        #st.plotly_chart(fig_atr, use_container_width=True)
         
-        st.markdown(f"**Phase Alignment Score:** {phase_alignment}")
-        st.markdown(f"**Dominant Cycle Window:** {dominant_window}")
-        if crossings:
-            st.markdown(f"**Phase Cross Intersections:** {crossings}")
+        #st.markdown(f"**Phase Alignment Score:** {phase_alignment}")
+        #st.markdown(f"**Dominant Cycle Window:** {dominant_window}")
+        #if crossings:
+            #st.markdown(f"**Phase Cross Intersections:** {crossings}")
     
     
     st.subheader("🌀 ALIEN MWATR OSCILLATOR (Ultra-Mode)")
@@ -2398,6 +2515,11 @@ if not df.empty:
     fig = plot_quantum_range_oscillator(df)
     st.plotly_chart(fig, use_container_width=True)
     
+    #---------------------------------------------------#
+    # In Streamlit
+    vol_fig = plot_quantum_volatility_oscillator(df)
+    st.plotly_chart(vol_fig, use_container_width=True)
+    #---------------------------------------------------#
     #with st.expander("📊 Advanced Range Modulation Signals Over Time", expanded=False):
         #st.subheader("📊 Advanced Trap Modulation Signals Over Time")
         #st.plotly_chart(plot_raw_range_signals(range_signals_df), use_container_width=True)
