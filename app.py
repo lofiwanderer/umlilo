@@ -1689,52 +1689,82 @@ def detect_volatility_squeezes(vol_width, window):
         default='NORMAL'
     )
 
-def plot_quantum_volatility_oscillator(df, windows=[3, 5, 8, 13]):
+def plot_quantum_volatility_oscillator(df, windows=[3, 5, 8, 13, 21, 34]):
     fig = go.Figure()
     
+    # Advanced color mapping
+    phase_colors = {
+        'TRAP': '#ff0066',      # High volatility (trap zones)
+        'STABLE': '#00ff88',    # Low volatility (trending)
+        'TRANSITION': '#ffcc00' # Warning zones
+    }
+    
+    squeeze_colors = {
+        'COMPRESSION': '#9900ff',
+        'EXPANSION': '#00ffff',
+        'NORMAL': 'rgba(0,0,0,0)'
+    }
+    
     for w in windows:
-        # Get components (now with robust calculations)
         center, width, phase, stability = compute_volatility_components(df, w)
+        squeezes = detect_volatility_squeezes(width, w)
         
-        # Only plot if we have valid data
-        if not center.isna().all():
+        # Plot volatility width with phase coloring
+        fig.add_trace(go.Scatter(
+            x=df.index,
+            y=width,
+            name=f'F{w} Vol',
+            line=dict(width=2 + np.log(w)),  # Logarithmic scaling for visibility
+            mode='lines',
+            customdata=np.stack((center, phase, stability, squeezes), axis=-1),
+            hovertemplate=(
+                "Round: %{x}<br>"
+                "Vol Width: %{y:.4f}<br>"
+                "Vol Center: %{customdata[0]:.4f}<br>"
+                "Phase: %{customdata[1]}<br>"
+                "Stability: %{customdata[2]:.2%}<br>"
+                "Squeeze: %{customdata[3]}"
+            )
+        ))
+        
+        # Add squeeze background
+        for squeeze_type in ['COMPRESSION', 'EXPANSION']:
             fig.add_trace(go.Scatter(
                 x=df.index,
-                y=width,
-                name=f'F{w} Vol',
-                line=dict(width=1 + np.log1p(w)),  # Safer width scaling
-                mode='lines',
-                customdata=np.stack((center, phase, stability), axis=-1),
-                hovertemplate=(
-                    "Round: %{x}<br>"
-                    "Vol Width: %{y:.4f}<br>"
-                    "Vol Center: %{customdata[0]:.4f}<br>"
-                    "Phase: %{customdata[1]}<br>"
-                    "Stability: %{customdata[2]:.2%}"
-                )
+                y=width.where(squeezes == squeeze_type),
+                fill='tozeroy',
+                mode='none',
+                name=f'F{w} {squeeze_type}',
+                fillcolor=squeeze_colors[squeeze_type],
+                opacity=0.15,
+                showlegend=False
             ))
     
-    # Only add bands if we have enough data
-    if len(df) > 21:
-        mean_width = width.rolling(21).mean()
-        fig.add_trace(go.Scatter(
-            x=df.index,
-            y=mean_width + 2*width.rolling(21).std(),
-            line=dict(color='gray', dash='dot'),
-            name='Upper Band'
-        ))
-        fig.add_trace(go.Scatter(
-            x=df.index,
-            y=np.maximum(mean_width - 2*width.rolling(21).std(), 0),
-            line=dict(color='gray', dash='dot'),
-            name='Lower Band'
-        ))
+    # Add volatility bands
+    mean_width = width.rolling(21).mean()
+    fig.add_trace(go.Scatter(
+        x=df.index,
+        y=mean_width + 2*width.rolling(21).std(),
+        line=dict(color='#666666', dash='dot'),
+        name='Volatility Upper Band'
+    ))
+    fig.add_trace(go.Scatter(
+        x=df.index,
+        y=np.maximum(mean_width - 2*width.rolling(21).std(), 0),
+        line=dict(color='#666666', dash='dot'),
+        name='Volatility Lower Band'
+    ))
     
     fig.update_layout(
-        title='🌀 Quantum Volatility Phase Oscillator',
-        yaxis_title='Volatility',
-        hovermode='x unified'
+        title='🌀 Quantum Volatility Phase Oscillator - Trap Detection System',
+        yaxis_title='Volatility Oscillation',
+        hovermode='x unified',
+        showlegend=True,
+        plot_bgcolor='rgba(10,10,20,0.9)',
+        paper_bgcolor='rgba(10,10,20,1)',
+        font=dict(color='white')
     )
+    
     return fig
 
 @st.cache_data
