@@ -2001,6 +2001,28 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     high_26 = df["msi"].rolling(window=26).max()
     low_26  = df["msi"].rolling(window=26).min()
     df["kijun"] = (high_26 + low_26) / 2
+
+     # MSI[5] and MSI[10]
+    df['msi_5'] = df['multiplier'].rolling(5).mean()
+    df['msi_10'] = df['multiplier'].rolling(10).mean()
+    
+    # Cross states
+    df['mini_surge'] = (df['msi_5'] > df['tenkan']) & (df['msi_5'].shift(1) <= df['tenkan'].shift(1))
+    df['main_surge'] = (df['msi_10'] > df['tenkan']) & (df['msi_10'].shift(1) <= df['tenkan'].shift(1))
+    
+    #df['tenkan_angle'] = df['tenkan'].diff()
+    #df["tenkan_surge"] = df["tenkan_angle"].abs() > df["tenkan_angle"].rolling(10).std()
+    
+    # Flat states
+    df['tenkan_flat'] = df['tenkan'].diff().abs() < 1e-6
+    df["flat_zone"] = df["tenkan_flat"].rolling(5).sum() >= 3  # ≥5 consecutive flats
+    
+    df['kijun_flat'] = df['kijun'].diff().abs() < 1e-6
+
+    # Tight proximity detection
+    #df['tight_gap'] = (df['tenkan'] - df['kijun']).abs() < 0.
+    
+    df['trap_zone'] = df['tenkan_flat'] & df['kijun_flat']
     
     df["senkou_a"] = ((df["tenkan"] + df["kijun"]) / 2).shift(26)
     
@@ -2199,6 +2221,19 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         
         ax.plot(df["timestamp"], df["tenkan"], label="Tenkan-Sen", color='blue', linestyle='-')
         ax.plot(df["timestamp"], df["kijun"], label="Kijun-Sen", color='orange', linestyle='-')
+        
+        ax.scatter(df[df['main_surge']]["timestamp"], df[df['main_surge']]["msi"], 
+           color="cyan", s=30, marker="*", label="Main Surge")
+
+        ax.scatter(df[df['mini_surge']]["timestamp"], df[df['mini_surge']]["msi"], 
+           color="green", s=30, marker="*", label="quantum spark")
+        
+        for idx in df[df["flat_zone"]].index:
+            ax.axvspan(df["timestamp"].iloc[idx], df["timestamp"].iloc[min(idx + 1, len(df) - 1)],
+                       color='gray', alpha=0.1)
+            
+        ax.scatter(df[df["trap_zone"]]["timestamp"], df[df["trap_zone"]]["msi"], 
+           color="orange", s=25, label="Trap Zone")
         
         # Cloud fill (Senkou A and B)
         ax.fill_between(df["timestamp"], df["senkou_a"], df["senkou_b"],
@@ -2444,12 +2479,12 @@ if not df.empty:
     # 1️⃣ QFE Engine Initialization
     # ============================
     multipliers = df['multiplier'].tolist()
-    qfe_engine = QuantumFibonacciEntanglement(multipliers)
+    #qfe_engine = QuantumFibonacciEntanglement(multipliers)
     
     # ============================
     # 2️⃣ Generate Wavefront Data
     # ============================
-    wavefront_data = qfe_engine.adaptive_fpi_dashboard()
+    #wavefront_data = qfe_engine.adaptive_fpi_dashboard()
     
     
 
@@ -2502,10 +2537,10 @@ if not df.empty:
     #current_regime = df['regime_state'].iloc[-1] if not df.empty else 'neutral'
 
     # Calculate oscillator
-    oscillator_df = compute_multiwindow_atr(df)
+    #oscillator_df = compute_multiwindow_atr(df)
     
     # Detect regime
-    regime_label, corr_value = detect_phase_regime(oscillator_df)
+    #regime_label, corr_value = detect_phase_regime(oscillator_df)
 
     # Analyze
     #osc_df, phase_alignment, dominant_window = analyze_multi_window_atr_oscillator(
@@ -2532,18 +2567,18 @@ if not df.empty:
             #st.markdown(f"**Phase Cross Intersections:** {crossings}")
     
     
-    st.subheader("🌀 ALIEN MWATR OSCILLATOR (Ultra-Mode)")
+    #st.subheader("🌀 ALIEN MWATR OSCILLATOR (Ultra-Mode)")
     
     FIB_WINDOWS = [3, 5, 8, 13, 21,34]
     
-    smoothed_atr_df = compute_smoothed_atr_long_df(df, windows=FIB_WINDOWS)
+    #smoothed_atr_df = compute_smoothed_atr_long_df(df, windows=FIB_WINDOWS)
 
     # Convert the output
-    long_df = smoothed_atr_df.copy()
+    #long_df = smoothed_atr_df.copy()
     
     # Ensure pivot safety
-    full_round_index = list(range(df.shape[0]))
-    long_df_clean = prepare_long_df_for_pivot(long_df, FIB_WINDOWS, full_round_index)
+    #full_round_index = list(range(df.shape[0]))
+    #long_df_clean = prepare_long_df_for_pivot(long_df, FIB_WINDOWS, full_round_index)
     
     # Detect crossings
     #crossings = detect_advanced_crossings(long_df_clean)
@@ -2551,7 +2586,7 @@ if not df.empty:
     
         
      # Plot
-    plot_alien_mwatr_oscillator(long_df_clean)
+    #plot_alien_mwatr_oscillator(long_df_clean)
     
     
 
@@ -2563,11 +2598,7 @@ if not df.empty:
     fig = plot_quantum_range_oscillator(df)
     st.plotly_chart(fig, use_container_width=True)
     
-    #---------------------------------------------------#
-    # In Streamlit
-    vol_fig = plot_quantum_volatility_oscillator(df)
-    st.plotly_chart(vol_fig, use_container_width=True)
-    #---------------------------------------------------#
+    
     #with st.expander("📊 Advanced Range Modulation Signals Over Time", expanded=False):
         #st.subheader("📊 Advanced Trap Modulation Signals Over Time")
         #st.plotly_chart(plot_raw_range_signals(range_signals_df), use_container_width=True)
@@ -2582,7 +2613,7 @@ if not df.empty:
         # ============================
         # 3️⃣ Plot the Visualization
         # ============================
-        plot_adaptive_wavefront(wavefront_data)
+        #plot_adaptive_wavefront(wavefront_data)
         
        
         #st.subheader("🎯 Anti-Trap Signal")
