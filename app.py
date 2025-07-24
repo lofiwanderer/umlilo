@@ -2002,6 +2002,10 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     low_26  = df["msi"].rolling(window=26).min()
     df["kijun"] = (high_26 + low_26) / 2
 
+    high_3 = df["msi"].rolling(3).max()
+    low_3 = df["msi"].rolling(3).min()
+    df["mini_tenkan"] = (high_3 + low_3)/2
+
      # MSI[5] and MSI[10]
     df['msi_5'] = df['multiplier'].rolling(5).mean()
     df['msi_10'] = df['multiplier'].rolling(10).mean()
@@ -2221,6 +2225,8 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         
         ax.plot(df["timestamp"], df["tenkan"], label="Tenkan-Sen", color='blue', linestyle='-')
         ax.plot(df["timestamp"], df["kijun"], label="Kijun-Sen", color='orange', linestyle='-')
+        ax.plot(df["timestamp"],  df["mini_tenkan"], label="Kijun-Sen", color='red', linestyle='-')
+        
         
         ax.scatter(df[df['main_surge']]["timestamp"], df[df['main_surge']]["msi"], 
            color="cyan", s=30, marker="*", label="Main Surge")
@@ -2262,7 +2268,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         ax.text(ts, df["msi"].max() * 0.9, f"🌀 {sc['label']}", rotation=90,
                 fontsize=8, ha='center', va='top', color=color)
         
-    if show_ichimoku:
+    if show_supertrend:
         for echo in spiral_echoes:
             ts = pd.to_datetime(echo["timestamp"])
             label = f"{echo['gap']}-Echo ({echo['source_label']})"
@@ -2301,6 +2307,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
             ax.plot(df["timestamp"], df[col_name],
                     label=f"MSI {window}",
                     linewidth=1.8,
+                    color= 'purple',
                     alpha=0.9)
         if show_msi_res:
             
