@@ -2225,7 +2225,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         
         ax.plot(df["timestamp"], df["tenkan"], label="Tenkan-Sen", color='blue', linestyle='-')
         ax.plot(df["timestamp"], df["kijun"], label="Kijun-Sen", color='orange', linestyle='-')
-        ax.plot(df["timestamp"],  df["mini_tenkan"], label="Kijun-Sen", color='red', linestyle='-')
+        ax.plot(df["timestamp"], df["mini_tenkan"],  label="Mini-tenkan", color='red', linestyle='-')
         
         
         ax.scatter(df[df['main_surge']]["timestamp"], df[df['main_surge']]["msi"], 
