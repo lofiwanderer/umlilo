@@ -2616,7 +2616,7 @@ if not df.empty:
     #st.plotly_chart(plot_range_regime(df), use_container_width=True)
     #render_regime_hud(current_regime)
 
-    with st.expander("🔎 Fibonacci pressure index+ Range Fuckery Modulation", expanded=False):
+    #with st.expander("🔎 Fibonacci pressure index+ Range Fuckery Modulation", expanded=False):
         # ============================
         # 3️⃣ Plot the Visualization
         # ============================
