@@ -847,7 +847,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
 
     high_2 = df["msi"].rolling(1).max()
     low_2 = df["msi"].rolling(1).min()
-    df["nano_tenkan"] = df["msi"].ewm(span=2).mean()
+    #df["nano_tenkan"] = df["msi"].ewm(span=2).mean()
 
      # MSI[5] and MSI[10]
     df['msi_5'] = df['multiplier'].rolling(5).mean()
@@ -1071,7 +1071,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         ax.plot(df["timestamp"], df["tenkan"], label="Tenkan-Sen", color='blue', linestyle='-')
         ax.plot(df["timestamp"], df["kijun"], label="Kijun-Sen", color='orange', linestyle='-')
         ax.plot(df["timestamp"], df["mini_tenkan"],  label="Mini-tenkan", color='red', linestyle='-')
-        ax.plot(df["timestamp"], df["nano_tenkan"],  label="nano-tenkan", color='green', linestyle='--', alpha= 0.9)
+        #ax.plot(df["timestamp"], df["nano_tenkan"],  label="nano-tenkan", color='green', linestyle='--', alpha= 0.9)
         
         
         
