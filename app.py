@@ -847,7 +847,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
 
     high_2 = df["msi"].rolling(1).max()
     low_2 = df["msi"].rolling(1).min()
-    df["nano_tenkan"] = (high_2 + low_2)/2
+    df["nano_tenkan"] = df["msi"].ewm(span=2).mean()
 
      # MSI[5] and MSI[10]
     df['msi_5'] = df['multiplier'].rolling(5).mean()
