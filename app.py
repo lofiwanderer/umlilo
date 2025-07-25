@@ -845,8 +845,8 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     low_3 = df["msi"].rolling(3).min()
     df["mini_tenkan"] = (high_3 + low_3)/2
 
-    high_2 = df["msi"].rolling(1.5).max()
-    low_2 = df["msi"].rolling(1.5).min()
+    high_2 = df["msi"].rolling(1).max()
+    low_2 = df["msi"].rolling(1).min()
     df["nano_tenkan"] = (high_2 + low_2)/2
 
      # MSI[5] and MSI[10]
