@@ -1323,7 +1323,7 @@ if not df.empty:
     # Plot MSI Chart
     plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_msi_window, fib_lookback_window,  spiral_centers=spiral_centers)
 
-   
+    FIB_WINDOWS = [3, 5, 8, 13, 21,34]  
     for w in FIB_WINDOWS:
         if len(df) < w :
             continue
