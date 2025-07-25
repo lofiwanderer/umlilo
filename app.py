@@ -1071,7 +1071,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         ax.plot(df["timestamp"], df["tenkan"], label="Tenkan-Sen", color='blue', linestyle='-')
         ax.plot(df["timestamp"], df["kijun"], label="Kijun-Sen", color='orange', linestyle='-')
         ax.plot(df["timestamp"], df["mini_tenkan"],  label="Mini-tenkan", color='red', linestyle='-')
-        ax.plot(df["timestamp"], df["nano_tenkan"],  label="nano-tenkan", color='green', linestyle='--', alpha= 0.9)
+        ax.plot(df["timestamp"], df["nano_tenkan"],  label="nano-tenkan", color='yellow', linestyle='--', alpha= 0.9)
         
         
         
