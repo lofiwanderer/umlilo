@@ -1323,57 +1323,7 @@ if not df.empty:
     # Plot MSI Chart
     plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_msi_window, fib_lookback_window,  spiral_centers=spiral_centers)
 
-    # ===== QUANTUM FIBONACCI ENTANGLEMENT DISPLAY =====
-    # 1️⃣ QFE Engine Initialization
-    # ============================
-    multipliers = df['multiplier'].tolist()
-    #qfe_engine = QuantumFibonacciEntanglement(multipliers)
-    
-    # ============================
-    # 2️⃣ Generate Wavefront Data
-    # ============================
-    #wavefront_data = qfe_engine.adaptive_fpi_dashboard()
-    
-    
-
-     # ===== QUANTUM WAR ROOM =====
-    #st.header("🚀 QUANTUM WAR ROOM")
-    
-    # 1. Phase space visualization
-    #plot_phase_space(df)
-    
-    # 2. Multiverse simulation
-    
-    
-    # 3. Entropy override
-    #if quantum_engine.entropy_state:
-     #   st.subheader(f"🧠 ENTROPY OVERRIDE: {quantum_engine.entropy_state}")
-     #  if quantum_engine.entropy_state == 'INVERT':
-     #       st.error("⚠️ SYSTEM DETECTED PATTERN - INVERT NEXT SIGNAL")
-     #   elif quantum_engine.entropy_state == 'TRUST':
-     #       st.success("✅ GENUINE RANDOMNESS - TRUST SYSTEM")
-    
-    # 4. Temporal signatures
-    #if quantum_engine.temporal_signatures:
-     #   st.subheader("⏱️ TEMPORAL TRAP SIGNATURES")
-      #  st.write(f"Trap clusters at seconds: {quantum_engine.temporal_signatures.get('trap_clusters', [])}")
-
-    
-    # Assume you have pandas dataframe df with MSI columns:
-    # df['msi_3'], df['msi_5'], df['msi_8']
-    
-    #msi_dict = {
-    #    3: df['msi_3'].dropna().tolist(),
-    #    5: df['msi_5'].dropna().tolist(),
-    #    8: df['msi_8'].dropna().tolist(),
-    #}
-    
-    #entry_signal = anti_trap_entry_signal(msi_dict)
-
-    #df_signal = get_normalized_signal_data(msi_dict)
-    #fig_signal = plot_normalized_signal_dashboard(df_signal)
-    
-    range_signals_df = compute_raw_range_signals(df, window=RANGE_WINDOW)
+   
     for w in FIB_WINDOWS:
         if len(df) < w :
             continue
@@ -1381,61 +1331,14 @@ if not df.empty:
         df['range_width']  = df['multiplier'].rolling(w).apply(lambda x: x.max() - x.min(), raw=True)
         #atr_series = atr_series.bfill().fillna(0)
         
-    # After data analysis:
-    #current_regime = df['regime_state'].iloc[-1] if not df.empty else 'neutral'
-
-    # Calculate oscillator
-    #oscillator_df = compute_multiwindow_atr(df)
-    
-    # Detect regime
-    #regime_label, corr_value = detect_phase_regime(oscillator_df)
-
-    # Analyze
-    #osc_df, phase_alignment, dominant_window = analyze_multi_window_atr_oscillator(
-        #df,
-        #multiplier_col='multiplier',
-        #windows=[3,5,8,13,21,34]
-    #)
-    
-    # Cross-intersections
-    #crossings = detect_phase_cross_intersections(osc_df)
-    
-    #with st.expander("🧭 Multi-Window ATR Oscillator Analysis", expanded=False):
-        # Display
-        #st.subheader("🧭 Multi-Window ATR Oscillator Analysis")
-        #st.dataframe(osc_df)
-    
-        # Visualization
-        #fig_atr = plot_multi_window_atr_dashboard(osc_df, phase_alignment, dominant_window, crossings)
-        #st.plotly_chart(fig_atr, use_container_width=True)
-        
-        #st.markdown(f"**Phase Alignment Score:** {phase_alignment}")
-        #st.markdown(f"**Dominant Cycle Window:** {dominant_window}")
-        #if crossings:
-            #st.markdown(f"**Phase Cross Intersections:** {crossings}")
+   
     
     
     #st.subheader("🌀 ALIEN MWATR OSCILLATOR (Ultra-Mode)")
     
     FIB_WINDOWS = [3, 5, 8, 13, 21,34]
     
-    #smoothed_atr_df = compute_smoothed_atr_long_df(df, windows=FIB_WINDOWS)
-
-    # Convert the output
-    #long_df = smoothed_atr_df.copy()
-    
-    # Ensure pivot safety
-    #full_round_index = list(range(df.shape[0]))
-    #long_df_clean = prepare_long_df_for_pivot(long_df, FIB_WINDOWS, full_round_index)
-    
-    # Detect crossings
-    #crossings = detect_advanced_crossings(long_df_clean)
-    
-    
-        
-     # Plot
-    #plot_alien_mwatr_oscillator(long_df_clean)
-    
+   
     
 
     
@@ -1447,9 +1350,7 @@ if not df.empty:
     st.plotly_chart(fig, use_container_width=True)
     
     
-    #with st.expander("📊 Advanced Range Modulation Signals Over Time", expanded=False):
-        #st.subheader("📊 Advanced Trap Modulation Signals Over Time")
-        #st.plotly_chart(plot_raw_range_signals(range_signals_df), use_container_width=True)
+   
 
    
     
