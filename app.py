@@ -1282,7 +1282,7 @@ if not df.empty:
 
         # 🔮 Mini-Cloud Overlays
         ax.plot(df["timestamp"], df["mini_senkou_a"], color='cyan', linestyle='-', alpha=0.7, label="Mini-Senkou A")
-        ax.plot(df["timestamp"], df["mini_senkou_b"], color='magenta', linestyle='-', alpha=0.7, label="Mini-Senkou B")
+        ax.plot(df["timestamp"], df["mini_senkou_b"], color='purple', linestyle='-', alpha=0.7, label="Mini-Senkou B")
         ax.fill_between(df["timestamp"], df["mini_senkou_a"], df["mini_senkou_b"],
                         where=(df["mini_senkou_a"] >= df["mini_senkou_b"]),
                         color='lightgreen', alpha=0.1, label="Future Bullish Cloud")
