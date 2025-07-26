@@ -763,6 +763,22 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     df["rsi_lower"] = df["rsi_mid"] - 1.2 * df["rsi_std"]
     df["rsi_signal"] = df["rsi"].ewm(span=7, adjust=False).mean()
 
+    high_3 = df["rsi"].rolling(3).max()
+    low_3 = df["rsi"].rolling(3).min()
+    df["mini_tenkan_rsi"] = (high_3 + low_3)/2
+
+    high_5 = df["rsi"].rolling(5).max()
+    low_5 = df["rsi"].rolling(5).min()
+    df["mini_kijun_rsi"] = (high_5 + low_5)/2
+
+    df["mini_senkou_a_rsi"] = ((df["mini_tenkan_rsi"] + df["mini_kijun_rsi"]) / 2).shift(6)
+    
+    # Projected Senkou B — mini-range memory, 12-period HL midpoint
+    high_12 = df["rsi"].rolling(12).max()
+    low_12 = df["rsi"].rolling(12).min()
+    df["mini_senkou_b_rsi"] = ((high_12 + low_12) / 2).shift(6)
+    
+
      # MSI[5] and MSI[10]
     df['msi_5'] = df['multiplier'].rolling(5).mean()
     df['msi_10'] = df['multiplier'].rolling(10).mean()
@@ -1289,6 +1305,15 @@ if not df.empty:
         ax.fill_between(df["timestamp"], df["mini_senkou_a"], df["mini_senkou_b"],
                         where=(df["mini_senkou_a"] < df["mini_senkou_b"]),
                         color='red', alpha=0.5, label="Future Bearish Cloud")
+
+        ax.plot(df["timestamp"], df["mini_senkou_a_rsi"], color='cyan', linestyle='-', alpha=0.7, label="Mini-Senkou A rsi")
+        ax.plot(df["timestamp"], df["mini_senkou_b_rsi"], color='purple', linestyle='-', alpha=0.7, label="Mini-Senkou B rsi")
+        ax.fill_between(df["timestamp"], df["mini_senkou_a_rsi"], df["mini_senkou_b_rsi"],
+                        where=(df["mini_senkou_a_rsi"] >= df["mini_senkou_b_rsi"]),
+                        color='lightgreen', alpha=0.3)
+        ax.fill_between(df["timestamp"], df["mini_senkou_a_rsi"], df["mini_senkou_b_rsi"],
+                        where=(df["mini_senkou_a_rsi"] < df["mini_senkou_b_rsi"]),
+                        color='red', alpha=0.5)
         
         ax.axhline(50, color='black', linestyle=':')  # Neutral RSI zone
         ax.axhline(70, color='green', linestyle=':')  # Overbought
