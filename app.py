@@ -1120,7 +1120,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     ax.legend()
     # --- SMMI Plot: Micro Momentum Based on Mini-Tenkan ---
     fig2, ax2 = plt.subplots(figsize=(12, 2.5))
-    ax2.plot(df["smmi"], label="SMMI (Stochastic Momentum)", color="violet", linewidth=1.5)
+    ax2.plot(df["smmi"], label="SMMI (Stochastic Momentum)", color="black", linewidth=1.5)
     
     # Threshold zones
     ax2.axhline(90, color="red", linestyle="dotted", linewidth=0.8)
