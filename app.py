@@ -739,9 +739,21 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     low_3 = df["msi"].rolling(3).min()
     df["mini_tenkan"] = (high_3 + low_3)/2
 
+    high_5 = df["msi"].rolling(5).max()
+    low_5 = df["msi"].rolling(5).min()
+    df["mini_kijun"] = (high_5 + low_5)/2
+
     high_2 = df["msi"].rolling(1).max()
     low_2 = df["msi"].rolling(1).min()
     df["nano_tenkan"] = df["msi"].ewm(span=2).mean()
+
+    # Projected Senkou A — mini average of short-term structure
+    df["mini_senkou_a"] = ((df["mini_tenkan"] + df["mini_kijun"]) / 2).shift(6)
+    
+    # Projected Senkou B — mini-range memory, 12-period HL midpoint
+    high_12 = df["msi"].rolling(12).max()
+    low_12 = df["msi"].rolling(12).min()
+    df["mini_senkou_b"] = ((high_12 + low_12) / 2).shift(6)
 
     df["rsi"] = compute_rsi(df["mini_tenkan"], period=14)
     
@@ -756,22 +768,22 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     df['msi_10'] = df['multiplier'].rolling(10).mean()
     
     # Cross states
-    df['mini_surge'] = (df['msi_5'] > df['tenkan']) & (df['msi_5'].shift(1) <= df['tenkan'].shift(1))
-    df['main_surge'] = (df['msi_10'] > df['tenkan']) & (df['msi_10'].shift(1) <= df['tenkan'].shift(1))
+    #df['mini_surge'] = (df['msi_5'] > df['tenkan']) & (df['msi_5'].shift(1) <= df['tenkan'].shift(1))
+    #df['main_surge'] = (df['msi_10'] > df['tenkan']) & (df['msi_10'].shift(1) <= df['tenkan'].shift(1))
     
     #df['tenkan_angle'] = df['tenkan'].diff()
     #df["tenkan_surge"] = df["tenkan_angle"].abs() > df["tenkan_angle"].rolling(10).std()
     
     # Flat states
-    df['tenkan_flat'] = df['tenkan'].diff().abs() < 1e-6
-    df["flat_zone"] = df["tenkan_flat"].rolling(5).sum() >= 3  # ≥5 consecutive flats
+    #df['tenkan_flat'] = df['tenkan'].diff().abs() < 1e-6
+    #df["flat_zone"] = df["tenkan_flat"].rolling(5).sum() >= 3  # ≥5 consecutive flats
     
-    df['kijun_flat'] = df['kijun'].diff().abs() < 1e-6
+    #df['kijun_flat'] = df['kijun'].diff().abs() < 1e-6
 
     # Tight proximity detection
     #df['tight_gap'] = (df['tenkan'] - df['kijun']).abs() < 0.
     
-    df['trap_zone'] = df['tenkan_flat'] & df['kijun_flat']
+    #df['trap_zone'] = df['tenkan_flat'] & df['kijun_flat']
     
     df["senkou_a"] = ((df["tenkan"] + df["kijun"]) / 2).shift(26)
     
@@ -994,6 +1006,15 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
             
         ax.scatter(df[df["trap_zone"]]["timestamp"], df[df["trap_zone"]]["msi"], 
            color="orange", s=25, label="Trap Zone")
+
+        # Cloud fill (Mini Senkou A and B)
+        ax.fill_between(df["timestamp"], df["mini_senkou_a"], df["mini_senkou_b"],
+                        where=(df["mini_senkou_a"] >= df["mini_senkou_b"]),
+                        interpolate=True, color='lightgreen', alpha=0.2, label="Kumo (Bullish)")
+        
+        ax.fill_between(df["timestamp"], df["mini_senkou_a"], df["mini_senkou_b"],
+                        where=(df["mini_senkou_a"] < df["mini_senkou_b"]),
+                        interpolate=True, color='red', alpha=0.2, label="Kumo (Bearish)")
         
         # Cloud fill (Senkou A and B)
         ax.fill_between(df["timestamp"], df["senkou_a"], df["senkou_b"],
@@ -1258,6 +1279,16 @@ if not df.empty:
         ax.plot(df["timestamp"], df["rsi_upper"], color='green', linestyle='--', alpha=0.5, label="RSI Upper Band")
         ax.plot(df["timestamp"], df["rsi_lower"], color='red', linestyle='--', alpha=0.5, label="RSI Lower Band")
         ax.fill_between(df["timestamp"], df["rsi_lower"], df["rsi_upper"], color='purple', alpha=0.1)
+
+        # 🔮 Mini-Cloud Overlays
+        ax.plot(df["timestamp"], df["mini_senkou_a"], color='cyan', linestyle='-', alpha=0.7, label="Mini-Senkou A")
+        ax.plot(df["timestamp"], df["mini_senkou_b"], color='magenta', linestyle='-', alpha=0.7, label="Mini-Senkou B")
+        ax.fill_between(df["timestamp"], df["mini_senkou_a"], df["mini_senkou_b"],
+                        where=(df["mini_senkou_a"] >= df["mini_senkou_b"]),
+                        color='lightgreen', alpha=0.1, label="Future Bullish Cloud")
+        ax.fill_between(df["timestamp"], df["mini_senkou_a"], df["mini_senkou_b"],
+                        where=(df["mini_senkou_a"] < df["mini_senkou_b"]),
+                        color='lightcoral', alpha=0.1, label="Future Bearish Cloud")
         
         ax.axhline(50, color='black', linestyle=':')  # Neutral RSI zone
         ax.axhline(70, color='green', linestyle=':')  # Overbought
