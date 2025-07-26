@@ -1320,7 +1320,7 @@ if not df.empty:
         ax.axhline(30, color='red', linestyle=':')    # Oversold
         
         ax.set_title("🧠 Trader’s Dynamic Index (RSI BB System)")
-        ax.legend()
+        ax.legend(loc="upper left", fontsize=8)
         st.pyplot(fig)
     
     FIB_WINDOWS = [3, 5, 8, 13, 21,34]  
