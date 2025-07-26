@@ -724,13 +724,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     # Pull latest values from the last row
     latest = df.iloc[-1] if not df.empty else pd.Series()
 
-    df["rsi"] = compute_rsi(df["score"], period=14)
     
-    df["rsi_mid"]   = df["rsi"].rolling(14).mean()
-    df["rsi_std"]   = df["rsi"].rolling(14).std()
-    df["rsi_upper"] = df["rsi_mid"] + 1.2 * df["rsi_std"]
-    df["rsi_lower"] = df["rsi_mid"] - 1.2 * df["rsi_std"]
-    df["rsi_signal"] = df["rsi"].ewm(span=7, adjust=False).mean()
     
     # === Ichimoku Cloud on MSI ===
     high_9  = df["msi"].rolling(window=9).max()
@@ -748,6 +742,14 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     high_2 = df["msi"].rolling(1).max()
     low_2 = df["msi"].rolling(1).min()
     df["nano_tenkan"] = df["msi"].ewm(span=2).mean()
+
+    df["rsi"] = compute_rsi(df["mini_tenkan"], period=14)
+    
+    df["rsi_mid"]   = df["rsi"].rolling(14).mean()
+    df["rsi_std"]   = df["rsi"].rolling(14).std()
+    df["rsi_upper"] = df["rsi_mid"] + 1.2 * df["rsi_std"]
+    df["rsi_lower"] = df["rsi_mid"] - 1.2 * df["rsi_std"]
+    df["rsi_signal"] = df["rsi"].ewm(span=7, adjust=False).mean()
 
      # MSI[5] and MSI[10]
     df['msi_5'] = df['multiplier'].rolling(5).mean()
@@ -1229,6 +1231,23 @@ if not df.empty:
     # Plot MSI Chart
     plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_msi_window, fib_lookback_window,  spiral_centers=spiral_centers)
 
+    with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
+        fig, ax = plt.subplots(figsize=(10, 4))
+        
+        ax.plot(df["timestamp"], df["rsi"], label="RSI", color='black', linewidth=1.5)
+        ax.plot(df["timestamp"], df["rsi_signal"], label="Signal Line", color='orange', linestyle='--')
+        ax.plot(df["timestamp"], df["rsi_upper"], color='green', linestyle='--', alpha=0.5, label="RSI Upper Band")
+        ax.plot(df["timestamp"], df["rsi_lower"], color='red', linestyle='--', alpha=0.5, label="RSI Lower Band")
+        ax.fill_between(df["timestamp"], df["rsi_lower"], df["rsi_upper"], color='purple', alpha=0.1)
+        
+        ax.axhline(50, color='black', linestyle=':')  # Neutral RSI zone
+        ax.axhline(70, color='green', linestyle=':')  # Overbought
+        ax.axhline(30, color='red', linestyle=':')    # Oversold
+        
+        ax.set_title("🧠 Trader’s Dynamic Index (RSI BB System)")
+        ax.legend()
+        st.pyplot(fig)
+    
     FIB_WINDOWS = [3, 5, 8, 13, 21,34]  
     for w in FIB_WINDOWS:
         if len(df) < w :
