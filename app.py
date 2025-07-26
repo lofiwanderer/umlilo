@@ -1288,7 +1288,7 @@ if not df.empty:
                         color='lightgreen', alpha=0.1, label="Future Bullish Cloud")
         ax.fill_between(df["timestamp"], df["mini_senkou_a"], df["mini_senkou_b"],
                         where=(df["mini_senkou_a"] < df["mini_senkou_b"]),
-                        color='coral', alpha=0.1, label="Future Bearish Cloud")
+                        color='red', alpha=0.1, label="Future Bearish Cloud")
         
         ax.axhline(50, color='black', linestyle=':')  # Neutral RSI zone
         ax.axhline(70, color='green', linestyle=':')  # Overbought
