@@ -782,6 +782,11 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     df["chikou"] = df["msi"].shift(-26)
     df = compute_supertrend(df, period=10, multiplier=2.0, source="msi")
 
+    # Custom Stochastic Mini-Momentum Index (SMMI)
+    lowest = df["mini_tenkan"].rolling(5).min()
+    highest = df["mini_tenkan"].rolling(5).max()
+    df["smmi"] = 100 * ((df["mini_tenkan"] - lowest) / (highest - lowest))
+
     # Core Fibonacci multipliers
     fib_ratios = [1.0, 1.618, 2.618]
     
@@ -1112,8 +1117,21 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
                         )
             
     ax.set_title("📊 MSI Volatility Tracker")
-    with st.expander("Legend", expanded=False):
-        ax.legend()
+    ax.legend()
+    # --- SMMI Plot: Micro Momentum Based on Mini-Tenkan ---
+    fig, ax3 = plt.subplots(figsize=(12, 2.5))
+    ax3.plot(df["smmi"], label="SMMI (Stochastic Momentum)", color="violet", linewidth=1.5)
+    
+    # Threshold zones
+    ax3.axhline(90, color="red", linestyle="dotted", linewidth=0.8)
+    ax3.axhline(10, color="green", linestyle="dotted", linewidth=0.8)
+    ax3.axhline(50, color="white", linestyle="dashed", linewidth=0.5)
+    
+    ax3.set_title("SMMI - Micro Stochastic Momentum Index", fontsize=10)
+    ax3.set_ylabel("SMMI Value")
+    ax3.set_ylim(-10, 110)
+    ax3.grid(alpha=0.2)
+    ax3.legend(loc="upper left", fontsize=8)
     plot_slot = st.empty()
     with plot_slot.container():
         st.pyplot(fig)
