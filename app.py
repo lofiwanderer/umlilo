@@ -994,18 +994,18 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         
         
         
-        ax.scatter(df[df['main_surge']]["timestamp"], df[df['main_surge']]["msi"], 
-           color="cyan", s=30, marker="*", label="Main Surge")
+        #ax.scatter(df[df['main_surge']]["timestamp"], df[df['main_surge']]["msi"], 
+           #color="cyan", s=30, marker="*", label="Main Surge")
 
-        ax.scatter(df[df['mini_surge']]["timestamp"], df[df['mini_surge']]["msi"], 
-           color="green", s=30, marker="*", label="quantum spark")
+        #ax.scatter(df[df['mini_surge']]["timestamp"], df[df['mini_surge']]["msi"], 
+           #color="green", s=30, marker="*", label="quantum spark")
         
-        for idx in df[df["flat_zone"]].index:
-            ax.axvspan(df["timestamp"].iloc[idx], df["timestamp"].iloc[min(idx + 1, len(df) - 1)],
-                       color='gray', alpha=0.1)
+        #for idx in df[df["flat_zone"]].index:
+            #ax.axvspan(df["timestamp"].iloc[idx], df["timestamp"].iloc[min(idx + 1, len(df) - 1)],
+                       #color='gray', alpha=0.1)
             
-        ax.scatter(df[df["trap_zone"]]["timestamp"], df[df["trap_zone"]]["msi"], 
-           color="orange", s=25, label="Trap Zone")
+        #ax.scatter(df[df["trap_zone"]]["timestamp"], df[df["trap_zone"]]["msi"], 
+           #color="orange", s=25, label="Trap Zone")
 
         # Cloud fill (Mini Senkou A and B)
         ax.fill_between(df["timestamp"], df["mini_senkou_a"], df["mini_senkou_b"],
