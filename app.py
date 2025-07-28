@@ -755,7 +755,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     low_12 = df["msi"].rolling(12).min()
     df["mini_senkou_b"] = ((high_12 + low_12) / 2).shift(6)
 
-    df["rsi"] = compute_rsi(df["mini_tenkan"], period=14)
+    df["rsi"] = compute_rsi(df["bb_mid_10"], period=14)
     
     df["rsi_mid"]   = df["rsi"].rolling(14).mean()
     df["rsi_std"]   = df["rsi"].rolling(14).std()
@@ -811,9 +811,9 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     df = compute_supertrend(df, period=10, multiplier=2.0, source="msi")
 
     # Custom Stochastic Mini-Momentum Index (SMMI)
-    lowest = df["mini_tenkan"].rolling(5).min()
-    highest = df["mini_tenkan"].rolling(5).max()
-    df["smmi"] = 100 * ((df["mini_tenkan"] - lowest) / (highest - lowest))
+    lowest = df["bb_mid_10"].rolling(5).min()
+    highest = df["bb_mid_10"].rolling(5).max()
+    df["smmi"] = 100 * ((df["bb_mid_10"] - lowest) / (highest - lowest))
 
     # Core Fibonacci multipliers
     fib_ratios = [1.0, 1.618, 2.618]
