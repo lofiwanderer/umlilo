@@ -516,7 +516,7 @@ def quantum_rsi(df, window=10):
 
 def enhanced_msi_analysis(df):
     # Calculate base MSI (your existing implementation)
-    df = calculate_msi(df)  
+    #df = calculate_msi(df)  
     
     # Add momentum dimensions
     df['msi_slope'] = np.arctan(df['msi'].diff(5))  # Angle in radians
