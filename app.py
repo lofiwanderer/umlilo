@@ -1346,7 +1346,7 @@ if not df.empty:
     
     # Plot MSI Chart
     plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_msi_window, fib_lookback_window,  spiral_centers=spiral_centers)
-
+    df = enhanced_msi_analysis(df)
     plot_enhanced_msi(df)
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
         fig, ax = plt.subplots(figsize=(10, 4))
