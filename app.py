@@ -504,15 +504,21 @@ def compute_fib_alignment_score(df, fib_threshold=10.0, lookback_window=34, tole
     return round(alignment_score, 3), gaps
 
 
-def quantum_rsi(df, window=10):
+def quantum_rsi(df, window):
     # Slope-weighted momentum
     slope = df['msi'].diff(3).rolling(window).mean()
+    slope = slope.fillna(0)  # Avoid NaN propagation early on
+
     delta = df['msi'].diff()
-    up = delta.where(slope > 0, 0).rolling(window).mean()
-    down = (-delta).where(slope < 0, 0).rolling(window).mean()
+    delta = delta.fillna(0)
     
-    rs = up / down
-    return 100 - (100 / (1 + rs))
+    up = delta.where(slope > 0, 0).rolling(window).mean().fillna(0)
+    down = (-delta).where(slope < 0, 0).rolling(window).mean().fillna(0)
+    
+    # RSI calculation with zero-safe RS
+    rs = up / (down.replace(0, np.nan))  # Prevent division by zero
+    rsi = 100 - (100 / (1 + rs))
+    return rsi.fillna(0)  # Final cleanup
 
 def enhanced_msi_analysis(df):
     # Calculate base MSI (your existing implementation)
@@ -819,27 +825,28 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     low_12 = df["msi"].rolling(12).min()
     df["mini_senkou_b"] = ((high_12 + low_12) / 2).shift(6)
 
-    df["rsi"] = compute_rsi(df["bb_mid_10"], period=14)
+    #df["rsi"] = compute_rsi(df["bb_mid_10"], period=14)
+    df['q_rsi'] = quantum_rsi(df, window=10)
     
-    df["rsi_mid"]   = df["rsi"].rolling(14).mean()
-    df["rsi_std"]   = df["rsi"].rolling(14).std()
+    df["rsi_mid"]   =  df['q_rsi'].rolling(14).mean()
+    df["rsi_std"]   =  df['q_rsi'].rolling(14).std()
     df["rsi_upper"] = df["rsi_mid"] + 1.2 * df["rsi_std"]
     df["rsi_lower"] = df["rsi_mid"] - 1.2 * df["rsi_std"]
-    df["rsi_signal"] = df["rsi"].ewm(span=7, adjust=False).mean()
+    df["rsi_signal"] =  df['q_rsi'].ewm(span=5, adjust=False).mean()
 
-    high_3 = df["rsi"].rolling(3).max()
-    low_3 = df["rsi"].rolling(3).min()
+    high_3 = df['q_rsi']].rolling(3).max()
+    low_3 = df['q_rsi'].rolling(3).min()
     df["mini_tenkan_rsi"] = (high_3 + low_3)/2
 
-    high_5 = df["rsi"].rolling(5).max()
-    low_5 = df["rsi"].rolling(5).min()
+    high_5 = df['q_rsi'].rolling(5).max()
+    low_5 = df['q_rsi'].rolling(5).min()
     df["mini_kijun_rsi"] = (high_5 + low_5)/2
 
     df["mini_senkou_a_rsi"] = ((df["mini_tenkan_rsi"] + df["mini_kijun_rsi"]) / 2).shift(6)
     
     # Projected Senkou B — mini-range memory, 12-period HL midpoint
-    high_12 = df["rsi"].rolling(12).max()
-    low_12 = df["rsi"].rolling(12).min()
+    high_12 = df['q_rsi'].rolling(12).max()
+    low_12 = df['q_rsi'].rolling(12).min()
     df["mini_senkou_b_rsi"] = ((high_12 + low_12) / 2).shift(6)
     
 
@@ -1354,7 +1361,9 @@ if not df.empty:
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
         fig, ax = plt.subplots(figsize=(10, 4))
         
-        ax.plot(df["timestamp"], df["rsi"], label="RSI", color='black', linewidth=1.5)
+        ax.plot(df["timestamp"], df['q_rsi'], label="RSI", color='black', linewidth=1.5)
+        ax.plot(df["timestamp"], df["mini_tenkan_rsi"], label="mini Tenkan", color='purple', linewidth=0.9)
+         
         ax.plot(df["timestamp"], df["rsi_signal"], label="Signal Line", color='orange', linestyle='--')
         ax.plot(df["timestamp"], df["rsi_upper"], color='green', linestyle='--', alpha=0.5, label="RSI Upper Band")
         ax.plot(df["timestamp"], df["rsi_lower"], color='red', linestyle='--', alpha=0.5, label="RSI Lower Band")
