@@ -525,7 +525,7 @@ def enhanced_msi_analysis(df):
         df['msi'].diff(3) * 2,  # Amplify strong moves
         df['msi'].diff(3)
     )
-    df['price_slope'] = df['close'].diff(5) / df['close'].rolling(5).std()
+    df['price_slope'] = df['score'].diff(5) / df['score'].rolling(5).std()
     # Convergence detector
     df['price_msi_conv'] = df['price_slope']* df['msi_slope']
     
