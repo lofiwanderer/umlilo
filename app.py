@@ -1370,7 +1370,7 @@ if not df.empty:
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
         fig, ax = plt.subplots(figsize=(10, 4))
         
-        ax.plot(df["timestamp"], df['eq_rsi'], label='EQ-RSI', color='#00ccff', linewidth=2)
+        ax.plot(df["timestamp"], df['eq_rsi'], label='EQ-RSI', color='black', linewidth=2)
         ax.plot(df["timestamp"], df["mini_tenkan_rsi"], label="mini Tenkan", color='purple', linewidth=0.9)
          
         ax.plot(df["timestamp"], df["rsi_signal"], label="Signal Line", color='orange', linestyle='--')
