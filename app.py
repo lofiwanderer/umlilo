@@ -782,6 +782,8 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     msi_score = recent_df['score'].mean() if not recent_df.empty else 0
     msi_color = 'green' if msi_score > 0.5 else ('yellow' if msi_score > 0 else 'red')
 
+    df = enhanced_msi_analysis(df)
+
     # Multi-window BBs on MSI
     df["bb_mid_20"], df["bb_upper_20"], df["bb_lower_20"] = bollinger_bands(df["msi"], 20, 2)
     df["bb_mid_10"], df["bb_upper_10"], df["bb_lower_10"] = bollinger_bands(df["msi"], 10, 1.5)
@@ -1373,7 +1375,7 @@ if not df.empty:
     
     # Plot MSI Chart
     plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_msi_window, fib_lookback_window,  spiral_centers=spiral_centers)
-    df = enhanced_msi_analysis(df)
+    
     fig = plot_enhanced_msi(df)
     st.plotly_chart(fig, use_container_width=True)
     
