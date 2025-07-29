@@ -891,9 +891,10 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     df = compute_supertrend(df, period=10, multiplier=2.0, source="msi")
 
     # Custom Stochastic Mini-Momentum Index (SMMI)
-    lowest = df["bb_mid_10"].rolling(5).min()
-    highest = df["bb_mid_10"].rolling(5).max()
-    df["smmi"] = 100 * ((df["bb_mid_10"] - lowest) / (highest - lowest))
+    lowest = df["momentum_impulse"].rolling(5).min()
+    highest = df["momentum_impulse"].rolling(5).max()
+    df["smmi"] = 100 * ((df["momentum_impulse"] - lowest) / (highest - lowest))
+
 
     # Core Fibonacci multipliers
     fib_ratios = [1.0, 1.618, 2.618]
@@ -1246,10 +1247,19 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     ax2.set_ylim(-10, 110)
     ax2.grid(alpha=0.2)
     ax2.legend(loc="upper left", fontsize=8)
+    
+    fig3, ax3 = plt.subplots(figsize=(12, 2.5))
+    ax3.plot(df.index, df['price_msi_conv'], label='Price-MSI Convergence', color='gold')
+    ax3.axhline(0, linestyle='--', color='gray')
+    ax3.fill_between(df.index, 0, df['price_msi_conv'], where=(df['price_msi_conv'] > 0), color='lime', alpha=0.2)
+    ax3.fill_between(df.index, 0, df['price_msi_conv'], where=(df['price_msi_conv'] < 0), color='red', alpha=0.2)
+    ax3.legend(loc="upper left", fontsize=8)
+
     plot_slot = st.empty()
     with plot_slot.container():
         st.pyplot(fig)
         st.pyplot(fig2)
+        st.pyplot(fig3)
             
 
 # =================== MAIN APP FUNCTIONALITY ========================
