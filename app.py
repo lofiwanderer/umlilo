@@ -525,7 +525,8 @@ def enhanced_msi_analysis(df):
         df['msi'].diff(3) * 2,  # Amplify strong moves
         df['msi'].diff(3)
     )
-    df['price_slope'] = df['score'].diff(5) / df['score'].rolling(5).std()
+    df['score_std'] = df['score'].rolling(5).std().replace(0, np.nan).bfill()
+    df['price_slope'] = df['score'].diff(5) / df['score_std']
     # Convergence detector
     df['price_msi_conv'] = df['price_slope']* df['msi_slope']
     
@@ -1347,7 +1348,9 @@ if not df.empty:
     # Plot MSI Chart
     plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_msi_window, fib_lookback_window,  spiral_centers=spiral_centers)
     df = enhanced_msi_analysis(df)
-    plot_enhanced_msi(df)
+    fig = plot_enhanced_msi(df)
+    st.plotly_chart(fig, use_container_width=True)
+    
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
         fig, ax = plt.subplots(figsize=(10, 4))
         
