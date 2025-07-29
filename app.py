@@ -504,22 +504,15 @@ def compute_fib_alignment_score(df, fib_threshold=10.0, lookback_window=34, tole
     return round(alignment_score, 3), gaps
 
 
-def quantum_rsi(df, window):
+def quantum_rsi(df, window=10):
     # Slope-weighted momentum
     slope = df['msi'].diff(3).rolling(window).mean()
-    slope = slope.fillna(0)  # Avoid NaN propagation early on
-
     delta = df['msi'].diff()
-    delta = delta.fillna(0)
+    up = delta.where(slope > 0, 0).rolling(window).mean()
+    down = (-delta).where(slope < 0, 0).rolling(window).mean()
     
-    up = delta.where(slope > 0, 0).rolling(window).mean().fillna(0)
-    down = (-delta).where(slope < 0, 0).rolling(window).mean().fillna(0)
-    
-    # RSI calculation with zero-safe RS
-    rs = up / (down.replace(0, np.nan))  # Prevent division by zero
-    rsi = 100 - (100 / (1 + rs))
-    return rsi.fillna(0)  # Final cleanup
-
+    rs = up / down
+    return 100 - (100 / (1 + rs))
 def enhanced_msi_analysis(df):
     # Calculate base MSI (your existing implementation)
     #df = calculate_msi(df)  
