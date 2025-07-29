@@ -910,10 +910,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
             lambda x: 1 if x > 0 else (-1 if x < 0 else 0)
         )
 
-    df["msi_resonance"] = df.apply(
-    lambda row: compute_resonance(row, selected_msi_windows, window_weights),
-    axis=1
-    )
+    
 
    
     
