@@ -834,7 +834,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW, VOLATILITY_THR
     df["rsi_lower"] = df["rsi_mid"] - 1.2 * df["rsi_std"]
     df["rsi_signal"] =  df['q_rsi'].ewm(span=5, adjust=False).mean()
 
-    high_3 = df['q_rsi']].rolling(3).max()
+    high_3 = df['q_rsi'].rolling(3).max()
     low_3 = df['q_rsi'].rolling(3).min()
     df["mini_tenkan_rsi"] = (high_3 + low_3)/2
 
