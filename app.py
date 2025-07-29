@@ -504,6 +504,69 @@ def compute_fib_alignment_score(df, fib_threshold=10.0, lookback_window=34, tole
     return round(alignment_score, 3), gaps
 
 
+def quantum_rsi(df, window=10):
+    # Slope-weighted momentum
+    slope = df['msi'].diff(3).rolling(window).mean()
+    delta = df['msi'].diff()
+    up = delta.where(slope > 0, 0).rolling(window).mean()
+    down = (-delta).where(slope < 0, 0).rolling(window).mean()
+    
+    rs = up / down
+    return 100 - (100 / (1 + rs))
+
+def enhanced_msi_analysis(df):
+    # Calculate base MSI (your existing implementation)
+    df = calculate_msi(df)  
+    
+    # Add momentum dimensions
+    df['msi_slope'] = np.arctan(df['msi'].diff(5))  # Angle in radians
+    df['momentum_impulse'] = np.where(
+        df['msi_slope'].abs() > np.radians(25),
+        df['msi'].diff(3) * 2,  # Amplify strong moves
+        df['msi'].diff(3)
+    )
+    
+    # Convergence detector
+    df['price_msi_conv'] = zscore(df['close'].diff(5)) * df['msi_slope']
+    
+    return df
+
+def plot_enhanced_msi(df):
+    fig = go.Figure()
+    
+    # MSI Baseline
+    fig.add_trace(go.Scatter(
+        x=df.index, y=df['msi'],
+        line=dict(color='#888888'),
+        name='MSI Baseline'
+    ))
+    
+    # Momentum Slope
+    fig.add_trace(go.Scatter(
+        x=df.index, y=np.degrees(df['msi_slope']),
+        line=dict(color='#00ffff', width=3),
+        name='Slope Angle (°)',
+        yaxis='y2'
+    ))
+    
+    # Impulse Bars
+    fig.add_trace(go.Bar(
+        x=df.index, y=df['momentum_impulse'],
+        marker_color=np.where(df['momentum_impulse'] > 0, '#00ff88', '#ff0066'),
+        name='Impulse Strength',
+        opacity=0.5
+    ))
+    
+    fig.update_layout(
+        yaxis2=dict(
+            title="Slope Angle (°)",
+            overlaying='y',
+            side='right',
+            range=[-45, 45]
+        ),
+        title='⚡ MSI Momentum Triangulation'
+    )
+    return fig
 
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
@@ -1287,6 +1350,7 @@ if not df.empty:
     # Plot MSI Chart
     plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_msi_window, fib_lookback_window,  spiral_centers=spiral_centers)
 
+    plot_enhanced_msi(df)
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
         fig, ax = plt.subplots(figsize=(10, 4))
         
