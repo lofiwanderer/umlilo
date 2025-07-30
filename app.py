@@ -583,7 +583,7 @@ def plot_enhanced_msi(df):
     )
     return fig
 
-def find_momentum_triangles(df, msi_col='msi'):
+def find_momentum_triangles(df, msi_col='msi', order=3, fib_min=0.5, fib_max=1.618, max_gap=30, min_area=0.5):
     from scipy.signal import argrelextrema
 
     triangles = []
