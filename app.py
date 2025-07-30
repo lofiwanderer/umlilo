@@ -188,7 +188,7 @@ with st.sidebar:
     fib_min = st.sidebar.slider("Min Fib Ratio", 0.2, 1.0, 0.5)
     fib_max = st.sidebar.slider("Max Fib Ratio", 1.0, 3.0, 1.618)
     max_gap = st.sidebar.slider("Max Time Gap", 5, 50, 30)
-    min_area = st.sidebar.slider("Min Triangle Area", 0.1, 10.0, 0.5))
+    min_area = st.sidebar.slider("Min Triangle Area", 0.1, 10.0, 0.5)
      
 # =================== ADVANCED HELPER FUNCTIONS ========================
 @st.cache_data
