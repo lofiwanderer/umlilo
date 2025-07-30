@@ -184,14 +184,11 @@ with st.sidebar:
         options=[3, 5, 8, 13, 21, 34, 55],
         index=3
         )
-    VOLATILITY_THRESHOLDS = {
-    'micro': 1.5,
-    'meso': 3.0,
-    'macro': 5.0
-    }
-    VOLATILITY_THRESHOLDS['micro'] = st.number_input("Micro Threshold", value=1.5)
-    VOLATILITY_THRESHOLDS['meso'] = st.number_input("Meso Threshold", value=3.0)
-    VOLATILITY_THRESHOLDS['macro'] = st.number_input("Macro Threshold", value=5.0)
+    order = st.sidebar.slider("Triangle Order (extrema sensitivity)", 1, 10, 3)
+    fib_min = st.sidebar.slider("Min Fib Ratio", 0.2, 1.0, 0.5)
+    fib_max = st.sidebar.slider("Max Fib Ratio", 1.0, 3.0, 1.618)
+    max_gap = st.sidebar.slider("Max Time Gap", 5, 50, 30)
+    min_area = st.sidebar.slider("Min Triangle Area", 0.1, 10.0, 0.5))
      
 # =================== ADVANCED HELPER FUNCTIONS ========================
 @st.cache_data
@@ -583,7 +580,7 @@ def plot_enhanced_msi(df):
     )
     return fig
 
-def find_momentum_triangles(df, msi_col='msi', order=3, fib_min=0.5, fib_max=1.618, max_gap=30, min_area=0.5):
+def find_momentum_triangles(df, order=order, fib_min=fib_min, fib_max=fib_max, max_gap=max_gap, min_area=min_area):
     from scipy.signal import argrelextrema
 
     triangles = []
