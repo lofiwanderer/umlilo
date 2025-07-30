@@ -583,6 +583,84 @@ def plot_enhanced_msi(df):
     )
     return fig
 
+def find_momentum_triangles(df, msi_col='msi', order=3, fib_min=0.5, fib_max=1.618, max_gap=30, min_area=0.5):
+    from scipy.signal import argrelextrema
+
+    triangles = []
+    msi = df[msi_col]
+    local_max = argrelextrema(msi.values, np.greater_equal, order=order)[0]
+    local_min = argrelextrema(msi.values, np.less_equal, order=order)[0]
+    extrema = sorted(np.concatenate([local_max, local_min]))
+
+    for i in range(len(extrema) - 2):
+        i1, i2, i3 = extrema[i], extrema[i+1], extrema[i+2]
+        x1, x2, x3 = i1, i2, i3
+        y1, y2, y3 = msi[i1], msi[i2], msi[i3]
+
+        # Time-gap filter
+        if (x3 - x1) > max_gap:
+            continue
+
+        # Sides
+        a = abs(y2 - y1)
+        b = abs(y3 - y2)
+        c = abs(y3 - y1)
+
+        # Fibonacci filter
+        if a == 0 or b == 0:
+            continue
+        ratio = b / a
+        if not (fib_min <= ratio <= fib_max):
+            continue
+
+        # Triangle area filter
+        base = (x3 - x1)
+        height = max(y1, y2, y3) - min(y1, y2, y3)
+        area = 0.5 * base * height
+        if area < min_area:
+            continue
+
+        # Classification
+        if y1 < y2 > y3:
+            triangle_type = "descending"
+        elif y1 > y2 < y3:
+            triangle_type = "ascending"
+        else:
+            triangle_type = "symmetrical"
+
+        triangles.append({
+            'points': (i1, i2, i3),
+            'type': triangle_type,
+            'area': area
+        })
+
+    return triangles
+
+def plot_momentum_triangles_on_ax(ax, df, triangles, msi_col='msi'):
+    for tri in triangles:
+        i1, i2, i3 = tri['points']
+        t_type = tri['type']
+        x_vals = [df['timestamp'].iloc[i1], df['timestamp'].iloc[i2], df['timestamp'].iloc[i3]]
+        y_vals = [df[msi_col].iloc[i1], df[msi_col].iloc[i2], df[msi_col].iloc[i3]]
+
+        # Color by type
+        if t_type == 'ascending':
+            color = 'lime'
+        elif t_type == 'descending':
+            color = 'red'
+        else:
+            color = 'dodgerblue'
+
+        # Plot triangle
+        ax.plot(x_vals + [x_vals[0]], y_vals + [y_vals[0]], color=color, linewidth=2, linestyle='--', alpha=0.9)
+        ax.fill(x_vals + [x_vals[0]], y_vals + [y_vals[0]], color=color, alpha=0.15)
+
+        # Labels A, B, C
+        ax.text(x_vals[0], y_vals[0], "A", fontsize=9, color=color, fontweight='bold', ha='center', va='bottom')
+        ax.text(x_vals[1], y_vals[1], "B", fontsize=9, color=color, fontweight='bold', ha='center', va='bottom')
+        ax.text(x_vals[2], y_vals[2], "C", fontsize=9, color=color, fontweight='bold', ha='center', va='bottom')
+
+
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
@@ -1232,7 +1310,13 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
                             f"{level} (W{window})",
                             fontsize=7, color=color, va='bottom'
                         )
-            
+    # === HARMONIC TRIANGLE OVERLAY ===
+    try:
+        triangles = find_momentum_triangles(df)
+        plot_momentum_triangles_on_ax(ax, df, triangles)
+    except Exception as e:
+        print(f"[Triangle Plot Error] {e}")
+        
     ax.set_title("📊 MSI Volatility Tracker")
     ax.legend()
     # --- SMMI Plot: Micro Momentum Based on Mini-Tenkan ---
@@ -1250,18 +1334,18 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     ax2.grid(alpha=0.2)
     ax2.legend(loc="upper left", fontsize=8)
     
-    fig3, ax3 = plt.subplots(figsize=(12, 2.5))
-    ax3.plot(df.index, df['price_msi_conv'], label='Price-MSI Convergence', color='gold')
-    ax3.axhline(0, linestyle='--', color='gray')
-    ax3.fill_between(df.index, 0, df['price_msi_conv'], where=(df['price_msi_conv'] > 0), color='lime', alpha=0.2)
-    ax3.fill_between(df.index, 0, df['price_msi_conv'], where=(df['price_msi_conv'] < 0), color='red', alpha=0.2)
-    ax3.legend(loc="upper left", fontsize=8)
+    #fig3, ax3 = plt.subplots(figsize=(12, 2.5))
+    #ax3.plot(df.index, df['price_msi_conv'], label='Price-MSI Convergence', color='gold')
+    #ax3.axhline(0, linestyle='--', color='gray')
+    #ax3.fill_between(df.index, 0, df['price_msi_conv'], where=(df['price_msi_conv'] > 0), color='lime', alpha=0.2)
+    #ax3.fill_between(df.index, 0, df['price_msi_conv'], where=(df['price_msi_conv'] < 0), color='red', alpha=0.2)
+    #ax3.legend(loc="upper left", fontsize=8)
 
     plot_slot = st.empty()
     with plot_slot.container():
         st.pyplot(fig)
         st.pyplot(fig2)
-        st.pyplot(fig3)
+        #st.pyplot(fig3)
             
 
 # =================== MAIN APP FUNCTIONALITY ========================
