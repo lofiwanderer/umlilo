@@ -588,24 +588,7 @@ def find_momentum_triangles(df, msi_col='msi', order=3, fib_min=0.5, fib_max=1.6
 
     triangles = []
     msi = df[msi_col]
-    vol = msi.rolling(10).std().fillna(0)
-    vol_now = vol.iloc[-1]
-    if vol_now < 0.2:
-        order = 2  # more sensitive in flat zones
-    elif vol_now > 0.8:
-        order = 5  # smoother in volatile zones
-    else:
-        order = 3
-
-    pulse = msi.diff().rolling(5).mean().abs().iloc[-1]
-    fib_min = 0.5 if pulse < 0.2 else 0.8
-    fib_max = 1.8 if pulse > 0.5 else 1.4
     
-    avg_gap = np.diff(df.index).mean().seconds
-    max_gap = int(2.5 * avg_gap)  # flexible window
-    
-    msi_range = msi.max() - msi.min()
-    min_area = 0.05 * msi_range  # adaptive area filter
 
 
     local_max = argrelextrema(msi.values, np.greater_equal, order=order)[0]
