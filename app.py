@@ -692,7 +692,83 @@ def compute_momentum_adaptive_ma(df, msi_col='msi', base_window=10, max_factor=2
     return df
 
 
+def label_msi_waves(df, msi_col='msi', order=3, prominence=0.5):
+    df = df.copy()
 
+    # Step 1: Detect peaks and troughs
+    peaks, _ = find_peaks(df[msi_col], distance=order, prominence=prominence)
+    troughs, _ = find_peaks(-df[msi_col], distance=order, prominence=prominence)
+
+    # Combine and sort
+    all_points = sorted(list(peaks) + list(troughs))
+    labels = []
+    wave_directions = []
+
+    # Step 2: Label wave directions
+    for i in range(1, len(all_points)):
+        start = all_points[i - 1]
+        end = all_points[i]
+        start_val = df[msi_col].iloc[start]
+        end_val = df[msi_col].iloc[end]
+
+        direction = 'up' if end_val > start_val else 'down'
+        wave_directions.append((start, end, direction))
+
+        # Optional: label on the dataframe
+        labels.append((start, f"A{i}"))
+        labels.append((end, f"B{i}"))
+
+    df['msi_wave_label'] = None
+    for idx, label in labels:
+        df.at[idx, 'msi_wave_label'] = label
+
+    df['msi_wave_phase'] = None
+    for start, end, direction in wave_directions:
+        df.loc[start:end, 'msi_wave_phase'] = direction
+
+    return df, wave_directions
+
+def plot_msi_wave_labels(ax, df, label_col='msi_wave_label', msi_col='msi'):
+    for idx, row in df.iterrows():
+        label = row[label_col]
+        if pd.notnull(label):
+            ax.annotate(label, (idx, row[msi_col]), textcoords="offset points", xytext=(0,10),
+                        ha='center', fontsize=8, color='purple')
+
+
+def assign_elliott_wave_labels(df, wave_directions, label_col='msi_elliott_label'):
+    df = df.copy()
+    wave_labels = []
+
+    wave_count = 1
+    is_impulse = True
+    for i, (start, end, direction) in enumerate(wave_directions):
+        # Assign Wave 1–5 or A–C
+        if is_impulse and wave_count <= 5:
+            wave_name = f"Wave {wave_count}"
+            wave_count += 1
+            if wave_count > 5:
+                is_impulse = False  # switch to correction phase
+                wave_count = 0
+        else:
+            wave_name = f"Wave {chr(65 + wave_count)}"  # A, B, C...
+            wave_count += 1
+            if wave_count > 2:  # A–B–C only
+                break  # stop after C
+
+        wave_labels.append((start, wave_name + " Start"))
+        wave_labels.append((end, wave_name + " End"))
+        df.loc[start:end, label_col] = wave_name
+
+    return df
+
+def plot_elliott_wave_labels(ax, df, label_col='msi_elliott_label', msi_col='msi'):
+    for idx, row in df.iterrows():
+        label = row[label_col]
+        if pd.notnull(label):
+            ax.annotate(label, (idx, row[msi_col]),
+                        textcoords="offset points", xytext=(0, 10),
+                        ha='center', fontsize=8, color='blue')
 
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
@@ -1170,7 +1246,11 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     if len(df) < 2:
         st.warning("Need at least 2 rounds to plot MSI chart.")
         return
-        
+
+    # ================= Detect and Label MSI Waves =================
+    df, wave_directions = label_msi_waves(df, msi_col="msi", order=3, prominence=0.5)
+    df = assign_elliott_wave_labels(df, wave_directions, label_col="msi_elliott_label")
+    
     # MSI with Bollinger Bands
     st.subheader("MSI with Bollinger Bands")
     fig, ax = plt.subplots(figsize=(12, 8))
@@ -1360,6 +1440,11 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
 
         plot_momentum_triangles_on_ax(ax, df, medium_triangles)
         plot_momentum_triangles_on_ax(ax, df, large_triangles)
+
+        # === Plot Wave Labels ===
+        plot_msi_wave_labels(ax, df, label_col="msi_wave_label", msi_col="msi")
+        plot_elliott_wave_labels(ax, df, label_col="msi_elliott_label", msi_col="msi")
+
     except Exception as e:
         print(f"[Triangle Plot Error] {e}")
         
