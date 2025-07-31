@@ -665,24 +665,28 @@ def compute_msi_macd(df, msi_col='msi', fast=6, slow=13, signal=5):
     return df
     
 def compute_momentum_adaptive_ma(df, msi_col='msi', base_window=10, max_factor=2):
-    # Step 1: Compute normalized momentum
-    momentum_strength = df[msi_col].diff().abs().rolling(base_window).mean()
-    norm_momentum = momentum_strength / (momentum_strength.max() + 1e-9)
+    # Step 1: Compute normalized momentum safely
+    momentum_strength = df[msi_col].diff().abs().rolling(base_window).mean().fillna(0)
+    momentum_max = momentum_strength.max()
+    norm_momentum = (momentum_strength / (momentum_max + 1e-9)).clip(0, 1)
 
-    # Step 2: Adaptive smoothing factor
+    # Step 2: Adaptive span logic
     adaptive_span = base_window / (1 + max_factor * norm_momentum)
-    adaptive_span = adaptive_span.clip(lower=3)  # Avoid excessive compression
+    adaptive_span = adaptive_span.clip(lower=3, upper=base_window * 2)
 
-    # Step 3: Smooth using dynamic span
+    # Step 3: Apply dynamic exponential smoothing
     ama = []
-    prev = df[msi_col].iloc[0]
-    for i, span in enumerate(adaptive_span):
-        alpha = 2 / (span + 1)
-        prev = alpha * df[msi_col].iloc[i] + (1 - alpha) * prev
+    prev = df[msi_col].fillna(0).iloc[0]
+    for i in range(len(df)):
+        alpha = 2 / (adaptive_span.iloc[i] + 1)
+        current_val = df[msi_col].iloc[i]
+        prev = alpha * current_val + (1 - alpha) * prev
         ama.append(prev)
-    
+
     df['msi_amma'] = ama
     return df
+
+
 
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
