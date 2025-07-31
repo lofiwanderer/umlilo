@@ -692,10 +692,13 @@ def compute_momentum_adaptive_ma(df, msi_col='msi', base_window=10, max_factor=2
     return df
 
 
-def label_msi_waves(df, msi_col='msi', order=3, prominence=0.5):
+def label_msi_waves(df, msi_col='msi', order=3, prominence=None):
     df = df.copy()
-
-    # Step 1: Detect peaks and troughs
+    
+    # Use relative prominence if not specified
+    if prominence is None:
+        prominence = 0.1 * (df[msi_col].max() - df[msi_col].min())
+    
     peaks, _ = find_peaks(df[msi_col], distance=order, prominence=prominence)
     troughs, _ = find_peaks(-df[msi_col], distance=order, prominence=prominence)
 
@@ -1250,8 +1253,9 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         return
 
     # ================= Detect and Label MSI Waves =================
+    # In your plot_msi_chart function, ensure you're capturing the returned dataframe
     df, wave_directions = label_msi_waves(df, msi_col="msi", order=3, prominence=0.5)
-    df = assign_elliott_wave_labels(df, wave_directions, label_col="msi_elliott_label")
+    df = assign_elliott_wave_labels(df, wave_directions)  # Make sure this is assigned back
     
     # MSI with Bollinger Bands
     st.subheader("MSI with Bollinger Bands")
@@ -1443,13 +1447,16 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         plot_momentum_triangles_on_ax(ax, df, medium_triangles)
         plot_momentum_triangles_on_ax(ax, df, large_triangles)
 
-        # === Plot Wave Labels ===
-        plot_msi_wave_labels(ax, df, label_col="msi_wave_label", msi_col="msi")
-        plot_elliott_wave_labels(ax, df, label_col="msi_elliott_label", msi_col="msi")
+    
 
     except Exception as e:
         print(f"[Triangle Plot Error] {e}")
         
+     if 'msi_elliott_label' in df.columns:
+         # === Plot Wave Labels ===
+        plot_msi_wave_labels(ax, df, label_col="msi_wave_label", msi_col="msi")
+        plot_elliott_wave_labels(ax, df, label_col="msi_elliott_label", msi_col="msi")
+         
     ax.set_title("📊 MSI Volatility Tracker")
     ax.legend()
     # --- SMMI Plot: Micro Momentum Based on Mini-Tenkan ---
