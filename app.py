@@ -184,12 +184,7 @@ with st.sidebar:
         options=[3, 5, 8, 13, 21, 34, 55],
         index=3
         )
-    order = st.sidebar.slider("Triangle Order (extrema sensitivity)", 1, 10, 3)
-    fib_min = st.sidebar.slider("Min Fib Ratio", 0.2, 1.0, 0.5)
-    fib_max = st.sidebar.slider("Max Fib Ratio", 1.0, 3.0, 1.618)
-    max_gap = st.sidebar.slider("Max Time Gap", 5, 50, 30)
-    min_area = st.sidebar.slider("Min Triangle Area", 0.1, 10.0, 0.5)
-     
+    
 # =================== ADVANCED HELPER FUNCTIONS ========================
 @st.cache_data
 def bollinger_bands(series, window, num_std=2):
@@ -580,14 +575,11 @@ def plot_enhanced_msi(df):
     )
     return fig
 
-def find_momentum_triangles(df, order=order, fib_min=fib_min, fib_max=fib_max, max_gap=max_gap, min_area=min_area):
+def find_momentum_triangles(df, msi_col='msi', order=3, fib_min=0.5, fib_max=1.618, max_gap=30, min_area=0.5):
     from scipy.signal import argrelextrema
 
     triangles = []
     msi = df[msi_col]
-    
-
-
     local_max = argrelextrema(msi.values, np.greater_equal, order=order)[0]
     local_min = argrelextrema(msi.values, np.less_equal, order=order)[0]
     extrema = sorted(np.concatenate([local_max, local_min]))
@@ -635,6 +627,7 @@ def find_momentum_triangles(df, order=order, fib_min=fib_min, fib_max=fib_max, m
         })
 
     return triangles
+
 
 def plot_momentum_triangles_on_ax(ax, df, triangles, msi_col='msi'):
     for tri in triangles:
