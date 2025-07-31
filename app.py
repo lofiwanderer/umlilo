@@ -665,26 +665,31 @@ def compute_msi_macd(df, msi_col='msi', fast=6, slow=13, signal=5):
     return df
     
 def compute_momentum_adaptive_ma(df, msi_col='msi', base_window=10, max_factor=2):
-    # Step 1: Compute normalized momentum safely
-    momentum_strength = df[msi_col].diff().abs().rolling(base_window).mean().fillna(0)
-    momentum_max = momentum_strength.max()
-    norm_momentum = (momentum_strength / (momentum_max + 1e-9)).clip(0, 1)
+    df = df.copy()
 
-    # Step 2: Adaptive span logic
+    # Step 1: Momentum diff & normalization
+    momentum_strength = df[msi_col].diff().abs().rolling(base_window).mean().fillna(0)
+    max_strength = momentum_strength.max()
+    if max_strength == 0 or np.isnan(max_strength):
+        max_strength = 1  # prevent division by zero
+    norm_momentum = (momentum_strength / max_strength).clip(0, 1)
+
+    # Step 2: Adaptive span range
     adaptive_span = base_window / (1 + max_factor * norm_momentum)
     adaptive_span = adaptive_span.clip(lower=3, upper=base_window * 2)
 
-    # Step 3: Apply dynamic exponential smoothing
+    # Step 3: Dynamic smoothing
     ama = []
-    prev = df[msi_col].fillna(0).iloc[0]
-    for i in range(len(df)):
+    msi_series = df[msi_col].fillna(method='ffill').fillna(0)
+    prev = msi_series.iloc[0]
+    for i in range(len(msi_series)):
         alpha = 2 / (adaptive_span.iloc[i] + 1)
-        current_val = df[msi_col].iloc[i]
-        prev = alpha * current_val + (1 - alpha) * prev
+        prev = alpha * msi_series.iloc[i] + (1 - alpha) * prev
         ama.append(prev)
 
     df['msi_amma'] = ama
     return df
+
 
 
 
@@ -888,7 +893,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     msi_color = 'green' if msi_score > 0.5 else ('yellow' if msi_score > 0 else 'red')
 
     df = enhanced_msi_analysis(df)
-    df = compute_momentum_adaptive_ma(df, msi_col='msi', base_window=10, max_factor=2)
+    df = compute_momentum_adaptive_ma(df)
 
     # Multi-window BBs on MSI
     df["bb_mid_20"], df["bb_upper_20"], df["bb_lower_20"] = bollinger_bands(df["msi"], 20, 2)
