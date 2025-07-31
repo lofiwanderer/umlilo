@@ -888,7 +888,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     msi_color = 'green' if msi_score > 0.5 else ('yellow' if msi_score > 0 else 'red')
 
     df = enhanced_msi_analysis(df)
-    df = compute_momentum_adaptive_ma(df)
+    df = compute_momentum_adaptive_ma(df, msi_col='msi', base_window=10, max_factor=2)
 
     # Multi-window BBs on MSI
     df["bb_mid_20"], df["bb_upper_20"], df["bb_lower_20"] = bollinger_bands(df["msi"], 20, 2)
