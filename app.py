@@ -802,17 +802,17 @@ def assign_elliott_waves(df, wave_directions):
     
     return df
 
-def plot_wave_labels(ax, df, label_col='wave_label', value_col='msi'):
-    """Plots wave labels on chart without affecting main line"""
+def plot_wave_labels(ax, df, label_col='wave_label', value_col='msi', time_col='timestamp'):
+    """Plots wave labels on chart using timestamp for x-axis"""
     if label_col not in df.columns:
         return
         
     labeled_points = df[df[label_col].notna()]
     
-    for idx, row in labeled_points.iterrows():
+    for _, row in labeled_points.iterrows():
         ax.annotate(
             row[label_col],
-            (idx, row[value_col]),
+            (row[time_col], row[value_col]),  # Use timestamp for x
             textcoords="offset points",
             xytext=(0, 10),
             ha='center',
@@ -821,8 +821,8 @@ def plot_wave_labels(ax, df, label_col='wave_label', value_col='msi'):
             bbox=dict(boxstyle='round,pad=0.2', fc='yellow', alpha=0.3)
         )
 
-def plot_elliott_waves(ax, df, wave_col='elliott_wave', value_col='msi'):
-    """Highlights Elliot Wave segments using annotations only"""
+def plot_elliott_waves(ax, df, wave_col='elliott_wave', value_col='msi', time_col='timestamp'):
+    """Highlights Elliot Wave segments using timestamp for x-axis"""
     if wave_col not in df.columns:
         return
         
@@ -834,56 +834,18 @@ def plot_elliott_waves(ax, df, wave_col='elliott_wave', value_col='msi'):
         if len(wave_df) < 2:
             continue
             
-        start_idx = wave_df.index[0]
-        end_idx = wave_df.index[-1]
-        mid_idx = start_idx + (end_idx - start_idx) // 2
-        
         color = 'green' if '1' in wave or '3' in wave or '5' in wave else (
-                'red' if 'A' in wave or 'C' in wave else 'blue')
+               'red' if 'A' in wave or 'C' in wave else 'blue')
         
-        # Only add annotation at midpoint
-        ax.annotate(
-            wave,
-            (mid_idx, wave_df.loc[mid_idx, value_col]),
-            textcoords="offset points",
-            xytext=(0, 15),
-            ha='center',
-            fontsize=9,
+        ax.plot(
+            wave_df[time_col],  # Use timestamp for x
+            wave_df[value_col],
             color=color,
-            arrowprops=dict(arrowstyle="->", color=color)
+            linewidth=2,
+            alpha=0.7,
+            label=f"{wave}"
         )
-def plot_elliott_waves(ax, df, wave_col='elliott_wave', value_col='msi'):
-    """Highlights Elliot Wave segments using annotations only"""
-    if wave_col not in df.columns:
-        return
         
-    # Get unique waves
-    waves = df[wave_col].dropna().unique()
-    
-    for wave in waves:
-        wave_df = df[df[wave_col] == wave]
-        if len(wave_df) < 2:
-            continue
-            
-        start_idx = wave_df.index[0]
-        end_idx = wave_df.index[-1]
-        mid_idx = start_idx + (end_idx - start_idx) // 2
-        
-        color = 'green' if '1' in wave or '3' in wave or '5' in wave else (
-                'red' if 'A' in wave or 'C' in wave else 'blue')
-        
-        # Only add annotation at midpoint
-        ax.annotate(
-            wave,
-            (mid_idx, wave_df.loc[mid_idx, value_col]),
-            textcoords="offset points",
-            xytext=(0, 15),
-            ha='center',
-            fontsize=9,
-            color=color,
-            arrowprops=dict(arrowstyle="->", color=color)
-        )
-
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
