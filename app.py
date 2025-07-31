@@ -692,88 +692,162 @@ def compute_momentum_adaptive_ma(df, msi_col='msi', base_window=10, max_factor=2
     return df
 
 
-def label_msi_waves(df, msi_col='msi', order=3, prominence=None):
+def detect_wave_points(series, min_distance=3, rel_prominence=0.2):
+    """
+    Enhanced peak/trough detection with adaptive parameters
+    Returns: (peaks, troughs)
+    """
+    # Calculate adaptive prominence based on series range
+    data_range = np.nanmax(series) - np.nanmin(series)
+    prominence = rel_prominence * data_range
+    
+    # Find peaks (high points)
+    peaks, _ = find_peaks(
+        series,
+        distance=min_distance,
+        prominence=prominence,
+        width=1
+    )
+    
+    # Find troughs (low points)
+    troughs, _ = find_peaks(
+        -series,
+        distance=min_distance,
+        prominence=prominence,
+        width=1
+    )
+    
+    return peaks, troughs
+
+def label_wave_segments(df, msi_col='msi', min_segment_length=3):
+    """
+    Identifies wave segments and labels them with direction
+    Returns: (df, wave_directions)
+    """
     df = df.copy()
+    series = df[msi_col]
     
-    # Use relative prominence if not specified
-    if prominence is None:
-        prominence = 0.1 * (df[msi_col].max() - df[msi_col].min())
+    # Detect wave points with looser parameters
+    peaks, troughs = detect_wave_points(series)
     
-    peaks, _ = find_peaks(df[msi_col], distance=order, prominence=prominence)
-    troughs, _ = find_peaks(-df[msi_col], distance=order, prominence=prominence)
-
-    # Combine and sort
-    all_points = sorted(list(peaks) + list(troughs))
-    labels = []
+    # Combine and sort all turning points
+    turning_points = sorted(np.concatenate([peaks, troughs]))
+    
+    # Ensure we have enough points to form segments
+    if len(turning_points) < 2:
+        df['wave_phase'] = None
+        df['wave_label'] = None
+        return df, []
+    
+    # Label wave directions and phases
     wave_directions = []
-
-    # Step 2: Label wave directions
-    for i in range(1, len(all_points)):
-        start = all_points[i - 1]
-        end = all_points[i]
-        start_val = df[msi_col].iloc[start]
-        end_val = df[msi_col].iloc[end]
-
-        direction = 'up' if end_val > start_val else 'down'
-        wave_directions.append((start, end, direction))
-
-        # Optional: label on the dataframe
-        labels.append((start, f"A{i}"))
-        labels.append((end, f"B{i}"))
-
-    df['msi_wave_label'] = None
-    for idx, label in labels:
-        df.at[idx, 'msi_wave_label'] = label
-
-    df['msi_wave_phase'] = None
-    for start, end, direction in wave_directions:
-        df.loc[start:end, 'msi_wave_phase'] = direction
-
+    for i in range(1, len(turning_points)):
+        start_idx = turning_points[i-1]
+        end_idx = turning_points[i]
+        
+        # Skip very small segments
+        if (end_idx - start_idx) < min_segment_length:
+            continue
+            
+        direction = 'up' if series[end_idx] > series[start_idx] else 'down'
+        wave_directions.append((start_idx, end_idx, direction))
+    
+    # Create wave labels
+    df['wave_phase'] = None
+    df['wave_label'] = None
+    
+    for i, (start, end, direction) in enumerate(wave_directions):
+        df.loc[start:end, 'wave_phase'] = direction
+        df.loc[start, 'wave_label'] = f"W{i+1}S"
+        df.loc[end, 'wave_label'] = f"W{i+1}E"
+    
     return df, wave_directions
 
-def plot_msi_wave_labels(ax, df, label_col='msi_wave_label', msi_col='msi'):
-    for idx, row in df.iterrows():
-        label = row[label_col]
-        if pd.notnull(label):
-            ax.annotate(label, (idx, row[msi_col]), textcoords="offset points", xytext=(0,10),
-                        ha='center', fontsize=8, color='purple')
-
-
-def assign_elliott_wave_labels(df, wave_directions, label_col='msi_elliott_label'):
+def assign_elliott_waves(df, wave_directions):
+    """
+    Assigns Elliot Wave labels (1-5 for impulse, A-B-C for corrective)
+    Returns: df with 'elliott_wave' column
+    """
     df = df.copy()
-    wave_labels = []
-    df[label_col] = None
-
-
+    df['elliott_wave'] = None
+    
+    if not wave_directions:
+        return df
+    
+    # Determine if we're starting with impulse or corrective
+    initial_direction = wave_directions[0][2]
+    is_impulse = initial_direction == 'up'
+    
     wave_count = 1
-    is_impulse = True
-    for i, (start, end, direction) in enumerate(wave_directions):
-        # Assign Wave 1–5 or A–C
-        if is_impulse and wave_count <= 5:
-            wave_name = f"Wave {wave_count}"
-            wave_count += 1
-            if wave_count > 5:
-                is_impulse = False  # switch to correction phase
-                wave_count = 0
+    max_waves = 5 if is_impulse else 3  # 1-5 or A-C
+    
+    for start, end, direction in wave_directions:
+        if wave_count > max_waves:
+            break
+            
+        # Assign wave label
+        if is_impulse:
+            label = str(wave_count)
         else:
-            wave_name = f"Wave {chr(65 + wave_count)}"  # A, B, C...
-            wave_count += 1
-            if wave_count > 3:  # A–B–C only
-                break  # stop after C
-
-        wave_labels.append((start, wave_name + " Start"))
-        wave_labels.append((end, wave_name + " End"))
-        df.loc[start:end, label_col] = wave_name
-
+            label = chr(64 + wave_count)  # A, B, C
+            
+        df.loc[start:end, 'elliott_wave'] = f"EW{label}"
+        
+        wave_count += 1
+        
+        # Switch to corrective after impulse
+        if is_impulse and wave_count > 5:
+            is_impulse = False
+            wave_count = 1
+    
     return df
 
-def plot_elliott_wave_labels(ax, df, label_col='msi_elliott_label', msi_col='msi'):
-    for idx, row in df.iterrows():
-        label = row[label_col]
-        if pd.notnull(label):
-            ax.annotate(label, (idx, row[msi_col]),
-                        textcoords="offset points", xytext=(0, 10),
-                        ha='center', fontsize=8, color='blue')
+def plot_wave_labels(ax, df, label_col='wave_label', value_col='msi'):
+    """Plots wave labels on chart"""
+    if label_col not in df.columns:
+        return
+        
+    labeled_points = df[df[label_col].notna()]
+    
+    for idx, row in labeled_points.iterrows():
+        ax.annotate(
+            row[label_col],
+            (idx, row[value_col]),
+            textcoords="offset points",
+            xytext=(0, 10),
+            ha='center',
+            fontsize=8,
+            color='blue',
+            bbox=dict(boxstyle='round,pad=0.2', fc='yellow', alpha=0.3)
+        )
+
+def plot_elliott_waves(ax, df, wave_col='elliott_wave', value_col='msi'):
+    """Highlights Elliot Wave segments on chart"""
+    if wave_col not in df.columns:
+        return
+        
+    # Get unique waves
+    waves = df[wave_col].dropna().unique()
+    
+    for wave in waves:
+        wave_df = df[df[wave_col] == wave]
+        if len(wave_df) < 2:
+            continue
+            
+        start = wave_df.index[0]
+        end = wave_df.index[-1]
+        
+        color = 'green' if 'EW1' in wave or 'EW3' in wave or 'EW5' in wave else (
+                'red' if 'EWA' in wave or 'EWC' in wave else 'blue')
+        
+        ax.plot(
+            wave_df.index,
+            wave_df[value_col],
+            color=color,
+            linewidth=2,
+            alpha=0.7,
+            label=f"{wave}"
+        )
 
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
@@ -1252,10 +1326,16 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         st.warning("Need at least 2 rounds to plot MSI chart.")
         return
 
-    # ================= Detect and Label MSI Waves =================
-    # In your plot_msi_chart function, ensure you're capturing the returned dataframe
-    df, wave_directions = label_msi_waves(df, msi_col="msi", order=3, prominence=0.1)
-    df = assign_elliott_wave_labels(df, wave_directions)  # Make sure this is assigned back
+    # ===== Enhanced Wave Detection and Labeling =====
+    # First pass with looser parameters for micro-moves
+    df, wave_directions = label_wave_segments(
+        df,
+        msi_col='msi',
+        min_segment_length=2  # Allows very small waves
+    )
+    
+    # Assign Elliot Wave labels
+    df = assign_elliott_waves(df, wave_directions)
     
     # MSI with Bollinger Bands
     st.subheader("MSI with Bollinger Bands")
@@ -1452,11 +1532,9 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     except Exception as e:
         print(f"[Triangle Plot Error] {e}")
         
-    if 'msi_elliott_label' in df.columns:
-        
-         # === Plot Wave Labels ===
-        plot_msi_wave_labels(ax, df, label_col="msi_wave_label", msi_col="msi")
-        plot_elliott_wave_labels(ax, df, label_col="msi_elliott_label", msi_col="msi")
+    # ===== Add These Plotting Calls =====
+    plot_wave_labels(ax, df)  # Basic wave labels
+    plot_elliott_waves(ax, df)  # Elliot wave highlights
          
     ax.set_title("📊 MSI Volatility Tracker")
     ax.legend()
