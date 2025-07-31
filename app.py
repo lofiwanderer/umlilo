@@ -654,6 +654,36 @@ def plot_momentum_triangles_on_ax(ax, df, triangles, msi_col='msi'):
         ax.text(x_vals[2], y_vals[2], "C", fontsize=9, color=color, fontweight='bold', ha='center', va='bottom')
 
 
+# MACD over MSI
+def compute_msi_macd(df, msi_col='msi', fast=6, slow=13, signal=5):
+    ema_fast = df[msi_col].ewm(span=fast, adjust=False).mean()
+    ema_slow = df[msi_col].ewm(span=slow, adjust=False).mean()
+
+    df['msi_macd'] = ema_fast - ema_slow
+    df['msi_signal'] = df['msi_macd'].ewm(span=signal, adjust=False).mean()
+    df['msi_hist'] = df['msi_macd'] - df['msi_signal']
+    return df
+    
+def compute_momentum_adaptive_ma(df, msi_col='msi', base_window=10, max_factor=2):
+    # Step 1: Compute normalized momentum
+    momentum_strength = df[msi_col].diff().abs().rolling(base_window).mean()
+    norm_momentum = momentum_strength / (momentum_strength.max() + 1e-9)
+
+    # Step 2: Adaptive smoothing factor
+    adaptive_span = base_window / (1 + max_factor * norm_momentum)
+    adaptive_span = adaptive_span.clip(lower=3)  # Avoid excessive compression
+
+    # Step 3: Smooth using dynamic span
+    ama = []
+    prev = df[msi_col].iloc[0]
+    for i, span in enumerate(adaptive_span):
+        alpha = 2 / (span + 1)
+        prev = alpha * df[msi_col].iloc[i] + (1 - alpha) * prev
+        ama.append(prev)
+    
+    df['msi_amma'] = ama
+    return df
+
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
@@ -854,6 +884,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     msi_color = 'green' if msi_score > 0.5 else ('yellow' if msi_score > 0 else 'red')
 
     df = enhanced_msi_analysis(df)
+    df = compute_momentum_adaptive_ma(df)
 
     # Multi-window BBs on MSI
     df["bb_mid_20"], df["bb_upper_20"], df["bb_lower_20"] = bollinger_bands(df["msi"], 20, 2)
@@ -1133,6 +1164,11 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     st.subheader("MSI with Bollinger Bands")
     fig, ax = plt.subplots(figsize=(12, 8))
     ax.plot(df["timestamp"], df["msi"], label="MSI", color='black')
+    
+    # ✅ Plot Adaptive Moving Average of MSI (msi_amma)
+    if 'msi_amma' in df.columns:
+        ax2.plot(df["timestamp"], df['msi_amma'], label='MSI-AMMA', color='deepskyblue', linewidth=1.3, linestyle='--')
+        
     if show_bb:
         
         # BB lines
