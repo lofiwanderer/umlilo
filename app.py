@@ -1045,7 +1045,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     msi_score = recent_df['score'].mean() if not recent_df.empty else 0
     msi_color = 'green' if msi_score > 0.5 else ('yellow' if msi_score > 0 else 'red')
 
-    df = enhanced_msi_analysis(df)
+    #df = enhanced_msi_analysis(df)
     df = compute_momentum_adaptive_ma(df)
     df = compute_msi_macd(df, msi_col='msi')
 
@@ -1069,7 +1069,89 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     # Pull latest values from the last row
     latest = df.iloc[-1] if not df.empty else pd.Series()
 
+    # ===== IMPROVED MOMENTUM DETECTION =====
+    # 1. True Momentum Calculation (Crash-Point Adjusted)
+    df['raw_momentum'] = df['multiplier'].pct_change().fillna(0)
     
+    # 2. Volume Proxy (Using Round Sequencing Patterns)
+    df['volume_proxy'] = (
+        (df['multiplier'].rolling(3).std() * 10) +  # Volatility component
+        (df['multiplier'].diff().abs().rolling(5).sum())  # Recent activity
+    )
+    
+    # 3. Momentum Impulse (Direction + Strength)
+    df['momentum_impulse'] = (
+        np.sign(df['raw_momentum']) *  # Direction
+        np.sqrt(abs(df['raw_momentum'])) *  # Magnitude (dampened)
+        df['volume_proxy']  # Volume weighting
+    )
+    
+    # 4. Adaptive Normalization Window
+    df['volatility_index'] = df['multiplier'].rolling(10).std().rank(pct=True)
+    df['dynamic_window'] = (5 + (df['volatility_index'] * 15)).astype(int)  # 5-20 period range
+
+    # ===== SUPERCHARGED SMMI =====
+    def dynamic_smmi(df):
+        """Adaptive Stochastic Mini-Momentum Index"""
+        # Get per-row lookback windows
+        windows = df['dynamic_window'].values
+        
+        # Vectorized calculation
+        smmi_values = []
+        for i in range(len(df)):
+            if i < 5:  # Warm-up period
+                smmi_values.append(50)
+                continue
+                
+            window = windows[i]
+            start_idx = max(0, i - window)
+            
+            # Current window slice
+            impulse = df['momentum_impulse'].iloc[start_idx:i+1]
+            
+            # Handle edge cases
+            if len(impulse) < 2:
+                smmi_values.append(smmi_values[-1] if i > 0 else 50)
+                continue
+                
+            # Normalize to 0-100 scale
+            lowest = impulse.min()
+            highest = impulse.max()
+            current = impulse.iloc[-1]
+            
+            if highest != lowest:
+                smmi = 100 * (current - lowest) / (highest - lowest)
+            else:
+                smmi = 50  # Neutral if no movement
+                
+            smmi_values.append(smmi)
+        
+        return pd.Series(smmi_values, index=df.index)
+    
+    df['smmi'] = dynamic_smmi(df)
+    
+    # Add signal line
+    df['smmi_signal'] = df['smmi'].ewm(span=3).mean()
+
+    # ===== CRASH-SPECIFIC SIGNALS =====
+    # 1. Overextension Alert (Pre-Crash Warning)
+    df['overextension'] = (
+        (df['smmi'] > 85) & 
+        (df['multiplier'] > df['multiplier'].rolling(5).mean() * 1.5
+    )
+    
+    # 2. Momentum Reversal Signals
+    df['bullish_reversal'] = (
+        (df['smmi'] < 20) & 
+        (df['smmi'].diff() > 5) & 
+        (df['multiplier'] < 1.3)
+    )
+    
+    df['bearish_reversal'] = (
+        (df['smmi'] > 80) & 
+        (df['smmi'].diff() < -5) & 
+        (df['multiplier'] > 1.5)
+    )
     
     # === Ichimoku Cloud on MSI ===
     high_9  = df["msi"].rolling(window=9).max()
@@ -1158,9 +1240,9 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     df = compute_supertrend(df, period=10, multiplier=2.0, source="msi")
 
     # Custom Stochastic Mini-Momentum Index (SMMI)
-    lowest = df["momentum_impulse"].rolling(5).min()
-    highest = df["momentum_impulse"].rolling(5).max()
-    df["smmi"] = 100 * ((df["momentum_impulse"] - lowest) / (highest - lowest))
+    #lowest = df["momentum_impulse"].rolling(5).min()
+    #highest = df["momentum_impulse"].rolling(5).max()
+    #df["smmi"] = 100 * ((df["momentum_impulse"] - lowest) / (highest - lowest))
 
 
     # Core Fibonacci multipliers
@@ -1530,20 +1612,86 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
          
     ax.set_title("📊 MSI Volatility Tracker")
     ax.legend()
-    # --- SMMI Plot: Micro Momentum Based on Mini-Tenkan ---
-    fig2, ax2 = plt.subplots(figsize=(12, 2.5))
+   # --- SMMI Plot: Micro Momentum Based on Mini-Tenkan ---
+    fig2, ax2 = plt.subplots(figsize=(12, 3.0))  # Slightly taller for signals
+    
+    # Main SMMI Lines
     ax2.plot(df["smmi"], label="SMMI (Stochastic Momentum)", color="black", linewidth=1.5)
+    ax2.plot(df['smmi_signal'], label="Signal Line", color="blue", linestyle="dotted", linewidth=1.2)
+    
+    # ===== SIGNAL VISUALIZATION =====
+    # 1. Overextension Alerts (Pre-Crash)
+    overextension = df[df['overextension']]
+    ax2.scatter(
+        overextension.index,
+        overextension['smmi'],
+        color='red',
+        marker='v',
+        s=100,
+        label='Overextension',
+        alpha=0.7,
+        edgecolors='black',
+        linewidths=0.5
+    )
+    
+    # 2. Bullish Reversals
+    bullish = df[df['bullish_reversal']]
+    ax2.scatter(
+        bullish.index,
+        bullish['smmi'],
+        color='lime',
+        marker='^',
+        s=100,
+        label='Bullish Reversal',
+        alpha=0.9,
+        edgecolors='black',
+        linewidths=0.5
+    )
+    
+    # 3. Bearish Reversals
+    bearish = df[df['bearish_reversal']]
+    ax2.scatter(
+        bearish.index,
+        bearish['smmi'],
+        color='orange',
+        marker='v',
+        s=100,
+        label='Bearish Reversal',
+        alpha=0.9,
+        edgecolors='black',
+        linewidths=0.5
+    )
+    
+    # 4. Squeeze Zones (Shading)
+    for i in range(1, len(df)):
+        if df['squeeze'].iloc[i]:
+            ax2.axvspan(
+                df.index[i-1], df.index[i],
+                color='purple',
+                alpha=0.1,
+                lw=0
+            )
     
     # Threshold zones
-    ax2.axhline(90, color="red", linestyle="dotted", linewidth=0.8)
-    ax2.axhline(10, color="green", linestyle="dotted", linewidth=0.8)
-    ax2.axhline(50, color="white", linestyle="dashed", linewidth=0.5)
+    ax2.axhline(90, color="red", linestyle="dotted", linewidth=0.8, alpha=0.5)
+    ax2.axhline(10, color="green", linestyle="dotted", linewidth=0.8, alpha=0.5)
+    ax2.axhline(50, color="gray", linestyle="dashed", linewidth=0.5)
     
-    ax2.set_title("SMMI - Micro Stochastic Momentum Index", fontsize=10)
-    ax2.set_ylabel("SMMI Value")
-    ax2.set_ylim(-10, 110)
-    ax2.grid(alpha=0.2)
-    ax2.legend(loc="upper left", fontsize=8)
+    # Labels and cosmetics
+    ax2.set_title("SMMI with Trading Signals", fontsize=11, pad=12)
+    ax2.set_ylabel("SMMI Value", fontsize=9)
+    ax2.set_ylim(-5, 105)  # Tighter y-range for better signal visibility
+    ax2.grid(alpha=0.15)
+    
+    # Smart legend (only show items with actual occurrences)
+    handles, labels = ax2.get_legend_handles_labels()
+    unique_labels = []
+    unique_handles = []
+    for h, l in zip(handles, labels):
+        if l not in unique_labels:
+            unique_labels.append(l)
+            unique_handles.append(h)
+    ax2.legend(unique_handles, unique_labels, loc="upper left", fontsize=8, ncol=2)
     
     
     # AX3: MACD over MSI
@@ -1682,10 +1830,10 @@ if not df.empty:
     # Plot MSI Chart
     plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_msi_window, fib_lookback_window,  spiral_centers=spiral_centers)
     
-    fig = plot_enhanced_msi(df)
-    st.plotly_chart(fig, use_container_width=True)
+    #fig = plot_enhanced_msi(df)
+    #st.plotly_chart(fig, use_container_width=True)
     
-    with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=True):
+    with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=False):
         fig, ax = plt.subplots(figsize=(10, 4))
         
         ax.plot(df["timestamp"], df['eq_rsi'], label='EQ-RSI', color='black', linewidth=2)
