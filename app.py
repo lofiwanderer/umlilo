@@ -739,6 +739,8 @@ def plot_msi_wave_labels(ax, df, label_col='msi_wave_label', msi_col='msi'):
 def assign_elliott_wave_labels(df, wave_directions, label_col='msi_elliott_label'):
     df = df.copy()
     wave_labels = []
+    df[label_col] = None
+
 
     wave_count = 1
     is_impulse = True
