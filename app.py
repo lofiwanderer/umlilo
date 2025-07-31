@@ -1326,6 +1326,12 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         st.warning("Need at least 2 rounds to plot MSI chart.")
         return
 
+    
+    # MSI with Bollinger Bands
+    st.subheader("MSI with Bollinger Bands")
+    fig, ax = plt.subplots(figsize=(12, 8))
+    ax.plot(df["timestamp"], df["msi"], label="MSI", color='black')
+
     # ===== Enhanced Wave Detection and Labeling =====
     # First pass with looser parameters for micro-moves
     df, wave_directions = label_wave_segments(
@@ -1337,10 +1343,6 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     # Assign Elliot Wave labels
     df = assign_elliott_waves(df, wave_directions)
     
-    # MSI with Bollinger Bands
-    st.subheader("MSI with Bollinger Bands")
-    fig, ax = plt.subplots(figsize=(12, 8))
-    ax.plot(df["timestamp"], df["msi"], label="MSI", color='black')
     
     # ✅ Plot Adaptive Moving Average of MSI (msi_amma)
     if 'msi_amma' in df.columns:
