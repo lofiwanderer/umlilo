@@ -165,7 +165,7 @@ with st.sidebar:
     show_fibo   = st.checkbox("💫 Show FIB modules", value=True)
     show_bb   = st.checkbox("🌈 Show BB bands", value=True)
     show_fibo_bands   = st.checkbox("📏 Show FIB  bands", value=True)
-    show_msi_res = st.checkbox("💹 MSI Res", value=True)
+    show_macd = st.checkbox("💹 MACD", value=True)
 
     st.header("📊 PANEL TOGGLES")
     FAST_ENTRY_MODE = st.checkbox("⚡ Fast Entry Mode", value=False)
@@ -894,6 +894,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
 
     df = enhanced_msi_analysis(df)
     df = compute_momentum_adaptive_ma(df)
+    df = compute_msi_macd(df, msi_col='msi')
 
     # Multi-window BBs on MSI
     df["bb_mid_20"], df["bb_upper_20"], df["bb_lower_20"] = bollinger_bands(df["msi"], 20, 2)
@@ -1372,7 +1373,18 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     ax2.grid(alpha=0.2)
     ax2.legend(loc="upper left", fontsize=8)
     
-    #fig3, ax3 = plt.subplots(figsize=(12, 2.5))
+    
+    # AX3: MACD over MSI
+    if show_macd and 'msi_macd' in df.columns:
+        fig3, ax3 = plt.subplots(figsize=(12, 2.5))
+        ax3.plot(df['msi_macd'], label='MSI-MACD', color='blue')
+        ax3.plot(df['msi_signal'], label='MACD Signal', color='red', linestyle='--')
+        ax3.bar(df.index, df['msi_hist'], label='MACD Hist', color='gray', alpha=0.4, width=1)
+        ax3.axhline(0, color='black', linewidth=0.5, linestyle='--')
+        ax3.set_ylabel('MSI-MACD')
+        ax3.legend(loc='upper left')
+        ax3.grid(True, alpha=0.15)
+    
     #ax3.plot(df.index, df['price_msi_conv'], label='Price-MSI Convergence', color='gold')
     #ax3.axhline(0, linestyle='--', color='gray')
     #ax3.fill_between(df.index, 0, df['price_msi_conv'], where=(df['price_msi_conv'] > 0), color='lime', alpha=0.2)
@@ -1383,7 +1395,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     with plot_slot.container():
         st.pyplot(fig)
         st.pyplot(fig2)
-        #st.pyplot(fig3)
+        st.pyplot(fig3)
             
 
 # =================== MAIN APP FUNCTIONALITY ========================
