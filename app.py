@@ -1167,7 +1167,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     
     # ✅ Plot Adaptive Moving Average of MSI (msi_amma)
     if 'msi_amma' in df.columns:
-        ax2.plot(df["timestamp"], df['msi_amma'], label='MSI-AMMA', color='deepskyblue', linewidth=1.3, linestyle='--')
+        ax.plot(df["timestamp"], df['msi_amma'], label='MSI-AMMA', color='deepskyblue', linewidth=1.3, linestyle='--')
         
     if show_bb:
         
