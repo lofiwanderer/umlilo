@@ -755,7 +755,7 @@ def assign_elliott_wave_labels(df, wave_directions, label_col='msi_elliott_label
         else:
             wave_name = f"Wave {chr(65 + wave_count)}"  # A, B, C...
             wave_count += 1
-            if wave_count > 2:  # A–B–C only
+            if wave_count > 3:  # A–B–C only
                 break  # stop after C
 
         wave_labels.append((start, wave_name + " Start"))
