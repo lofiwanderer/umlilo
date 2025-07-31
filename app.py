@@ -166,7 +166,8 @@ with st.sidebar:
     show_bb   = st.checkbox("🌈 Show BB bands", value=True)
     show_fibo_bands   = st.checkbox("📏 Show FIB  bands", value=True)
     show_macd = st.checkbox("💹 MACD", value=True)
-
+    show_msi_res = st.checkbox("❌ MSI RES", value=True)
+    
     st.header("📊 PANEL TOGGLES")
     FAST_ENTRY_MODE = st.checkbox("⚡ Fast Entry Mode", value=False)
     
