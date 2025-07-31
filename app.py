@@ -803,7 +803,7 @@ def assign_elliott_waves(df, wave_directions):
     return df
 
 def plot_wave_labels(ax, df, label_col='wave_label', value_col='msi'):
-    """Plots wave labels on chart"""
+    """Plots wave labels on chart without affecting main line"""
     if label_col not in df.columns:
         return
         
@@ -822,7 +822,7 @@ def plot_wave_labels(ax, df, label_col='wave_label', value_col='msi'):
         )
 
 def plot_elliott_waves(ax, df, wave_col='elliott_wave', value_col='msi'):
-    """Highlights Elliot Wave segments on chart"""
+    """Highlights Elliot Wave segments using annotations only"""
     if wave_col not in df.columns:
         return
         
@@ -834,19 +834,54 @@ def plot_elliott_waves(ax, df, wave_col='elliott_wave', value_col='msi'):
         if len(wave_df) < 2:
             continue
             
-        start = wave_df.index[0]
-        end = wave_df.index[-1]
+        start_idx = wave_df.index[0]
+        end_idx = wave_df.index[-1]
+        mid_idx = start_idx + (end_idx - start_idx) // 2
         
-        color = 'green' if 'EW1' in wave or 'EW3' in wave or 'EW5' in wave else (
-                'red' if 'EWA' in wave or 'EWC' in wave else 'blue')
+        color = 'green' if '1' in wave or '3' in wave or '5' in wave else (
+                'red' if 'A' in wave or 'C' in wave else 'blue')
         
-        ax.plot(
-            wave_df.index,
-            wave_df[value_col],
+        # Only add annotation at midpoint
+        ax.annotate(
+            wave,
+            (mid_idx, wave_df.loc[mid_idx, value_col]),
+            textcoords="offset points",
+            xytext=(0, 15),
+            ha='center',
+            fontsize=9,
             color=color,
-            linewidth=2,
-            alpha=0.7,
-            label=f"{wave}"
+            arrowprops=dict(arrowstyle="->", color=color)
+        )
+def plot_elliott_waves(ax, df, wave_col='elliott_wave', value_col='msi'):
+    """Highlights Elliot Wave segments using annotations only"""
+    if wave_col not in df.columns:
+        return
+        
+    # Get unique waves
+    waves = df[wave_col].dropna().unique()
+    
+    for wave in waves:
+        wave_df = df[df[wave_col] == wave]
+        if len(wave_df) < 2:
+            continue
+            
+        start_idx = wave_df.index[0]
+        end_idx = wave_df.index[-1]
+        mid_idx = start_idx + (end_idx - start_idx) // 2
+        
+        color = 'green' if '1' in wave or '3' in wave or '5' in wave else (
+                'red' if 'A' in wave or 'C' in wave else 'blue')
+        
+        # Only add annotation at midpoint
+        ax.annotate(
+            wave,
+            (mid_idx, wave_df.loc[mid_idx, value_col]),
+            textcoords="offset points",
+            xytext=(0, 15),
+            ha='center',
+            fontsize=9,
+            color=color,
+            arrowprops=dict(arrowstyle="->", color=color)
         )
 
 @st.cache_data
