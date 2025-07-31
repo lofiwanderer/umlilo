@@ -1070,89 +1070,84 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     latest = df.iloc[-1] if not df.empty else pd.Series()
 
     # ===== IMPROVED MOMENTUM DETECTION =====
-    # 1. True Momentum Calculation (Crash-Point Adjusted)
+    # 1. Calculate volatility index safely
+    df['volatility_index'] = df['multiplier'].rolling(10, min_periods=1).std().rank(pct=True)
+    
+    # 2. Handle NaN/inf values before integer conversion
+    df['volatility_index'] = df['volatility_index'].replace([np.inf, -np.inf], np.nan).fillna(0.5)
+    
+    # 3. Dynamic window calculation with safety checks
+    df['dynamic_window'] = np.clip(
+        (5 + (df['volatility_index'] * 15)).round(),
+        5,  # Minimum window
+        20  # Maximum window
+    ).astype(int)
+    
+    # 4. Safe momentum calculations
     df['raw_momentum'] = df['multiplier'].pct_change().fillna(0)
-    
-    # 2. Volume Proxy (Using Round Sequencing Patterns)
     df['volume_proxy'] = (
-        (df['multiplier'].rolling(3).std() * 10) +  # Volatility component
-        (df['multiplier'].diff().abs().rolling(5).sum())  # Recent activity
-    )
-    
-    # 3. Momentum Impulse (Direction + Strength)
+        (df['multiplier'].rolling(3, min_periods=1).std() * 10) + 
+        (df['multiplier'].diff().abs().rolling(5, min_periods=1).sum())
     df['momentum_impulse'] = (
-        np.sign(df['raw_momentum']) *  # Direction
-        np.sqrt(abs(df['raw_momentum'])) *  # Magnitude (dampened)
-        df['volume_proxy']  # Volume weighting
+        np.sign(df['raw_momentum']) * 
+        np.sqrt(abs(df['raw_momentum'].clip(lower=1e-6))) * 
+        df['volume_proxy']
     )
     
-    # 4. Adaptive Normalization Window
-    df['volatility_index'] = df['multiplier'].rolling(10).std().rank(pct=True)
-    df['dynamic_window'] = (5 + (df['volatility_index'] * 15)).astype(int)  # 5-20 period range
-
-    # ===== SUPERCHARGED SMMI =====
-    def dynamic_smmi(df):
-        """Adaptive Stochastic Mini-Momentum Index"""
-        # Get per-row lookback windows
-        windows = df['dynamic_window'].values
-        
-        # Vectorized calculation
+    # ===== ROBUST SMMI CALCULATION =====
+    def safe_smmi(df):
         smmi_values = []
         for i in range(len(df)):
-            if i < 5:  # Warm-up period
-                smmi_values.append(50)
-                continue
-                
-            window = windows[i]
+            window = df['dynamic_window'].iloc[i] if i < len(df) else 10
             start_idx = max(0, i - window)
             
-            # Current window slice
             impulse = df['momentum_impulse'].iloc[start_idx:i+1]
             
             # Handle edge cases
-            if len(impulse) < 2:
+            if len(impulse) < 2 or impulse.isna().all():
                 smmi_values.append(smmi_values[-1] if i > 0 else 50)
                 continue
                 
-            # Normalize to 0-100 scale
+            # Safe normalization
             lowest = impulse.min()
             highest = impulse.max()
             current = impulse.iloc[-1]
             
-            if highest != lowest:
-                smmi = 100 * (current - lowest) / (highest - lowest)
+            if pd.isna(current) or pd.isna(lowest) or pd.isna(highest):
+                smmi_values.append(50)
+            elif highest != lowest:
+                smmi_values.append(100 * (current - lowest) / (highest - lowest))
             else:
-                smmi = 50  # Neutral if no movement
-                
-            smmi_values.append(smmi)
+                smmi_values.append(50)
         
         return pd.Series(smmi_values, index=df.index)
     
-    df['smmi'] = dynamic_smmi(df)
+    df['smmi'] = safe_smmi(df)
+    df['smmi_signal'] = df['smmi'].ewm(span=3, min_periods=1).mean()
     
-    # Add signal line
-    df['smmi_signal'] = df['smmi'].ewm(span=3).mean()
-
-    # ===== CRASH-SPECIFIC SIGNALS =====
-    # 1. Overextension Alert (Pre-Crash Warning)
+    # ===== SAFE SIGNAL GENERATION =====
     df['overextension'] = (
-        (df['smmi'] > 85) & 
-        (df['multiplier'] > df['multiplier'].rolling(5).mean() * 1.5)
-    )
+        (df['smmi'].fillna(50) > 85) & 
+        (df['multiplier'].fillna(1) > df['multiplier'].rolling(5, min_periods=1).mean() * 1.5)
+    ).fillna(False)
     
-    # 2. Momentum Reversal Signals
     df['bullish_reversal'] = (
-        (df['smmi'] < 20) & 
-        (df['smmi'].diff() > 5) & 
-        (df['multiplier'] < 1.3)
-    )
+        (df['smmi'].fillna(50) < 20) & 
+        (df['smmi'].diff().fillna(0) > 5) & 
+        (df['multiplier'].fillna(1) < 1.3)
+    ).fillna(False)
     
     df['bearish_reversal'] = (
-        (df['smmi'] > 80) & 
-        (df['smmi'].diff() < -5) & 
-        (df['multiplier'] > 1.5)
-    )
-    
+        (df['smmi'].fillna(50) > 80) & 
+        (df['smmi'].diff().fillna(0) < -5) & 
+        (df['multiplier'].fillna(1) > 1.5)
+    ).fillna(False)
+
+    df['squeeze'] = (
+    ((df['bb_upper_10'] - df['bb_lower_10']).fillna(1) < 
+    df['bb_upper_10'].rolling(20, min_periods=1).std().fillna(1) * 0.5)
+    ).fillna(False)
+
     # === Ichimoku Cloud on MSI ===
     high_9  = df["msi"].rolling(window=9).max()
     low_9   = df["msi"].rolling(window=9).min()
