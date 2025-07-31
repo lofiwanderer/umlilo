@@ -1137,7 +1137,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     # 1. Overextension Alert (Pre-Crash Warning)
     df['overextension'] = (
         (df['smmi'] > 85) & 
-        (df['multiplier'] > df['multiplier'].rolling(5).mean() * 1.5
+        (df['multiplier'] > df['multiplier'].rolling(5).mean() * 1.5)
     )
     
     # 2. Momentum Reversal Signals
