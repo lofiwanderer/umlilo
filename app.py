@@ -1453,9 +1453,10 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         print(f"[Triangle Plot Error] {e}")
         
      if 'msi_elliott_label' in df.columns:
+         
          # === Plot Wave Labels ===
-        plot_msi_wave_labels(ax, df, label_col="msi_wave_label", msi_col="msi")
-        plot_elliott_wave_labels(ax, df, label_col="msi_elliott_label", msi_col="msi")
+         plot_msi_wave_labels(ax, df, label_col="msi_wave_label", msi_col="msi")
+         plot_elliott_wave_labels(ax, df, label_col="msi_elliott_label", msi_col="msi")
          
     ax.set_title("📊 MSI Volatility Tracker")
     ax.legend()
