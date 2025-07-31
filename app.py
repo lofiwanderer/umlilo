@@ -1353,7 +1353,13 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     # === HARMONIC TRIANGLE OVERLAY ===
     try:
         triangles = find_momentum_triangles(df)
+        medium_triangles = find_momentum_triangles(df, msi_col='msi', order=8)
+        large_triangles = find_momentum_triangles(df, msi_col='msi', order=13)
+        
         plot_momentum_triangles_on_ax(ax, df, triangles)
+
+        plot_momentum_triangles_on_ax(ax, df, medium_triangles)
+        plot_momentum_triangles_on_ax(ax, df, large_triangles)
     except Exception as e:
         print(f"[Triangle Plot Error] {e}")
         
