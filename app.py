@@ -1254,7 +1254,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
 
     # ================= Detect and Label MSI Waves =================
     # In your plot_msi_chart function, ensure you're capturing the returned dataframe
-    df, wave_directions = label_msi_waves(df, msi_col="msi", order=3, prominence=0.5)
+    df, wave_directions = label_msi_waves(df, msi_col="msi", order=3, prominence=0.1)
     df = assign_elliott_wave_labels(df, wave_directions)  # Make sure this is assigned back
     
     # MSI with Bollinger Bands
