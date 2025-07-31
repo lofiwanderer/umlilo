@@ -1330,16 +1330,9 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     ax.plot(df["timestamp"], df["msi"], label="MSI", color='black')
 
     # ===== Enhanced Wave Detection and Labeling =====
-    # First pass with looser parameters for micro-moves
-    df, wave_directions = label_wave_segments(
-        df,
-        msi_col='msi',
-        min_segment_length=2  # Allows very small waves
-    )
-    
-    # Assign Elliot Wave labels
+    # Detect and label waves
+    df, wave_directions = label_wave_segments(df)
     df = assign_elliott_waves(df, wave_directions)
-    
     
     # ✅ Plot Adaptive Moving Average of MSI (msi_amma)
     if 'msi_amma' in df.columns:
