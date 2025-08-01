@@ -1087,11 +1087,11 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     df['raw_momentum'] = df['multiplier'].pct_change().fillna(0)
     df['volume_proxy'] = (
         (df['multiplier'].rolling(3, min_periods=1).std() * 10) + 
-        (df['multiplier'].diff().abs().rolling(5, min_periods=1).sum())
+        (df['multiplier'].diff().abs().rolling(5, min_periods=1).sum()))
     df['momentum_impulse'] = (
         np.sign(df['raw_momentum']) * 
         np.sqrt(abs(df['raw_momentum'].clip(lower=1e-6))) * 
-        df['volume_proxy'])
+        df['volume_proxy']
     )
     
     # ===== ROBUST SMMI CALCULATION =====
