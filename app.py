@@ -60,16 +60,7 @@ if 'qfe_accuracy' not in st.session_state:
         'correct': 0,
         'last_checked': -1
     }
-# Create and store the AI Core instance at the top-level (singleton-style)
-if 'ai_core' not in st.session_state:
-    st.session_state['ai_core'] = AviatorAICore()
 
-# Feed timestamps into the pattern learner
-for t in msi_df['timestamp']:
-    st.session_state['ai_core'].update(pd.to_datetime(t))
-
-# Get pattern insights
-pattern_output = st.session_state['ai_core'].get_current_patterns()
 
 
 # ================ CONFIGURATION SIDEBAR ==================
