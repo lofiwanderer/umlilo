@@ -1856,8 +1856,8 @@ if not df.empty:
     #st.plotly_chart(fig, use_container_width=True)
     
     with st.expander("📊 Time Series Analyzer"):
-    fig = plot_multiplier_timeseries(df)
-    st.pyplot(fig)
+        fig = plot_multiplier_timeseries(df)
+        st.pyplot(fig)
 
     
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=False):
