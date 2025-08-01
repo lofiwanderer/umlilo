@@ -303,7 +303,7 @@ if 'ai_core' not in st.session_state:
     st.session_state['ai_core'] = AviatorAICore()
 
 # Feed timestamps into the pattern learner
-for t in msi_df['timestamp']:
+for t in df['timestamp']:
     st.session_state['ai_core'].update(pd.to_datetime(t))
 
 # Get pattern insights
