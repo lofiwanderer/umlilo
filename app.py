@@ -11,7 +11,7 @@ import plotly.express as px
 from datetime import datetime
 from datetime import timedelta
 #import collections
-from collections import defaultdict
+from collections import defaultdict, deque
 from scipy.fft import rfft, rfftfreq
 from scipy.signal import find_peaks, peak_widths
 from scipy.signal import hilbert
@@ -60,6 +60,16 @@ if 'qfe_accuracy' not in st.session_state:
         'correct': 0,
         'last_checked': -1
     }
+# Create and store the AI Core instance at the top-level (singleton-style)
+if 'ai_core' not in st.session_state:
+    st.session_state['ai_core'] = AviatorAICore()
+
+# Feed timestamps into the pattern learner
+for t in msi_df['timestamp']:
+    st.session_state['ai_core'].update(pd.to_datetime(t))
+
+# Get pattern insights
+pattern_output = st.session_state['ai_core'].get_current_patterns()
 
 
 # ================ CONFIGURATION SIDEBAR ==================
@@ -225,7 +235,79 @@ def get_phase_label(position, cycle_length):
         return "End Phase", pct
 
 
-    
+class AviatorAICore:
+    def __init__(self):
+        self.pattern_db = {
+            'intervals': defaultdict(list),
+            'sequences': defaultdict(int)
+        }
+        self.real_time_buffer = deque(maxlen=50)  # Holds recent timestamps (pd.Timestamp format)
+
+    def _find_interval_patterns(self):
+        if len(self.real_time_buffer) < 10:
+            return []
+
+        timestamps = [t.timestamp() for t in self.real_time_buffer]
+        intervals = np.diff(timestamps)
+
+        interval_bins = {}
+        for i in intervals:
+            nearest_bin = round(i / 15) * 15
+            interval_bins[nearest_bin] = interval_bins.get(nearest_bin, 0) + 1
+
+        total = len(intervals)
+        return [b for b, c in interval_bins.items() if c / total > 0.25]
+
+    def _detect_sequences(self):
+        if len(self.real_time_buffer) < 15:
+            return []
+
+        intervals = np.diff([t.timestamp() for t in self.real_time_buffer])
+        symbolic = [f"{round(i / 60)}m" for i in intervals]
+
+        seq_counts = defaultdict(int)
+        for w in range(2, 4):
+            for i in range(len(symbolic) - w + 1):
+                seq = "-".join(symbolic[i:i + w])
+                seq_counts[seq] += 1
+
+        return [s for s, c in seq_counts.items() if c > 2]
+
+    def update(self, new_timestamp):
+        """new_timestamp: pd.Timestamp"""
+        self.real_time_buffer.append(new_timestamp)
+
+        for interval in self._find_interval_patterns():
+            self.pattern_db['intervals'][interval].append(new_timestamp)
+
+        for seq in self._detect_sequences():
+            self.pattern_db['sequences'][seq] += 1
+
+        return self.get_current_patterns()
+
+    def get_current_patterns(self):
+        active_intervals = {}
+        for interval, timestamps in self.pattern_db['intervals'].items():
+            recency = (pd.Timestamp.now() - pd.to_datetime(timestamps[-1])).seconds
+            decay = max(0, 1 - recency / (2 * interval))
+            active_intervals[interval] = min(100, len(timestamps) * 10 * decay)
+
+        active_sequences = {}
+        total_rounds = len(self.real_time_buffer)
+        for seq, count in self.pattern_db['sequences'].items():
+            active_sequences[seq] = min(100, count / total_rounds * 500)
+
+        return {
+            'intervals': sorted(
+                [{'seconds': k, 'confidence': v} for k, v in active_intervals.items()],
+                key=lambda x: -x['confidence']
+            ),
+            'sequences': sorted(
+                [{'pattern': k, 'confidence': v} for k, v in active_sequences.items()],
+                key=lambda x: -x['confidence']
+            )
+        }
+        
 FIB_NUMBERS = [3, 5, 8, 13, 21, 34, 55]
 FIBONACCI_NUMBERS = [3, 5, 8, 13, 21, 34, 55]
 ENVELOPE_MULTS = [1.0, 1.618, 2.618]
@@ -1711,7 +1793,15 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         st.pyplot(fig)
         st.pyplot(fig2)
         st.pyplot(fig3)
-            
+        
+    st.subheader("🧠 Autonomous Pattern Detection")
+    st.write("**Recurring Intervals:**")
+    for entry in pattern_output['intervals']:
+        st.markdown(f"- ⏱️ Every **{entry['seconds']}s** → Confidence: `{entry['confidence']:.1f}%`")
+    
+    st.write("**Sequence Patterns:**")
+    for seq in pattern_output['sequences']:
+        st.markdown(f"- 🔁 `{seq['pattern']}` → Confidence: `{seq['confidence']:.1f}%`")        
 
 # =================== MAIN APP FUNCTIONALITY ========================
 # =================== FLOATING ADD ROUND UI ========================
