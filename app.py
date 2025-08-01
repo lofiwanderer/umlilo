@@ -864,10 +864,9 @@ def plot_categorized_multiplier_timeseries(df, time_col='timestamp', level_col='
     colors = {"1x": "gray", "2x": "orange", "10x+": "deeppink"}
 
     # Plot each category as a scatter
-    for level in levels:
-        subset = df[df[level_col] == level]
-        ax.plot(subset[time_col], [level]*len(subset), 
-                   label=level, color='blue', linewidth=1.5, alpha=0.9)
+   
+    subset = df[df[level_col] == level]
+    ax.plot(subset[time_col], [level]*len(subset), label=level, color='black', linewidth=1.5, alpha=0.9)
 
     # Format
     ax.set_title("🧠 Multiplier Level Time Series", fontsize=16)
