@@ -858,19 +858,23 @@ def map_multiplier_level(value):
         return 3  # Level 10x+
 
 
-def plot_multiplier_levels(df, time_col='timestamp'):
-    fig, ax = plt.subplots(figsize=(12, 5))
+def plot_multiplier_timeseries(df, multiplier_col='multiplier', time_col='timestamp'):
+    fig, ax = plt.subplots(figsize=(12, 6))
 
-    ax.plot(df[time_col], df['multiplier_level'], color='skyblue', linewidth=1.8)
+    # Plot raw multiplier values
+    ax.plot(df[time_col], df[multiplier_col], label='Multiplier', color='royalblue', linewidth=1.5)
 
-    # Set custom y-axis labels
-    ax.set_yticks([1, 2, 3])
-    ax.set_yticklabels(['1x', '2x', '10x+'])
+    # Optional: horizontal lines for visual thresholds
+    ax.axhline(1.0, color='gray', linestyle='--', linewidth=1)
+    ax.axhline(2.0, color='orange', linestyle='--', linewidth=1)
+    ax.axhline(10.0, color='deeppink', linestyle='--', linewidth=1)
 
-    ax.set_title("🚀 Multiplier Level Time Series", fontsize=14)
-    ax.set_xlabel("Time")
-    ax.set_ylabel("Multiplier Level")
-    ax.grid(True, linestyle='--', alpha=0.5)
+    # Format
+    ax.set_title('📈 Multiplier Time Series', fontsize=16)
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Multiplier')
+    ax.legend()
+    ax.grid(True, linestyle='--', alpha=0.4)
 
     plt.tight_layout()
     return fig
@@ -1748,37 +1752,38 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
 
 
 # Fast entry mode UI - simplified UI for mobile/quick decisions
-def fast_entry_mode_ui(pink_threshold):
+def fast_entry_mode_ui():
     st.markdown("### ⚡ FAST ENTRY MODE")
-    st.markdown("Quick enter rounds for rapid decision making")
-    
-    cols = st.columns(3)
-    with cols[0]:
-        if st.button("➕ Blue (1.5x)", use_container_width=True):
-            st.session_state.roundsc.append({
-                "timestamp": datetime.now(),
-                "multiplier": 1.5,
-                "score": -1
-            })
-            st.rerun()
-    
-    with cols[1]:
-        if st.button("➕ Purple (2x)", use_container_width=True):
-            st.session_state.roundsc.append({
-                "timestamp": datetime.now(),
-                "multiplier": 2.0,
-                "score": 1
-            })
-            st.rerun()
-    
-    with cols[2]:
-        if st.button(f"➕ Pink ({pink_threshold}x)", use_container_width=True):
-            st.session_state.roundsc.append({
-                "timestamp": datetime.now(),
-                "multiplier": pink_threshold,
-                "score": 2
-            })
-            st.rerun()
+    st.markdown("Tap a number to enter the corresponding round multiplier")
+
+    # Numberpad layout
+    num_rows = [
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9],
+        [0, 10]
+    ]
+
+    for row in num_rows:
+        cols = st.columns(len(row))
+        for i, num in enumerate(row):
+            with cols[i]:
+                if st.button(f"{num}x", use_container_width=True):
+                    # Categorize score
+                    if num < 2:
+                        score = -1  # Blue
+                    elif num < 10:
+                        score = 1   # Purple
+                    else:
+                        score = 2   # Pink
+
+                    # Append to roundsc
+                    st.session_state.roundsc.append({
+                        "timestamp": datetime.now(),
+                        "multiplier": float(num),
+                        "score": score
+                    })
+                    st.rerun()
 
 # =================== MAIN APP CODE ========================
 # Round Entry form
@@ -1803,7 +1808,7 @@ with col_entry:
 
 # Display fast entry mode if enabled
 if FAST_ENTRY_MODE:
-    fast_entry_mode_ui(PINK_THRESHOLD)
+    fast_entry_mode_ui()
 
 # Convert rounds to DataFrame
 df = pd.DataFrame(st.session_state.roundsc)
@@ -1859,12 +1864,13 @@ if not df.empty:
     
     #fig = plot_enhanced_msi(df)
     #st.plotly_chart(fig, use_container_width=True)
-    df['multiplier_level'] = df['multiplier'].apply(map_multiplier_level)
+    #df['multiplier_level'] = df['multiplier'].apply(map_multiplier_level)
 
 
-    with st.expander("🚀 Multiplier Line Plot (Categorical Levels)"):
-        fig = plot_multiplier_levels(df)
+    with st.expander("📊 Time Series Analyzer"):
+        fig = plot_multiplier_timeseries(df)
         st.pyplot(fig)
+
     
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=False):
         fig, ax = plt.subplots(figsize=(10, 4))
