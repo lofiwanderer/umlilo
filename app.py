@@ -226,81 +226,6 @@ def get_phase_label(position, cycle_length):
         return "End Phase", pct
 
 
-class AviatorAICore:
-    def __init__(self):
-        self.pattern_db = {
-            'intervals': defaultdict(list),
-            'sequences': defaultdict(int)
-        }
-        self.real_time_buffer = deque(maxlen=50)  # Holds recent timestamps (pd.Timestamp format)
-
-    def _find_interval_patterns(self):
-        if len(self.real_time_buffer) < 10:
-            return []
-
-        timestamps = [t.timestamp() for t in self.real_time_buffer]
-        intervals = np.diff(timestamps)
-
-        interval_bins = {}
-        for i in intervals:
-            nearest_bin = round(i / 15) * 15
-            interval_bins[nearest_bin] = interval_bins.get(nearest_bin, 0) + 1
-
-        total = len(intervals)
-        return [b for b, c in interval_bins.items() if c / total > 0.25]
-
-    def _detect_sequences(self):
-        if len(self.real_time_buffer) < 15:
-            return []
-
-        intervals = np.diff([t.timestamp() for t in self.real_time_buffer])
-        symbolic = [f"{round(i / 60)}m" for i in intervals]
-
-        seq_counts = defaultdict(int)
-        for w in range(2, 4):
-            for i in range(len(symbolic) - w + 1):
-                seq = "-".join(symbolic[i:i + w])
-                seq_counts[seq] += 1
-
-        return [s for s, c in seq_counts.items() if c > 2]
-
-    def update(self, new_timestamp):
-        """new_timestamp: pd.Timestamp"""
-        self.real_time_buffer.append(new_timestamp)
-
-        for interval in self._find_interval_patterns():
-            self.pattern_db['intervals'][interval].append(new_timestamp)
-
-        for seq in self._detect_sequences():
-            self.pattern_db['sequences'][seq] += 1
-
-        return self.get_current_patterns()
-
-    def get_current_patterns(self):
-        active_intervals = {}
-        for interval, timestamps in self.pattern_db['intervals'].items():
-            recency = (pd.Timestamp.now() - pd.to_datetime(timestamps[-1])).seconds
-            if interval == 0 or interval is None:
-                decay = 0
-            else:
-                decay = max(0, 1 - recency / (2 * interval))
-            active_intervals[interval] = min(100, len(timestamps) * 10 * decay)
-
-        active_sequences = {}
-        total_rounds = len(self.real_time_buffer)
-        for seq, count in self.pattern_db['sequences'].items():
-            active_sequences[seq] = min(100, count / total_rounds * 500)
-
-        return {
-            'intervals': sorted(
-                [{'seconds': k, 'confidence': v} for k, v in active_intervals.items()],
-                key=lambda x: -x['confidence']
-            ),
-            'sequences': sorted(
-                [{'pattern': k, 'confidence': v} for k, v in active_sequences.items()],
-                key=lambda x: -x['confidence']
-            )
-        }
 
 
 
@@ -923,7 +848,28 @@ def plot_elliott_waves(ax, df, wave_col='elliott_wave', value_col='msi', time_co
             alpha=0.7,
             label=f"{wave}"
         )
-        
+
+def plot_multiplier_timeseries(df, multiplier_col='multiplier', time_col='timestamp'):
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # Plot raw multiplier values
+    ax.plot(df[time_col], df[multiplier_col], label='Multiplier', color='royalblue', linewidth=1.5)
+
+    # Optional: horizontal lines for visual thresholds
+    ax.axhline(1.0, color='gray', linestyle='--', linewidth=1)
+    ax.axhline(2.0, color='orange', linestyle='--', linewidth=1)
+    ax.axhline(10.0, color='deeppink', linestyle='--', linewidth=1)
+
+    # Format
+    ax.set_title('📈 Multiplier Time Series', fontsize=16)
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Multiplier')
+    ax.legend()
+    ax.grid(True, linestyle='--', alpha=0.4)
+
+    plt.tight_layout()
+    return fig
+    
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
@@ -1790,14 +1736,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
         st.pyplot(fig2)
         st.pyplot(fig3)
         
-    st.subheader("🧠 Autonomous Pattern Detection")
-    st.write("**Recurring Intervals:**")
-    for entry in pattern_output['intervals']:
-        st.markdown(f"- ⏱️ Every **{entry['seconds']}s** → Confidence: `{entry['confidence']:.1f}%`")
-    
-    st.write("**Sequence Patterns:**")
-    for seq in pattern_output['sequences']:
-        st.markdown(f"- 🔁 `{seq['pattern']}` → Confidence: `{seq['confidence']:.1f}%`")        
+            
 
 # =================== MAIN APP FUNCTIONALITY ========================
 # =================== FLOATING ADD ROUND UI ========================
@@ -1907,16 +1846,7 @@ if not df.empty:
     with col_hud:
         st.metric("Rounds Recorded", len(df))
 
-    # Create and store the AI Core instance at the top-level (singleton-style)
-    if 'ai_core' not in st.session_state:
-        st.session_state['ai_core'] = AviatorAICore()
     
-    # Feed timestamps into the pattern learner
-    for t in df['timestamp']:
-        st.session_state['ai_core'].update(pd.to_datetime(t))
-    
-    # Get pattern insights
-    pattern_output = st.session_state['ai_core'].get_current_patterns()
         
     
     # Plot MSI Chart
@@ -1924,6 +1854,11 @@ if not df.empty:
     
     #fig = plot_enhanced_msi(df)
     #st.plotly_chart(fig, use_container_width=True)
+    
+    with st.expander("📊 Time Series Analyzer"):
+    fig = plot_multiplier_timeseries(df)
+    st.pyplot(fig)
+
     
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=False):
         fig, ax = plt.subplots(figsize=(10, 4))
