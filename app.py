@@ -849,32 +849,28 @@ def plot_elliott_waves(ax, df, wave_col='elliott_wave', value_col='msi', time_co
             label=f"{wave}"
         )
 
-def categorize_multiplier(value):
+def map_multiplier_level(value):
     if value < 2:
-        return "1x"
+        return 1  # Level 1x
     elif value < 10:
-        return "2x"
+        return 2  # Level 2x
     else:
-        return "10x+"
+        return 3  # Level 10x+
 
-def plot_categorized_multiplier_timeseries(df, time_col='timestamp', level_col='multiplier_level'):
-    fig, ax = plt.subplots(figsize=(12, 6))
 
-    levels = ["1x", "2x", "10x+"]
-    colors = {"1x": "gray", "2x": "orange", "10x+": "deeppink"}
+def plot_multiplier_levels(df, time_col='timestamp'):
+    fig, ax = plt.subplots(figsize=(12, 5))
 
-    # Plot each category as a scatter
-   
-    subset = df[df[level_col] == level]
-    ax.plot(subset[time_col], [level]*len(subset), label=level, color='black', linewidth=1.5, alpha=0.9)
+    ax.plot(df[time_col], df['multiplier_level'], color='skyblue', linewidth=1.8)
 
-    # Format
-    ax.set_title("🧠 Multiplier Level Time Series", fontsize=16)
+    # Set custom y-axis labels
+    ax.set_yticks([1, 2, 3])
+    ax.set_yticklabels(['1x', '2x', '10x+'])
+
+    ax.set_title("🚀 Multiplier Level Time Series", fontsize=14)
     ax.set_xlabel("Time")
     ax.set_ylabel("Multiplier Level")
-    ax.set_yticks(levels)
-    ax.legend()
-    ax.grid(True, linestyle="--", alpha=0.4)
+    ax.grid(True, linestyle='--', alpha=0.5)
 
     plt.tight_layout()
     return fig
@@ -1863,12 +1859,12 @@ if not df.empty:
     
     #fig = plot_enhanced_msi(df)
     #st.plotly_chart(fig, use_container_width=True)
-    df['multiplier_level'] = df['multiplier'].apply(categorize_multiplier)
+    df['multiplier_level'] = df['multiplier'].apply(map_multiplier_level)
 
-    with st.expander("🧠 Categorized Multiplier Time Series"):
-        fig = plot_categorized_multiplier_timeseries(df)
+
+    with st.expander("🚀 Multiplier Line Plot (Categorical Levels)"):
+        fig = plot_multiplier_levels(df)
         st.pyplot(fig)
-
     
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=False):
         fig, ax = plt.subplots(figsize=(10, 4))
