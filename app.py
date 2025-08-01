@@ -298,16 +298,7 @@ class AviatorAICore:
                 key=lambda x: -x['confidence']
             )
         }
-# Create and store the AI Core instance at the top-level (singleton-style)
-if 'ai_core' not in st.session_state:
-    st.session_state['ai_core'] = AviatorAICore()
 
-# Feed timestamps into the pattern learner
-for t in df['timestamp']:
-    st.session_state['ai_core'].update(pd.to_datetime(t))
-
-# Get pattern insights
-pattern_output = st.session_state['ai_core'].get_current_patterns()
 
 
 FIB_NUMBERS = [3, 5, 8, 13, 21, 34, 55]
@@ -1912,6 +1903,17 @@ if not df.empty:
     # Display metrics
     with col_hud:
         st.metric("Rounds Recorded", len(df))
+
+    # Create and store the AI Core instance at the top-level (singleton-style)
+    if 'ai_core' not in st.session_state:
+        st.session_state['ai_core'] = AviatorAICore()
+    
+    # Feed timestamps into the pattern learner
+    for t in df['timestamp']:
+        st.session_state['ai_core'].update(pd.to_datetime(t))
+    
+    # Get pattern insights
+    pattern_output = st.session_state['ai_core'].get_current_patterns()
         
     
     # Plot MSI Chart
