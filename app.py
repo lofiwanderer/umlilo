@@ -849,23 +849,33 @@ def plot_elliott_waves(ax, df, wave_col='elliott_wave', value_col='msi', time_co
             label=f"{wave}"
         )
 
-def plot_multiplier_timeseries(df, multiplier_col='multiplier', time_col='timestamp'):
+def categorize_multiplier(value):
+    if value < 2:
+        return "1x"
+    elif value < 10:
+        return "2x"
+    else:
+        return "10x+"
+
+def plot_categorized_multiplier_timeseries(df, time_col='timestamp', level_col='multiplier_level'):
     fig, ax = plt.subplots(figsize=(12, 6))
 
-    # Plot raw multiplier values
-    ax.plot(df[time_col], df[multiplier_col], label='Multiplier', color='royalblue', linewidth=1.5)
+    levels = ["1x", "2x", "10x+"]
+    colors = {"1x": "gray", "2x": "orange", "10x+": "deeppink"}
 
-    # Optional: horizontal lines for visual thresholds
-    ax.axhline(1.0, color='gray', linestyle='--', linewidth=1)
-    ax.axhline(2.0, color='orange', linestyle='--', linewidth=1)
-    ax.axhline(10.0, color='deeppink', linestyle='--', linewidth=1)
+    # Plot each category as a scatter
+    for level in levels:
+        subset = df[df[level_col] == level]
+        ax.scatter(subset[time_col], [level]*len(subset), 
+                   label=level, color=colors[level], s=10, alpha=0.7)
 
     # Format
-    ax.set_title('📈 Multiplier Time Series', fontsize=16)
-    ax.set_xlabel('Time')
-    ax.set_ylabel('Multiplier')
+    ax.set_title("🧠 Multiplier Level Time Series", fontsize=16)
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Multiplier Level")
+    ax.set_yticks(levels)
     ax.legend()
-    ax.grid(True, linestyle='--', alpha=0.4)
+    ax.grid(True, linestyle="--", alpha=0.4)
 
     plt.tight_layout()
     return fig
@@ -1854,9 +1864,10 @@ if not df.empty:
     
     #fig = plot_enhanced_msi(df)
     #st.plotly_chart(fig, use_container_width=True)
-    
-    with st.expander("📊 Time Series Analyzer"):
-        fig = plot_multiplier_timeseries(df)
+    df['multiplier_level'] = df['multiplier'].apply(categorize_multiplier)
+
+    with st.expander("🧠 Categorized Multiplier Time Series"):
+        fig = plot_categorized_multiplier_timeseries(df)
         st.pyplot(fig)
 
     
