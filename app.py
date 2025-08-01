@@ -280,7 +280,10 @@ class AviatorAICore:
         active_intervals = {}
         for interval, timestamps in self.pattern_db['intervals'].items():
             recency = (pd.Timestamp.now() - pd.to_datetime(timestamps[-1])).seconds
-            decay = max(0, 1 - recency / (2 * interval))
+            if interval == 0 or interval is None:
+                decay = 0
+            else:
+                decay = max(0, 1 - recency / (2 * interval))
             active_intervals[interval] = min(100, len(timestamps) * 10 * decay)
 
         active_sequences = {}
