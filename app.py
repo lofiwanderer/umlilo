@@ -1640,86 +1640,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
          
     ax.set_title("📊 MSI Volatility Tracker")
     ax.legend()
-   # --- SMMI Plot: Micro Momentum Based on Mini-Tenkan ---
-    fig2, ax2 = plt.subplots(figsize=(12, 3.0))  # Slightly taller for signals
-    
-    # Main SMMI Lines
-    ax2.plot(df["smmi"], label="SMMI (Stochastic Momentum)", color="black", linewidth=1.5)
-    ax2.plot(df['smmi_signal'], label="Signal Line", color="blue", linestyle="dotted", linewidth=1.2)
-    
-    # ===== SIGNAL VISUALIZATION =====
-    # 1. Overextension Alerts (Pre-Crash)
-    overextension = df[df['overextension']]
-    ax2.scatter(
-        overextension.index,
-        overextension['smmi'],
-        color='red',
-        marker='v',
-        s=100,
-        label='Overextension',
-        alpha=0.7,
-        edgecolors='black',
-        linewidths=0.5
-    )
-    
-    # 2. Bullish Reversals
-    bullish = df[df['bullish_reversal']]
-    ax2.scatter(
-        bullish.index,
-        bullish['smmi'],
-        color='lime',
-        marker='^',
-        s=100,
-        label='Bullish Reversal',
-        alpha=0.9,
-        edgecolors='black',
-        linewidths=0.5
-    )
-    
-    # 3. Bearish Reversals
-    bearish = df[df['bearish_reversal']]
-    ax2.scatter(
-        bearish.index,
-        bearish['smmi'],
-        color='orange',
-        marker='v',
-        s=100,
-        label='Bearish Reversal',
-        alpha=0.9,
-        edgecolors='black',
-        linewidths=0.5
-    )
-    
-    # 4. Squeeze Zones (Shading)
-    for i in range(1, len(df)):
-        if df['squeeze'].iloc[i]:
-            ax2.axvspan(
-                df.index[i-1], df.index[i],
-                color='purple',
-                alpha=0.1,
-                lw=0
-            )
-    
-    # Threshold zones
-    ax2.axhline(90, color="red", linestyle="dotted", linewidth=0.8, alpha=0.5)
-    ax2.axhline(10, color="green", linestyle="dotted", linewidth=0.8, alpha=0.5)
-    ax2.axhline(50, color="gray", linestyle="dashed", linewidth=0.5)
-    
-    # Labels and cosmetics
-    ax2.set_title("SMMI with Trading Signals", fontsize=11, pad=12)
-    ax2.set_ylabel("SMMI Value", fontsize=9)
-    ax2.set_ylim(-5, 105)  # Tighter y-range for better signal visibility
-    ax2.grid(alpha=0.15)
-    
-    # Smart legend (only show items with actual occurrences)
-    handles, labels = ax2.get_legend_handles_labels()
-    unique_labels = []
-    unique_handles = []
-    for h, l in zip(handles, labels):
-        if l not in unique_labels:
-            unique_labels.append(l)
-            unique_handles.append(h)
-    ax2.legend(unique_handles, unique_labels, loc="upper left", fontsize=8, ncol=2)
+   
     
     
     # AX3: MACD over MSI
@@ -1742,7 +1663,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
     plot_slot = st.empty()
     with plot_slot.container():
         st.pyplot(fig)
-        st.pyplot(fig2)
+        #st.pyplot(fig2)
         st.pyplot(fig3)
         
             
