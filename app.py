@@ -1816,9 +1816,11 @@ if not df.empty:
     N = len(signal)
     
     # Guard against too-short series
-    if N < 16:
-        raise ValueError(f"🚫 Not enough data to compute FFT. You have {N} minutes, need at least 16.")
+    if N < 6:
+        st.warning(f"⚠️ FFT running on low data ({N} points). Accuracy may be poor.")
 
+    if N < 16:
+        signal = savgol_filter(signal, window_length=5 if N >= 5 else N, polyorder=2)
         
     # Sample spacing (1 minute interval = 60 seconds)
     T = 60.0  # seconds per sample (1 per minute)
