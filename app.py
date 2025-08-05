@@ -1898,11 +1898,32 @@ if not df.empty:
         peak_values = predicted_wave[peak_indices]
         
         # Get next 3 upcoming peak timestamps (if available)
-        next_peaks = peak_times[:3]
-        next_peaks, peak_values[:3]
         
-        #next_peaks = peak_times[-3:] if len(peak_times) >= 3 else peak_times
-        #next_peak_values = peak_values[-3:] if len(peak_values) >= 3 else peak_values
+        
+        next_peaks = peak_times[-3:] if len(peak_times) >= 3 else peak_times
+        next_peak_values = peak_values[-3:] if len(peak_values) >= 3 else peak_values
+
+        # Predict next 3 peak times in future
+        num_future_peaks = 3
+        future_peaks = []
+        
+        # Time offset from last data point
+        t_last = time[-1]
+        
+        # Predict next peaks from fitted sine phase
+        for n in range(1, num_future_peaks + 1):
+            # Solve for t when sine is at its peak: sin(ωt + φ) = 1 → ωt + φ = π/2 + 2πn
+            t_peak = (np.pi / 2 + 2 * np.pi * n - phi_fit) / omega
+            t_peak_abs = t_last + (t_peak % (2 * np.pi / omega))  # align it into future
+            peak_minute = minute_avg_df['minute'].iloc[0] + pd.to_timedelta(int(t_peak_abs), unit='m')
+            future_peaks.append(peak_minute)
+        
+        # Display predicted peak minutes
+        st.markdown("### 🔮 Next Predicted Surge Times:")
+        for i, peak_time in enumerate(future_peaks, 1):
+            st.write(f"Peak #{i}: {peak_time.strftime('%H:%M')}")
+
+        
 
     
         fig2, ax = plt.subplots(figsize=(10, 4))
@@ -1923,7 +1944,10 @@ if not df.empty:
             st.success(f"🕓 Next Surge Peaks (Wave Clock): {', '.join(formatted_peaks)}")
         else:
             st.info("🔄 Waiting for enough data to predict wave clock...")
-
+        # Display predicted peak minutes
+        st.markdown("### 🔮 Next Predicted Surge Times:")
+        for i, peak_time in enumerate(future_peaks, 1):
+            st.write(f"Peak #{i}: {peak_time.strftime('%H:%M')}")
 
         
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=False):
