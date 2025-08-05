@@ -1883,16 +1883,15 @@ if not df.empty:
         # Append it to dataframe for plotting
         minute_avg_df['sine_wave'] = predicted_wave
 
-        plt.figure(figsize=(15, 6))
-        plt.plot(minute_avg_df['minute'], signal, label='Avg Multiplier (1-min)', alpha=0.6)
-        plt.plot(minute_avg_df['minute'], predicted_wave, label='Fitted Surge Wave', color='magenta', linewidth=2)
-        plt.title('Surge Wave Prediction Using FFT-Derived Sine Model')
-        plt.xlabel('Time')
-        plt.ylabel('Multiplier')
-        plt.legend()
-        plt.grid(True)
+        # Plot: Reconstructed Sine Curve vs Original
+        fig2, ax = plt.subplots(figsize=(10, 4))
+        ax.plot(minute_avg_df['minute'], signal, label='Original Signal', alpha=0.5)
+        ax.plot(minute_avg_df['minute'], fitted_sine, label='Fitted Sine Prediction', linewidth=2)
+        ax.set_title("📈 Predictive Sine Rebuild")
+        ax.legend()
+        plt.xticks(rotation=45)
         plt.tight_layout()
-        plt.show()
+        st.pyplot(fig2)
 
         
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=False):
