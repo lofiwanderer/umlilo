@@ -1918,10 +1918,7 @@ if not df.empty:
             peak_minute = minute_avg_df['minute'].iloc[0] + pd.to_timedelta(int(t_peak_abs), unit='m')
             future_peaks.append(peak_minute)
         
-        # Display predicted peak minutes
-        st.markdown("### 🔮 Next Predicted Surge Times:")
-        for i, peak_time in enumerate(future_peaks, 1):
-            st.write(f"Peak #{i}: {peak_time.strftime('%H:%M')}")
+        
 
         
 
