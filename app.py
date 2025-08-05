@@ -16,6 +16,7 @@ from scipy.fft import rfft, rfftfreq
 from scipy.signal import find_peaks, peak_widths
 from scipy.signal import hilbert
 from scipy.signal import savgol_filter
+from scipy.optimize import curve_fit
 import math
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import KMeans
@@ -1045,6 +1046,9 @@ def compute_surge_probability(thre_val, delta_slope, fnr_index):
 def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = selected_msi_windows):
     df = data.copy()
     df["timestamp"] = pd.to_datetime(df["timestamp"])
+    # Round timestamp to the nearest minute
+    df['minute'] = df['timestamp'].dt.floor('T')
+    
     df["type"] = df["multiplier"].apply(lambda x: "Pink" if x >= pink_threshold else ("Purple" if x >= 2 else "Blue"))
     df["msi"] = df["score"].rolling(window_size).sum()
     df["momentum"] = df["score"].cumsum()
@@ -1787,12 +1791,88 @@ if not df.empty:
     #st.plotly_chart(fig, use_container_width=True)
     #df['multiplier_level'] = df['multiplier'].apply(map_multiplier_level)
 
+    # Group by each minute and calculate average multiplier
+    minute_avg_df = df.groupby('minute').agg({'multiplier': 'mean'}).reset_index()
+    
+    # Optional: Fill missing minutes if gaps exist (important for clean FFT)
+    minute_avg_df.set_index('minute', inplace=True)
+    minute_avg_df = minute_avg_df.resample('1T').mean().interpolate()
+    minute_avg_df.reset_index(inplace=True)
 
-    with st.expander("📊 Time Series Analyzer"):
+    # Extract signal: average multiplier values
+    signal = minute_avg_df['multiplier'].values
+    
+    
+
+
+    with st.expander("📊 Time Series Analyzer", expanded=True):
         fig = plot_multiplier_timeseries(df)
         st.pyplot(fig)
 
+        # Number of samples
+        N = len(signal)
+        
+        # Sample spacing (1 minute interval = 60 seconds)
+        T = 60.0  # seconds per sample (1 per minute)
+        time = np.arange(N)  # N = number of minutes
     
+        # Apply FFT
+        yf = fft(signal)
+        xf = fftfreq(N, T)[:N // 2]  # frequency axis (positive half)
+        
+        # Magnitude of FFT
+        fft_magnitude = 2.0 / N * np.abs(yf[0:N // 2])
+
+        # Get dominant frequency (excluding 0 Hz / DC component)
+        dominant_index = np.argmax(fft_magnitude[1:]) + 1
+        dominant_freq = xf[dominant_index]  # cycles per second (Hz)
+        omega = 2 * np.pi * dominant_freq  # angular frequency
+
+        plt.figure(figsize=(14, 6))
+        plt.plot(xf / (1/60), fft_magnitude)  # Convert frequency to cycles per minute
+        plt.title('Fourier Spectrum of Avg Multiplier per Minute')
+        plt.xlabel('Cycles per Minute (Hz)')
+        plt.ylabel('Magnitude')
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+        # Convert dominant frequencies into periods (minutes per cycle)
+        dominant_freqs = xf[np.argsort(fft_magnitude)[-10:]]  # Top 10
+        dominant_periods = 1 / dominant_freqs * 60  # in minutes
+        
+        # Filter out unrealistic (very low or high) cycles
+        valid_periods = dominant_periods[(dominant_periods > 2) & (dominant_periods < 60)]
+        print("Top Detected Cycle Periods (minutes):", np.round(valid_periods, 2))
+
+        # Define sine wave function: A * sin(ωt + φ) + offset
+        def sine_model(t, A, phi, offset):
+            return A * np.sin(omega * t + phi) + offset
+        
+        # Fit sine wave to the signal using curve fitting
+        params, _ = curve_fit(sine_model, time, signal, p0=[1, 0, np.mean(signal)])
+        
+        # Extract fitted params
+        A_fit, phi_fit, offset_fit = params
+        print(f"Sine Wave Params — Amplitude: {A_fit:.2f}, Phase: {phi_fit:.2f}, Offset: {offset_fit:.2f}")
+
+        # Generate predicted sine wave
+        predicted_wave = sine_model(time, A_fit, phi_fit, offset_fit)
+        
+        # Append it to dataframe for plotting
+        minute_avg_df['sine_wave'] = predicted_wave
+
+        plt.figure(figsize=(15, 6))
+        plt.plot(minute_avg_df['minute'], signal, label='Avg Multiplier (1-min)', alpha=0.6)
+        plt.plot(minute_avg_df['minute'], predicted_wave, label='Fitted Surge Wave', color='magenta', linewidth=2)
+        plt.title('Surge Wave Prediction Using FFT-Derived Sine Model')
+        plt.xlabel('Time')
+        plt.ylabel('Multiplier')
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+        
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=False):
         fig, ax = plt.subplots(figsize=(10, 4))
         
