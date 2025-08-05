@@ -1893,7 +1893,7 @@ if not df.empty:
     
         fig2, ax = plt.subplots(figsize=(10, 4))
         ax.plot(minute_avg_df['minute'], signal, label='Avg Multiplier (1-min)', alpha=0.6)
-        ax.plot(minute_avg_df['minute'], predicted_wave, label='Fitted Surge Wave', color='magenta', linewidth=2)
+        ax.plot(minute_avg_df['minute'], predicted_wave, label='Fitted Surge Wave', color='black', linewidth=2)
         ax.set_title("📈 Predictive Sine Rebuild")
         ax.legend()
         plt.xticks(rotation=45)
