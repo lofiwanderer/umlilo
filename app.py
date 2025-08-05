@@ -1798,10 +1798,41 @@ if not df.empty:
     minute_avg_df.set_index('minute', inplace=True)
     minute_avg_df = minute_avg_df.resample('1T').mean().interpolate()
     minute_avg_df.reset_index(inplace=True)
+    minute_avg_df = minute_avg_df.dropna(subset=['multiplier'])
 
     # Extract signal: average multiplier values
     signal = minute_avg_df['multiplier'].values
+    N = len(signal)
     
+    if N < 16:
+        raise ValueError("🚫 Not enough data to compute FFT. Need at least ~16 data points.")
+        
+    # Sample spacing (1 minute interval = 60 seconds)
+    T = 60.0  # seconds per sample (1 per minute)
+    time = np.arange(N)  # N = number of minutes
+    
+        # Apply FFT
+    yf = rfft(signal)
+    xf = rfftfreq(N, T)[:N // 2]  # frequency axis (positive half)
+        
+    # Magnitude of FFT
+    fft_magnitude = 2.0 / N * np.abs(yf[0:N // 2])
+    
+    # Safety: Check if there's anything to analyze
+    if len(fft_magnitude[1:]) == 0:
+        raise ValueError("🚫 FFT magnitude array is empty. Check your data input.")
+        
+    # Get dominant frequency (excluding 0 Hz / DC component)
+    dominant_index = np.argmax(fft_magnitude[1:]) + 1
+    dominant_freq = xf[dominant_index]  # cycles per second (Hz)
+    omega = 2 * np.pi * dominant_freq  # angular frequency
+
+    # Define sine wave function: A * sin(ωt + φ) + offset
+    def sine_model(t, A, phi, offset):
+        return A * np.sin(omega * t + phi) + offset
+        
+    # Fit sine wave to the signal using curve fitting
+    params, _ = curve_fit(sine_model, time, signal, p0=[1, 0, np.mean(signal)])
     
 
 
@@ -1809,24 +1840,7 @@ if not df.empty:
         fig = plot_multiplier_timeseries(df)
         st.pyplot(fig)
 
-        # Number of samples
-        N = len(signal)
         
-        # Sample spacing (1 minute interval = 60 seconds)
-        T = 60.0  # seconds per sample (1 per minute)
-        time = np.arange(N)  # N = number of minutes
-    
-        # Apply FFT
-        yf = rfft(signal)
-        xf = rfftfreq(N, T)[:N // 2]  # frequency axis (positive half)
-        
-        # Magnitude of FFT
-        fft_magnitude = 2.0 / N * np.abs(yf[0:N // 2])
-
-        # Get dominant frequency (excluding 0 Hz / DC component)
-        dominant_index = np.argmax(fft_magnitude[1:]) + 1
-        dominant_freq = xf[dominant_index]  # cycles per second (Hz)
-        omega = 2 * np.pi * dominant_freq  # angular frequency
 
         plt.figure(figsize=(14, 6))
         plt.plot(xf / (1/60), fft_magnitude)  # Convert frequency to cycles per minute
@@ -1844,12 +1858,7 @@ if not df.empty:
         valid_periods = dominant_periods[(dominant_periods > 2) & (dominant_periods < 60)]
         print("Top Detected Cycle Periods (minutes):", np.round(valid_periods, 2))
 
-        # Define sine wave function: A * sin(ωt + φ) + offset
-        def sine_model(t, A, phi, offset):
-            return A * np.sin(omega * t + phi) + offset
         
-        # Fit sine wave to the signal using curve fitting
-        params, _ = curve_fit(sine_model, time, signal, p0=[1, 0, np.mean(signal)])
         
         # Extract fitted params
         A_fit, phi_fit, offset_fit = params
