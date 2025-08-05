@@ -1889,16 +1889,38 @@ if not df.empty:
         # Append it to dataframe for plotting
         minute_avg_df['sine_wave'] = predicted_wave
 
+        # Detect local maxima (peak timestamps)
+        second_derivative = np.diff(np.sign(np.diff(predicted_wave)))
+        peak_indices = np.where(second_derivative == -2)[0] + 1  # adjust for diff offset
         
+        # Extract peak times (minute) and corresponding sine wave values
+        peak_times = minute_avg_df['minute'].iloc[peak_indices].values
+        peak_values = predicted_wave[peak_indices]
+        
+        # Get next 3 upcoming peak timestamps (if available)
+        next_peaks = peak_times[-3:] if len(peak_times) >= 3 else peak_times
+        next_peak_values = peak_values[-3:] if len(peak_values) >= 3 else peak_values
+
     
         fig2, ax = plt.subplots(figsize=(10, 4))
         ax.plot(minute_avg_df['minute'], signal, label='Avg Multiplier (1-min)', alpha=0.6)
         ax.plot(minute_avg_df['minute'], predicted_wave, label='Fitted Surge Wave', color='black', linewidth=2)
+        # Mark peaks
+        ax.scatter(peak_times, peak_values, color='red', label='Predicted Peaks', zorder=5)
+
         ax.set_title("📈 Predictive Sine Rebuild")
         ax.legend()
         plt.xticks(rotation=45)
         plt.tight_layout()
         st.pyplot(fig2)
+
+        # 🔮 Display Wave Clock Prediction
+        if len(next_peaks) > 0:
+            formatted_peaks = [pd.to_datetime(p).strftime('%H:%M') for p in next_peaks]
+            st.success(f"🕓 Next Surge Peaks (Wave Clock): {', '.join(formatted_peaks)}")
+        else:
+            st.info("🔄 Waiting for enough data to predict wave clock...")
+
 
         
     with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=False):
