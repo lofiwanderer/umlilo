@@ -1906,7 +1906,7 @@ if not df.empty:
         ax.plot(minute_avg_df['minute'], signal, label='Avg Multiplier (1-min)', alpha=0.6)
         ax.plot(minute_avg_df['minute'], predicted_wave, label='Fitted Surge Wave', color='black', linewidth=2)
         # Mark peaks
-        ax.scatter(peak_times, peak_values, color='red', label='Predicted Peaks', zorder=5)
+        ax.scatter(peak_times, peak_values, color='red', label='Predicted Peaks bruv', zorder=5)
 
         ax.set_title("📈 Predictive Sine Rebuild")
         ax.legend()
