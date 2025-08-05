@@ -1800,7 +1800,7 @@ if not df.empty:
     
     # Optional: Fill missing minutes if gaps exist (important for clean FFT)
     minute_avg_df.set_index('minute', inplace=True)
-    minute_avg_df = minute_avg_df.resample('1T').mean().interpolate()
+    minute_avg_df = minute_avg_df.resample('1min').mean().interpolate()
     minute_avg_df.reset_index(inplace=True)
     minute_avg_df = minute_avg_df.dropna(subset=['multiplier'])
 
