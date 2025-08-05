@@ -1791,6 +1791,10 @@ if not df.empty:
     #st.plotly_chart(fig, use_container_width=True)
     #df['multiplier_level'] = df['multiplier'].apply(map_multiplier_level)
 
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    # Round timestamp to the nearest minute
+    df['minute'] = df['timestamp'].dt.floor('min')
+    
     # Group by each minute and calculate average multiplier
     minute_avg_df = df.groupby('minute').agg({'multiplier': 'mean'}).reset_index()
     
