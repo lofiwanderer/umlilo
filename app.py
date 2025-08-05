@@ -1865,7 +1865,11 @@ if not df.empty:
         plt.show()
         # Convert dominant frequencies into periods (minutes per cycle)
         dominant_freqs = xf[np.argsort(fft_magnitude)[-10:]]  # Top 10
-        dominant_periods = 1 / dominant_freqs * 60  # in minutes
+        # Only keep non-zero frequencies
+        nonzero_freqs = dominant_freqs[dominant_freqs > 0]
+        dominant_periods = 1 / nonzero_freqs * 60  # in minutes
+
+        #dominant_periods = 1 / dominant_freqs * 60  # in minutes
         
         # Filter out unrealistic (very low or high) cycles
         valid_periods = dominant_periods[(dominant_periods > 2) & (dominant_periods < 60)]
@@ -1883,10 +1887,11 @@ if not df.empty:
         # Append it to dataframe for plotting
         minute_avg_df['sine_wave'] = predicted_wave
 
-        # Plot: Reconstructed Sine Curve vs Original
+        
+    
         fig2, ax = plt.subplots(figsize=(10, 4))
-        ax.plot(minute_avg_df['minute'], signal, label='Original Signal', alpha=0.5)
-        ax.plot(minute_avg_df['minute'], fitted_sine, label='Fitted Sine Prediction', linewidth=2)
+        ax.plot(minute_avg_df['minute'], signal, label='Avg Multiplier (1-min)', alpha=0.6)
+        ax.plot(minute_avg_df['minute'], predicted_wave, label='Fitted Surge Wave', color='magenta', linewidth=2)
         ax.set_title("📈 Predictive Sine Rebuild")
         ax.legend()
         plt.xticks(rotation=45)
