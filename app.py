@@ -1817,8 +1817,8 @@ if not df.empty:
         time = np.arange(N)  # N = number of minutes
     
         # Apply FFT
-        yf = fft(signal)
-        xf = fftfreq(N, T)[:N // 2]  # frequency axis (positive half)
+        yf = rfft(signal)
+        xf = rfftfreq(N, T)[:N // 2]  # frequency axis (positive half)
         
         # Magnitude of FFT
         fft_magnitude = 2.0 / N * np.abs(yf[0:N // 2])
