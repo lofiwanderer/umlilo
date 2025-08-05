@@ -1791,7 +1791,11 @@ if not df.empty:
     #st.plotly_chart(fig, use_container_width=True)
     #df['multiplier_level'] = df['multiplier'].apply(map_multiplier_level)
 
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    # Ensure timestamp is parsed
+    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+    
+    # Drop rows with bad timestamps
+    df = df.dropna(subset=['timestamp'])
     # Round timestamp to the nearest minute
     df['minute'] = df['timestamp'].dt.floor('min')
     
@@ -1804,12 +1808,17 @@ if not df.empty:
     minute_avg_df.reset_index(inplace=True)
     minute_avg_df = minute_avg_df.dropna(subset=['multiplier'])
 
+    # DEBUG: Print how many minutes we're working with
+    st.write(f"📊 Minutes of data for FFT: {len(minute_avg_df)}")
+
     # Extract signal: average multiplier values
     signal = minute_avg_df['multiplier'].values
     N = len(signal)
     
+    # Guard against too-short series
     if N < 16:
-        raise ValueError("🚫 Not enough data to compute FFT. Need at least ~16 data points.")
+        raise ValueError(f"🚫 Not enough data to compute FFT. You have {N} minutes, need at least 16.")
+
         
     # Sample spacing (1 minute interval = 60 seconds)
     T = 60.0  # seconds per sample (1 per minute)
