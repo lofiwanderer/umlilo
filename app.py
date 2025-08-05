@@ -1047,7 +1047,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     df = data.copy()
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     # Round timestamp to the nearest minute
-    df['minute'] = df['timestamp'].dt.floor('T')
+    df['minute'] = df['timestamp'].dt.floor('min')
     
     df["type"] = df["multiplier"].apply(lambda x: "Pink" if x >= pink_threshold else ("Purple" if x >= 2 else "Blue"))
     df["msi"] = df["score"].rolling(window_size).sum()
