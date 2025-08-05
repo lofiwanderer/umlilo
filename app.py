@@ -1898,8 +1898,11 @@ if not df.empty:
         peak_values = predicted_wave[peak_indices]
         
         # Get next 3 upcoming peak timestamps (if available)
-        next_peaks = peak_times[-3:] if len(peak_times) >= 3 else peak_times
-        next_peak_values = peak_values[-3:] if len(peak_values) >= 3 else peak_values
+        next_peaks = peak_times[:3]
+        next_peaks, peak_values[:3]
+        
+        #next_peaks = peak_times[-3:] if len(peak_times) >= 3 else peak_times
+        #next_peak_values = peak_values[-3:] if len(peak_values) >= 3 else peak_values
 
     
         fig2, ax = plt.subplots(figsize=(10, 4))
