@@ -1993,7 +1993,12 @@ if not df.empty:
         acf_target = signal  # try also trend or residual
         
         # Autocorrelation
-        acf_vals = acf(acf_target, nlags=20, fft=True)
+        if len(acf_target) >= 10:
+            acf_vals = acf(acf_target, nlags=min(20, len(acf_target) // 2), fft=True)
+        else:
+            st.warning("Not enough data for reliable ACF analysis.")
+            acf_vals = []
+
         
         # Find spike lags (excluding lag 0)
         spike_threshold = 0.4
@@ -2004,6 +2009,12 @@ if not df.empty:
         # Plot ACF
         fig_acf, ax_acf = plt.subplots()
         sm.graphics.tsa.plot_acf(acf_target, lags=20, ax=ax_acf)
+        
+        # Plot vertical lines at spike lags if within bounds
+        for lag in spike_lags:
+            if lag < len(acf_vals):
+                ax_acf.axvline(lag, color='red', linestyle='--', alpha=0.7)
+        
         plt.title("🔁 Autocorrelation (ACF) of Signal Component")
         st.pyplot(fig_acf)
         
