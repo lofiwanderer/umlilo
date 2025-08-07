@@ -20,6 +20,7 @@ from scipy.signal import hilbert
 from scipy.signal import savgol_filter
 from scipy.optimize import curve_fit
 from statsmodels.tsa.seasonal import STL
+import statsmodels.api as sm
 from statsmodels.tsa.stattools import acf
 import math
 from sklearn.metrics.pairwise import cosine_similarity
@@ -1861,6 +1862,20 @@ if not df.empty:
     params, _ = curve_fit(sine_model, time, signal, p0=[1, 0, np.mean(signal)])
     
 
+    # --- STL Decomposition ---
+    # Assume signal is the SavGol-filtered curve
+    stl = STL(signal, period=6, robust=True)
+    res = stl.fit()
+    
+    trend = res.trend
+    seasonal = res.seasonal
+    residual = res.resid
+    
+    # Append to your working DataFrame for plotting
+    minute_avg_df['stl_trend'] = trend
+    minute_avg_df['stl_seasonal'] = seasonal
+    minute_avg_df['stl_residual'] = residual
+
 
     with st.expander("📊 Time Series Analyzer", expanded=True):
         fig = plot_multiplier_timeseries(df)
@@ -1955,7 +1970,23 @@ if not df.empty:
         plt.tight_layout()
         st.pyplot(fig2)
 
-       
+        # --- Plot STL components ---
+        st.subheader("🧪 STL Decomposition")
+        
+        fig3, axs = plt.subplots(4, 1, figsize=(10, 6), sharex=True)
+        
+        axs[0].plot(minute_avg_df['minute'], signal, label='Filtered Signal', linewidth=1.8)
+        axs[0].set_title("🔧 Input Signal")
+        axs[1].plot(minute_avg_df['minute'], trend, label='Trend', color='orange')
+        axs[1].set_title("📈 Trend")
+        axs[2].plot(minute_avg_df['minute'], seasonal, label='Seasonal', color='green')
+        axs[2].set_title("🔁 Seasonal")
+        axs[3].plot(minute_avg_df['minute'], residual, label='Residual', color='red')
+        axs[3].set_title("🌪 Residual")
+        
+        plt.tight_layout()
+        st.pyplot(fig3)
+        
         # 🔮 Display Wave Clock Prediction
         if len(next_peaks) > 0:
             formatted_peaks = [pd.to_datetime(p).strftime('%H:%M') for p in next_peaks]
