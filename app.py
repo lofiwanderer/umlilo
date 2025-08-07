@@ -1975,14 +1975,14 @@ if not df.empty:
         
         fig3, axs = plt.subplots(4, 1, figsize=(10, 6), sharex=True)
         
-        axs[0].plot(minute_avg_df['minute'], signal, label='Filtered Signal', linewidth=1.8)
-        axs[0].set_title("🔧 Input Signal")
-        axs[1].plot(minute_avg_df['minute'], trend, label='Trend', color='orange')
-        axs[1].set_title("📈 Trend")
-        axs[2].plot(minute_avg_df['minute'], seasonal, label='Seasonal', color='green')
-        axs[2].set_title("🔁 Seasonal")
-        axs[3].plot(minute_avg_df['minute'], residual, label='Residual', color='red')
-        axs[3].set_title("🌪 Residual")
+        axs.plot(minute_avg_df['minute'], signal, label='Filtered Signal', linewidth=1.8)
+        
+        axs.plot(minute_avg_df['minute'], trend, label='Trend', color='orange')
+        
+        axs.plot(minute_avg_df['minute'], seasonal, label='Seasonal', color='green')
+        
+        axs.plot(minute_avg_df['minute'], residual, label='Residual', color='red')
+        
         
         plt.tight_layout()
         st.pyplot(fig3)
