@@ -17,6 +17,8 @@ from scipy.signal import find_peaks, peak_widths
 from scipy.signal import hilbert
 from scipy.signal import savgol_filter
 from scipy.optimize import curve_fit
+from statsmodels.tsa.seasonal import STL
+from statsmodels.tsa.stattools import acf
 import math
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import KMeans
