@@ -1986,6 +1986,26 @@ if not df.empty:
         axs.legend(loc="upper left", fontsize=8)
         plt.tight_layout()
         st.pyplot(fig3)
+
+        st.subheader("📊 ACF Surge Delay Detector")
+
+        # Choose a component to analyze
+        acf_target = seasonal  # try also trend or residual
+        
+        # Autocorrelation
+        acf_vals = acf(acf_target, nlags=20, fft=True)
+        
+        # Find spike lags (excluding lag 0)
+        spike_threshold = 0.4
+        spike_lags = [i for i, val in enumerate(acf_vals[1:], 1) if val >= spike_threshold]
+        
+        st.write(f"🔁 Repeating surge delay(s) likely at: {spike_lags} minutes")
+        
+        # Plot ACF
+        fig_acf, ax_acf = plt.subplots()
+        sm.graphics.tsa.plot_acf(acf_target, lags=20, ax=ax_acf)
+        plt.title("🔁 Autocorrelation (ACF) of Signal Component")
+        st.pyplot(fig_acf)
         
         # 🔮 Display Wave Clock Prediction
         if len(next_peaks) > 0:
