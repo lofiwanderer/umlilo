@@ -1990,7 +1990,7 @@ if not df.empty:
         st.subheader("📊 ACF Surge Delay Detector")
 
         # Choose a component to analyze
-        acf_target = seasonal  # try also trend or residual
+        acf_target = signal  # try also trend or residual
         
         # Autocorrelation
         acf_vals = acf(acf_target, nlags=20, fft=True)
