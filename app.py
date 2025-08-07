@@ -1821,7 +1821,24 @@ if not df.empty:
 
     if N < 16:
         signal = savgol_filter(signal, window_length=5 if N >= 5 else N, polyorder=2)
-        
+
+    signal = savgol_filter(signal, window_length=5 if N >= 5 else N, polyorder=2)
+
+    
+    # STL Decomposition on filtered signal
+    df = pd.DataFrame({
+        'minute': minute_avg_df['minute'],
+        'signal': signal
+    })
+    df.set_index('minute', inplace=True)
+    stl = STL(df['signal'], period=10, robust=True)
+    res = stl.fit()
+    
+    # Autocorrelation on filtered signal
+    autocorr_values = acf(df['signal'], nlags=30)
+    
+    
+    
     # Sample spacing (1 minute interval = 60 seconds)
     T = 60.0  # seconds per sample (1 per minute)
     time = np.arange(N)  # N = number of minutes
@@ -1892,16 +1909,24 @@ if not df.empty:
         # Detect local maxima (peak timestamps)
         second_derivative = np.diff(np.sign(np.diff(predicted_wave)))
         peak_indices = np.where(second_derivative == -2)[0] + 1  # adjust for diff offset
+        # Troughs: local minima where slope goes from - to +
+        trough_indices = np.where(second_derivative == 2)[0] + 1
         
         # Extract peak times (minute) and corresponding sine wave values
         peak_times = minute_avg_df['minute'].iloc[peak_indices].values
         peak_values = predicted_wave[peak_indices]
+
+        trough_times = minute_avg_df['minute'].iloc[trough_indices].values
+        trough_values = predicted_wave[trough_indices]
         
         # Get next 3 upcoming peak timestamps (if available)
         
         
         next_peaks = peak_times[-3:] if len(peak_times) >= 3 else peak_times
         next_peak_values = peak_values[-3:] if len(peak_values) >= 3 else peak_values
+
+        next_troughs = trough_times[-3:] if len(trough_times) >= 3 else trough_times
+        next_trough_values = trough_values[-3:] if len(trough_values) >= 3 else trough_values
 
         # Predict next 3 peak times in future
         num_future_peaks = 3
@@ -1928,6 +1953,7 @@ if not df.empty:
         ax.plot(minute_avg_df['minute'], predicted_wave, label='Fitted Surge Wave', color='black', linewidth=2)
         # Mark peaks
         ax.scatter(peak_times, peak_values, color='red', label='Predicted Peaks bruv', zorder=5)
+        ax.scatter(trough_times, trough_values, color='purple', label='Predicted troughs bruv', zorder=5)
 
         ax.set_title("📈 Predictive Sine Rebuild")
         ax.legend()
@@ -1935,12 +1961,40 @@ if not df.empty:
         plt.tight_layout()
         st.pyplot(fig2)
 
+        # Plot STL decomposition components
+        fig3, ax2 = plt.subplots(figsize=(10, 4))
+        ax2.plot(df.index, res.trend, label='Trend')
+        ax2.plot(df.index, res.seasonal, label='Seasonal')
+        ax2.plot(df.index, res.resid, label='Residual')
+        ax2.set_title("STL Decomposition of Filtered Signal")
+        ax2.legend()
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        st.pyplot(fig3)
+
+        # Plot Autocorrelation Function
+        fig4, ax3 = plt.subplots(figsize=(10, 4))
+        ax3.stem(range(len(autocorr_values)), autocorr_values, use_line_collection=True)
+        ax3.set_title("Autocorrelation of Filtered Signal")
+        ax3.xlabel("Lag")
+        ax3.ylabel("ACF Value")
+        ax3.grid(True)
+        ax3.legend()
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        st.pyplot(fig4)
+
         # 🔮 Display Wave Clock Prediction
         if len(next_peaks) > 0:
             formatted_peaks = [pd.to_datetime(p).strftime('%H:%M') for p in next_peaks]
             st.success(f"🕓 Next Surge Peaks (Wave Clock): {', '.join(formatted_peaks)}")
+
+        if len(next_troughs) > 0:
+            formatted_troughs = [pd.to_datetime(p).strftime('%H:%M') for p in next_troughs]
+            st.success(f"🕓 Next troughs (Wave Clock): {', '.join(formatted_troughs)}")
         else:
             st.info("🔄 Waiting for enough data to predict wave clock...")
+            
         # Display predicted peak minutes
         st.markdown("### 🔮 Next Predicted Surge Times:")
         for i, peak_time in enumerate(future_peaks, 1):
