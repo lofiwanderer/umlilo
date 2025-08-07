@@ -1983,7 +1983,7 @@ if not df.empty:
         
         axs.plot(minute_avg_df['minute'], residual, label='Residual', color='red')
         
-        
+        axs.legend(loc="upper left", fontsize=8)
         plt.tight_layout()
         st.pyplot(fig3)
         
