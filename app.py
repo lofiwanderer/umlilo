@@ -1973,7 +1973,7 @@ if not df.empty:
         # --- Plot STL components ---
         st.subheader("🧪 STL Decomposition")
         
-        fig3, axs = plt.subplots(4, 1, figsize=(10, 6), sharex=True)
+        fig3, axs = plt.subplots(figsize=(10, 4))
         
         axs.plot(minute_avg_df['minute'], signal, label='Filtered Signal', linewidth=1.8)
         
