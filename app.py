@@ -1829,17 +1829,7 @@ if not df.empty:
     signal = savgol_filter(signal, window_length=5 if N >= 5 else N, polyorder=2)
 
     
-    # STL Decomposition on filtered signal
-    df = pd.DataFrame({
-        'minute': minute_avg_df['minute'],
-        'signal': signal
-    })
-    df.set_index('minute', inplace=True)
-    stl = STL(df['signal'], period=10, robust=True)
-    res = stl.fit()
     
-    # Autocorrelation on filtered signal
-    autocorr_values = acf(df['signal'], nlags=30)
     
     
     
@@ -1965,29 +1955,7 @@ if not df.empty:
         plt.tight_layout()
         st.pyplot(fig2)
 
-        # Plot STL decomposition components
-        fig3, ax2 = plt.subplots(figsize=(10, 4))
-        ax2.plot(df.index, res.trend, label='Trend')
-        ax2.plot(df.index, res.seasonal, label='Seasonal')
-        ax2.plot(df.index, res.resid, label='Residual')
-        ax2.set_title("STL Decomposition of Filtered Signal")
-        ax2.legend()
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-        st.pyplot(fig3)
-
-        # Plot Autocorrelation Function
-        fig4, ax3 = plt.subplots(figsize=(10, 4))
-        ax3.stem(range(len(autocorr_values)), autocorr_values, use_line_collection=True)
-        ax3.set_title("Autocorrelation of Filtered Signal")
-        ax3.xlabel("Lag")
-        ax3.ylabel("ACF Value")
-        ax3.grid(True)
-        ax3.legend()
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-        st.pyplot(fig4)
-
+       
         # 🔮 Display Wave Clock Prediction
         if len(next_peaks) > 0:
             formatted_peaks = [pd.to_datetime(p).strftime('%H:%M') for p in next_peaks]
