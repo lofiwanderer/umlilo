@@ -2007,6 +2007,8 @@ if not df.empty:
         plt.title("🔁 Autocorrelation (ACF) of Signal Component")
         st.pyplot(fig_acf)
         
+        
+        
         # 🔮 Display Wave Clock Prediction
         if len(next_peaks) > 0:
             formatted_peaks = [pd.to_datetime(p).strftime('%H:%M') for p in next_peaks]
