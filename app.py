@@ -884,7 +884,144 @@ def plot_multiplier_timeseries(df, multiplier_col='multiplier', time_col='timest
 
     plt.tight_layout()
     return fig
-    
+
+# Safe STL: try to use statsmodels.STL, otherwise fallback to rolling mean seasonal/trend
+def stl_or_fallback(signal_array, period=6):
+    try:
+        from statsmodels.tsa.seasonal import STL
+        stl = STL(signal_array, period=max(3, int(period)), robust=True)
+        res = stl.fit()
+        return res.trend, res.seasonal, res.resid
+    except Exception:
+        # Fallback: trend = rolling mean; seasonal = signal - trend; resid small
+        s = pd.Series(signal_array)
+        trend = s.rolling(window=max(3, int(period)), min_periods=1, center=True).mean().values
+        seasonal = signal_array - trend
+        resid = signal_array - trend - seasonal * 0  # basically zeros, kept for shape
+        return trend, seasonal, resid
+
+# Safe ACF: adaptive nlags and returns lags with strong spikes
+def acf_spike_detector(signal_array, max_lags=20, threshold=0.4):
+    n = len(signal_array)
+    if n < 4:
+        return [] , np.array([])  # not enough data
+    nlags = min(max_lags, max(3, n // 2))
+    try:
+        acf_vals = stats_acf(signal_array, nlags=nlags, fft=True)
+    except Exception:
+        # fallback simple serial correlation (very small)
+        acf_vals = np.array([1.0] + [0.0]*(nlags))
+    spike_lags = [i for i,v in enumerate(acf_vals[1:], start=1) if v >= threshold]
+    return spike_lags, acf_vals
+
+# Input: minute_avg_df with index or column 'minute' and column 'multiplier'
+def build_responsive_signal(minute_avg_df):
+    # Ensure sorted and continuous index
+    minute_avg_df = minute_avg_df.sort_values('minute').reset_index(drop=True)
+    raw = minute_avg_df['multiplier'].values
+    N = len(raw)
+    if N == 0:
+        return np.array([]), minute_avg_df
+    # choose window length (odd and <= N)
+    wl = 5 if N >= 5 else (N if N%2==1 else max(1, N-1))
+    try:
+        filtered = savgol_filter(raw, window_length=wl, polyorder=2)
+    except Exception:
+        # fallback simple rolling mean
+        filtered = pd.Series(raw).rolling(window=wl, min_periods=1, center=True).mean().fillna(method='bfill').fillna(method='ffill').values
+    return filtered, minute_avg_df
+
+def get_top_fft_periods(signal_array, sample_seconds=60, topk=3, min_period_minutes=2, max_period_minutes=120):
+    N = len(signal_array)
+    if N < 3:
+        return []  # nothing meaningful
+    # Use rfft for real signals
+    yf = rfft(signal_array)
+    xf = rfftfreq(N, sample_seconds)  # frequencies in Hz (cycles/sec)
+    mag = np.abs(yf)
+    # exclude DC (index 0)
+    if len(mag) <= 1:
+        return []
+    mag_nozero = mag.copy()
+    mag_nozero[0] = 0
+    # pick topk indices but guard duplicates/near-zero freqs
+    idx_sorted = np.argsort(mag_nozero)[::-1]
+    periods = []
+    for idx in idx_sorted:
+        if idx == 0:
+            continue
+        freq = xf[idx]
+        if freq <= 0:
+            continue
+        period_min = 1.0 / freq / 60.0
+        if not (min_period_minutes <= period_min <= max_period_minutes):
+            continue
+        periods.append((period_min, mag_nozero[idx], freq))
+        if len(periods) >= topk:
+            break
+    return periods  # list of tuples (period_minutes, magnitude, freq_hz)
+
+# sine with known angular frequency
+def sine_with_fixed_omega(t, A, phi, offset, omega):
+    return A * np.sin(omega * t + phi) + offset
+
+def fit_sine_fixed_freq(time_vector, signal_array, freq_hz):
+    omega = 2 * math.pi * freq_hz
+    # initial guesses
+    A0 = (np.nanmax(signal_array) - np.nanmin(signal_array)) / 2.0
+    phi0 = 0.0
+    offset0 = np.nanmean(signal_array)
+    try:
+        params, _ = curve_fit(lambda t, A, phi, offset: sine_with_fixed_omega(t, A, phi, offset, omega),
+                              time_vector, signal_array, p0=[A0, phi0, offset0], maxfev=2000)
+        return params, omega
+    except Exception:
+        return (A0, phi0, offset0), omega
+
+# Build multi-sine predicted wave from top periods
+def build_multi_sine(time_vector, signal_array, top_periods):
+    # top_periods: list of (period_min, magnitude, freq_hz)
+    recon = np.zeros_like(signal_array, dtype=float)
+    fitted_params = []
+    for period_min, mag, freq_hz in top_periods:
+        params, omega = fit_sine_fixed_freq(time_vector, signal_array, freq_hz)
+        A, phi, offset = params
+        recon += sine_with_fixed_omega(time_vector, A, phi, offset, omega)  # sum
+        fitted_params.append({'period_min': period_min, 'A': A, 'phi': phi, 'offset': offset, 'omega': omega})
+    # Normalize by number of components to keep scale sensible (optional)
+    if len(top_periods) > 0:
+        recon = recon / max(1, len(top_periods))
+    return recon, fitted_params
+
+def predict_future_peaks(minute_index_series, fitted_params, horizon_minutes=60, n_peaks=3):
+    # minute_index_series: pandas Series or index of minute timestamps
+    # fitted_params: list of fitted sine dicts (A,phi,offset,omega)
+    if len(minute_index_series) == 0 or len(fitted_params) == 0:
+        return []
+    # create time vector in minutes since start
+    t0 = pd.to_datetime(minute_index_series.iloc[0])
+    last_min = pd.to_datetime(minute_index_series.iloc[-1])
+    total_minutes = int((last_min - t0).total_seconds() / 60)
+    # future time grid (in minutes since start)
+    future_minutes = np.arange(total_minutes, total_minutes + horizon_minutes + 1)
+    # build multi-sine forecast using fitted_params
+    forecast = np.zeros_like(future_minutes, dtype=float)
+    for p in fitted_params:
+        omega = p['omega']
+        A, phi, offset = p['A'], p['phi'], p['offset']
+        t_seconds = future_minutes * 60.0
+        forecast += sine_with_fixed_omega(t_seconds, A, phi, offset, omega)
+    if len(fitted_params) > 0:
+        forecast = forecast / len(fitted_params)
+    # detect peaks on forecast
+    sec_deriv = np.diff(np.sign(np.diff(forecast)))
+    peak_idx = np.where(sec_deriv == -2)[0] + 1
+    # convert peak_idx in future_minutes to absolute timestamps
+    peak_minutes = future_minutes[peak_idx]
+    peak_times = [t0 + pd.Timedelta(minutes=int(m)) for m in peak_minutes]
+    # return next n_peaks
+    return peak_times[:n_peaks], forecast, future_minutes
+
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
@@ -1876,6 +2013,39 @@ if not df.empty:
     minute_avg_df['stl_seasonal'] = seasonal
     minute_avg_df['stl_residual'] = residual
 
+    # ---- assume minute_avg_df exists and has 'minute' and 'multiplier' ----
+    filtered_signal, minute_avg_df = build_responsive_signal(minute_avg_df)
+    if len(filtered_signal) == 0:
+        st.info("No data for time-series predictor yet.")
+    else:
+        # time vector for fitting (seconds since start)
+        N = len(filtered_signal)
+        t_seconds = np.arange(N) * 60.0  # each sample = 1 minute -> 60 sec steps
+    
+        # STL decomposition (period guess from small window)
+        est_period = max(3, min(12, int(max(3, N//6))))
+        tren, seasona, resid = stl_or_fallback(filtered_signal, period=est_period)
+        minute_avg_df['trend'] = tren
+        minute_avg_df['seasonal'] = seasona
+        minute_avg_df['resid'] = resid
+    
+        # ACF spike detection (on seasonal)
+        spike_lags, acf_vals = acf_spike_detector(seasona, max_lags=min(20, max(5, N//2)), threshold=0.4)
+    
+        # FFT top periods (work with filtered signal)
+        top_periods = get_top_fft_periods(filtered_signal, sample_seconds=60.0, topk=3,
+                                          min_period_minutes=2, max_period_minutes=120)
+        # extract just freq hz for fitting
+        top_periods_simple = [(p[0], p[1], p[2]) for p in top_periods]
+    
+        # Fit multi-sine reconstruction
+        recon_wave, fitted_params = build_multi_sine(t_seconds, filtered_signal, top_periods_simple)
+    
+        # Add recon to df
+        minute_avg_df['recon'] = recon_wave
+    
+        # Predict next peaks (60-min horizon)
+        next_peaks, forecast_values, future_minutes = predict_future_peaks(minute_avg_df['minute'], fit
 
     with st.expander("📊 Time Series Analyzer", expanded=True):
         fig = plot_multiplier_timeseries(df)
@@ -1987,37 +2157,55 @@ if not df.empty:
         plt.tight_layout()
         st.pyplot(fig3)
 
-        st.subheader("📊 ACF Surge Delay Detector")
-
-        # Choose a component to analyze
-        acf_target = signal  # try also trend or residual
-        
-        # Autocorrelation
-        if len(acf_target) >= 10:
-            acf_vals = acf(acf_target, nlags=min(20, len(acf_target) // 2), fft=True)
-        else:
-            st.warning("Not enough data for reliable ACF analysis.")
-            acf_vals = []
-
-        
-        # Find spike lags (excluding lag 0)
-        spike_threshold = 0.4
-        spike_lags = [i for i, val in enumerate(acf_vals[1:], 1) if val >= spike_threshold]
-        
-        st.write(f"🔁 Repeating surge delay(s) likely at: {spike_lags} minutes")
-        
-        # Plot ACF
-        fig_acf, ax_acf = plt.subplots()
-        sm.graphics.tsa.plot_acf(acf_target, lags=20, ax=ax_acf)
-        
-        # Plot vertical lines at spike lags if within bounds
+       
+         # --- PLOTTING (compact) ---
+        st.subheader("🔮 Combined STL + ACF + FFT Predictor")
+        fig, ax = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
+    
+        # Top: raw filtered and reconstruction
+        ax[0].plot(minute_avg_df['minute'], filtered_signal, label='Filtered Signal', color='black', alpha=0.8)
+        ax[0].plot(minute_avg_df['minute'], minute_avg_df['recon'], label='Reconstructed Wave', color='magenta', linewidth=1.7)
+        ax[0].plot(minute_avg_df['minute'], minute_avg_df['trend'], label='Trend', color='orange', linestyle='--')
+        # mark peaks/troughs on recon
+        sec_deriv_recon = np.diff(np.sign(np.diff(minute_avg_df['recon'].values)))
+        peak_idx = np.where(sec_deriv_recon == -2)[0] + 1
+        trough_idx = np.where(sec_deriv_recon == 2)[0] + 1
+        if len(peak_idx)>0:
+            ax[0].scatter(minute_avg_df['minute'].iloc[peak_idx], minute_avg_df['recon'].iloc[peak_idx], color='red', label='Recon Peaks')
+        if len(trough_idx)>0:
+            ax[0].scatter(minute_avg_df['minute'].iloc[trough_idx], minute_avg_df['recon'].iloc[trough_idx], color='blue', label='Recon Troughs')
+    
+        ax[0].legend(fontsize=8)
+        ax[0].set_title("Signal vs Reconstructed Wave")
+    
+        # Middle: seasonal component + ACF spike info
+        ax[1].plot(minute_avg_df['minute'], minute_avg_df['seasonal'], label='Seasonal (STL)', color='green')
         for lag in spike_lags:
-            if lag < len(acf_vals):
-                ax_acf.axvline(lag, color='red', linestyle='--', alpha=0.7)
-        
-        plt.title("🔁 Autocorrelation (ACF) of Signal Component")
-        st.pyplot(fig_acf)
-        
+            # draw vertical line at estimated lag (relative to current time)
+            ax[1].axvline(minute_avg_df['minute'].iloc[-1] - pd.Timedelta(minutes=lag), color='red', linestyle='--', alpha=0.4)
+        ax[1].set_title(f"Seasonal Component (ACF spikes at lags: {spike_lags})")
+        ax[1].legend(fontsize=8)
+    
+        # Bottom: FFT spectrum (quick)
+        if len(top_periods_simple) > 0:
+            xs = [p[0] for p in top_periods_simple]  # periods in minutes
+            ys = [p[1] for p in top_periods_simple]
+            ax[2].bar(xs, ys, width=0.8, color='purple', alpha=0.7)
+            ax[2].set_xlabel("Period (minutes)")
+            ax[2].set_ylabel("FFT mag")
+            ax[2].set_title("Top FFT Periods (minutes)")
+        else:
+            ax[2].text(0.02, 0.5, "No significant FFT periods detected", transform=ax[2].transAxes)
+    
+        plt.tight_layout()
+        st.pyplot(fig)
+    
+        # --- HUD: next peaks ---
+        if len(next_peaks) > 0:
+            hud_text = " | ".join([p.strftime('%H:%M') for p in next_peaks])
+            st.success(f"🕓 Next predicted peaks: {hud_text}")
+        else:
+            st.info("🔄 No future peaks found (insufficient fit or no dominant cycles).")
         
         
         # 🔮 Display Wave Clock Prediction
