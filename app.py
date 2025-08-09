@@ -2045,7 +2045,7 @@ if not df.empty:
         minute_avg_df['recon'] = recon_wave
     
         # Predict next peaks (60-min horizon)
-        next_peaks, forecast_values, future_minutes = predict_future_peaks(minute_avg_df['minute'], fit
+        next_peaks, forecast_values, future_minutes = predict_future_peaks(minute_avg_df['minute'], fitted_params, horizon_minutes=60, n_peaks=3)
 
     with st.expander("📊 Time Series Analyzer", expanded=True):
         fig = plot_multiplier_timeseries(df)
