@@ -2158,54 +2158,90 @@ if not df.empty:
         st.pyplot(fig3)
 
        
-         # --- PLOTTING (compact) ---
+         # --- SETTINGS ---
+        forecast_horizon = 60  # minutes ahead to project lag lines
+        acf_threshold = 0.4    # for horizontal line
+        
+        # --- PLOTTING (upgraded) ---
         st.subheader("🔮 Combined STL + ACF + FFT Predictor")
         fig, ax = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
-    
-        # Top: raw filtered and reconstruction
+        
+        # ============ 1. TOP CHART: Raw filtered + Recon + Trend + Peak/Trough Lines ============
         ax[0].plot(minute_avg_df['minute'], filtered_signal, label='Filtered Signal', color='black', alpha=0.8)
         ax[0].plot(minute_avg_df['minute'], minute_avg_df['recon'], label='Reconstructed Wave', color='magenta', linewidth=1.7)
         ax[0].plot(minute_avg_df['minute'], minute_avg_df['trend'], label='Trend', color='orange', linestyle='--')
-        # mark peaks/troughs on recon
+        
+        # Peaks & troughs from recon
         sec_deriv_recon = np.diff(np.sign(np.diff(minute_avg_df['recon'].values)))
         peak_idx = np.where(sec_deriv_recon == -2)[0] + 1
         trough_idx = np.where(sec_deriv_recon == 2)[0] + 1
-        if len(peak_idx)>0:
-            ax[0].scatter(minute_avg_df['minute'].iloc[peak_idx], minute_avg_df['recon'].iloc[peak_idx], color='red', label='Recon Peaks')
-        if len(trough_idx)>0:
-            ax[0].scatter(minute_avg_df['minute'].iloc[trough_idx], minute_avg_df['recon'].iloc[trough_idx], color='blue', label='Recon Troughs')
-    
+        
+        if len(peak_idx) > 0:
+            ax[0].scatter(minute_avg_df['minute'].iloc[peak_idx],
+                          minute_avg_df['recon'].iloc[peak_idx],
+                          color='red', label='Recon Peaks')
+            for t in minute_avg_df['minute'].iloc[peak_idx]:
+                ax[0].axvline(t, color='red', linestyle=':', alpha=0.3)
+        
+        if len(trough_idx) > 0:
+            ax[0].scatter(minute_avg_df['minute'].iloc[trough_idx],
+                          minute_avg_df['recon'].iloc[trough_idx],
+                          color='blue', label='Recon Troughs')
+            for t in minute_avg_df['minute'].iloc[trough_idx]:
+                ax[0].axvline(t, color='blue', linestyle=':', alpha=0.3)
+        
         ax[0].legend(fontsize=8)
         ax[0].set_title("Signal vs Reconstructed Wave")
-    
-        # Middle: seasonal component + ACF spike info
+        
+        # ============ 2. MIDDLE CHART: Seasonal Component + ACF Lag Markers (historical + predictive) ============
         ax[1].plot(minute_avg_df['minute'], minute_avg_df['seasonal'], label='Seasonal (STL)', color='green')
+        
+        last_time = minute_avg_df['minute'].iloc[-1]
+        future_limit = last_time + pd.Timedelta(minutes=forecast_horizon)
+        
         for lag in spike_lags:
-            # draw vertical line at estimated lag (relative to current time)
-            ax[1].axvline(minute_avg_df['minute'].iloc[-1] - pd.Timedelta(minutes=lag), color='red', linestyle='--', alpha=0.4)
+            for base_time in minute_avg_df['minute']:
+                future_time = base_time + pd.Timedelta(minutes=lag)
+                if future_time <= last_time:
+                    # Historical lag marker
+                    ax[1].axvline(future_time, color='red', linestyle='--', alpha=0.3)
+                elif future_time <= future_limit:
+                    # Predictive lag marker
+                    ax[1].axvline(future_time, color='gray', linestyle=':', alpha=0.4)
+        
+        # Horizontal threshold for ACF
+        ax[1].axhline(y=acf_threshold, color='orange', linestyle=':', alpha=0.5, label='ACF Threshold')
+        
         ax[1].set_title(f"Seasonal Component (ACF spikes at lags: {spike_lags})")
         ax[1].legend(fontsize=8)
-    
-        # Bottom: FFT spectrum (quick)
+        
+        # Extend X-axis to fit predictions
+        ax[1].set_xlim(minute_avg_df['minute'].iloc[0], future_limit)
+        
+        # ============ 3. BOTTOM CHART: FFT Spectrum ============
         if len(top_periods_simple) > 0:
             xs = [p[0] for p in top_periods_simple]  # periods in minutes
-            ys = [p[1] for p in top_periods_simple]
+            ys = [p[1] / len(filtered_signal) for p in top_periods_simple]  # normalize
+        
             ax[2].bar(xs, ys, width=0.8, color='purple', alpha=0.7)
             ax[2].set_xlabel("Period (minutes)")
-            ax[2].set_ylabel("FFT mag")
+            ax[2].set_ylabel("Normalized FFT Magnitude")
             ax[2].set_title("Top FFT Periods (minutes)")
         else:
-            ax[2].text(0.02, 0.5, "No significant FFT periods detected", transform=ax[2].transAxes)
-    
+            ax[2].text(0.5, 0.5, "No significant FFT periods detected",
+                       transform=ax[2].transAxes,
+                       ha='center', va='center', fontsize=10, alpha=0.7)
+        
         plt.tight_layout()
         st.pyplot(fig)
-    
+        
         # --- HUD: next peaks ---
         if len(next_peaks) > 0:
             hud_text = " | ".join([p.strftime('%H:%M') for p in next_peaks])
             st.success(f"🕓 Next predicted peaks: {hud_text}")
         else:
             st.info("🔄 No future peaks found (insufficient fit or no dominant cycles).")
+
         
         
         # 🔮 Display Wave Clock Prediction
