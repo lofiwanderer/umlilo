@@ -2379,6 +2379,13 @@ if not df.empty:
         # ---------- PLOTTING ----------
         fig2, ax = plt.subplots(figsize=(10, 4))
         ax.plot(minute_avg_df['minute'], signal, label='Avg Multiplier (1-min)', alpha=0.6)
+        
+        # Plot each sine separately
+        colors = ['red', 'green', 'blue']
+        labels = ['Short cycle', 'Medium cycle', 'Long cycle']
+        for i, comp in enumerate(components):  # 'components' is the list of sine arrays
+            ax.plot(minute_avg_df['minute'], comp, label=labels[i], color=colors[i], linewidth=1.5)
+            
         ax.plot(minute_avg_df['minute'], historical_wave, label='Fitted Multi-Sine (short/med/long)', color='black', linewidth=2)
         
         # mark historical peaks/troughs (only those inside historical window)
