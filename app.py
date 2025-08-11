@@ -2262,18 +2262,70 @@ if not df.empty:
 
         
     with st.expander("📈 Predictive Sine Rebuild + Projection)", expanded=True):
-        # Project the sine wave forward 10 minutes
+        # === Multi-sine model ===
+        def multi_sine_model(t, *params):
+            """
+            Multi-sine model for overlapping Aviator cycles.
+            params: [A1, f1, phi1, A2, f2, phi2, ..., offset]
+            Frequencies in Hz (cycles per minute here), based on fixed bands.
+            """
+            n_components = (len(params) - 1) // 3
+            offset = params[-1]
+            wave = np.zeros_like(t, dtype=float)
+            for i in range(n_components):
+                A = params[3*i]
+                f = params[3*i + 1]
+                phi = params[3*i + 2]
+                wave += A * np.sin(2 * np.pi * f * t + phi)
+            return wave + offset
+        
+        
+        # === FFT on signal ===
+        yf = rfft(signal)
+        xf = rfftfreq(N, T)  # cycles per minute if T=1 min spacing
+        fft_magnitude = 2.0 / N * np.abs(yf)
+        
+        # === Define target period bands (in minutes) ===
+        bands = {
+            "short": (3, 6),
+            "medium": (8, 15),
+            "long": (18, 25)
+        }
+        
+        # Convert period bands to frequency bands (Hz)
+        band_freqs = {k: (1 / b[1], 1 / b[0]) for k, b in bands.items()}  # (low, high) in cycles per minute
+        
+        # === Pick best freq in each band ===
+        band_freqs_selected = []
+        for band, (low_f, high_f) in band_freqs.items():
+            mask = (xf >= low_f) & (xf <= high_f)
+            if np.any(mask):
+                idx = np.argmax(fft_magnitude[mask])
+                band_peak_freq = xf[mask][idx]
+                band_freqs_selected.append(band_peak_freq)
+            else:
+                # fallback: pick middle of band if no FFT component found
+                band_freqs_selected.append(np.mean([low_f, high_f]))
+        
+        # === Initial guess: amplitudes=1, freqs from selected bands, phases=0, offset=mean ===
+        init_guess = []
+        for f in band_freqs_selected:
+            init_guess.extend([1.0, f, 0.0])
+        init_guess.append(np.mean(signal))  # offset
+        
+        # Fit multi-sine to your signal
+        params, _ = curve_fit(multi_sine_model, time, signal, p0=init_guess, maxfev=10000)
+        
+        # Generate the multi-sine composite for full range
         forecast_minutes = 10
-        future_time = np.arange(N + forecast_minutes)  # extend time array
-        predicted_wave_full = sine_model(future_time, A_fit, phi_fit, offset_fit)
+        future_time = np.arange(N + forecast_minutes)
+        predicted_wave_full = multi_sine_model(future_time, *params)
         
-        # Historical segment
+        # Historical & future segments
         historical_wave = predicted_wave_full[:N]
-        
-        # Future segment (projection)
         future_wave = predicted_wave_full[N:]
         
-        # Detect peaks/troughs in full wave
+        # Detect peaks/troughs
         second_derivative_full = np.diff(np.sign(np.diff(predicted_wave_full)))
         peak_indices_full = np.where(second_derivative_full == -2)[0] + 1
         trough_indices_full = np.where(second_derivative_full == 2)[0] + 1
@@ -2289,37 +2341,43 @@ if not df.empty:
             (np.array(future_trough_indices) - N), unit='min'
         )
         
-        # Plot
+        # === Plot ===
         fig2, ax = plt.subplots(figsize=(10, 4))
         ax.plot(minute_avg_df['minute'], signal, label='Avg Multiplier (1-min)', alpha=0.6)
-        ax.plot(minute_avg_df['minute'], historical_wave, label='Fitted Surge Wave', color='black', linewidth=2)
+        ax.plot(minute_avg_df['minute'], historical_wave, label='Fitted Multi-Sine', color='black', linewidth=2)
         
         # Mark historical peaks/troughs
-        ax.scatter(peak_times, peak_values, color='red', label='Historical Peaks', zorder=5)
-        ax.scatter(trough_times, trough_values, color='purple', label='Historical Troughs', zorder=5)
+        ax.scatter(minute_avg_df['minute'].iloc[peak_indices_full], predicted_wave_full[peak_indices_full],
+                   color='red', label='Historical Peaks', zorder=5)
+        ax.scatter(minute_avg_df['minute'].iloc[trough_indices_full], predicted_wave_full[trough_indices_full],
+                   color='purple', label='Historical Troughs', zorder=5)
         
-        # Extend chart with projected sine
-        future_minutes_index = pd.date_range(start=minute_avg_df['minute'].iloc[-1] + pd.Timedelta(minutes=1), periods=forecast_minutes, freq='T')
-        ax.plot(future_minutes_index, future_wave, color='black', linestyle='--', label='Projected Wave')
+        # Projected segment
+        future_minutes_index = pd.date_range(
+            start=minute_avg_df['minute'].iloc[-1] + pd.Timedelta(minutes=1),
+            periods=forecast_minutes, freq='T'
+        )
+        ax.plot(future_minutes_index, future_wave, color='black', linestyle='--', label='Projected Multi-Sine')
         
         # Mark projected peaks/troughs
         ax.scatter(future_peak_times, predicted_wave_full[future_peak_indices], color='orange', label='Projected Peaks', zorder=5)
         ax.scatter(future_trough_times, predicted_wave_full[future_trough_indices], color='blue', label='Projected Troughs', zorder=5)
         
-        ax.set_title("📈 Predictive Sine Rebuild + Projection")
+        ax.set_title("📈 Predictive Multi-Sine (Short/Med/Long) + Projection")
         ax.legend()
         plt.xticks(rotation=45)
         plt.tight_layout()
         st.pyplot(fig2)
         
-        # Display table of predicted events
+        # === Fixed upcoming events table ===
         pred_table = pd.DataFrame({
             'Time': list(future_peak_times) + list(future_trough_times),
-            'Type': ['Peak']*len(future_peak_times) + ['Trough']*len(future_trough_times)
-        }).sort_values(by='Time')
+            'Type': ['Peak'] * len(future_peak_times) + ['Trough'] * len(future_trough_times)
+        }).drop_duplicates().sort_values(by='Time')
         
         st.write("🔮 **Upcoming Predicted Events**")
         st.dataframe(pred_table)
+
     
     FIB_WINDOWS = [3, 5, 8, 13, 21,34]  
     for w in FIB_WINDOWS:
