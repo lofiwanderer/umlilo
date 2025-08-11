@@ -2238,7 +2238,7 @@ if not df.empty:
         # --- HUD: next peaks ---
         if len(next_peaks) > 0:
             #hud_text = " | ".join([p.strftime('%H:%M') for p in next_peaks])
-            st.success(f"🕓 Next predicted peaks: {hud_text}")
+            st.success(f"🕓 Next predicted peaks:")
         else:
             st.info("🔄 No future peaks found (insufficient fit or no dominant cycles).")
 
