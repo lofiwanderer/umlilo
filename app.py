@@ -2383,7 +2383,7 @@ if not df.empty:
         # Plot each sine separately
         colors = ['red', 'green', 'blue']
         labels = ['Short cycle', 'Medium cycle', 'Long cycle']
-        for i, comp in enumerate(predicted_wave_full):  # 'components' is the list of sine arrays
+        for i, comp in enumerate(components):  # 'components' is the list of sine arrays
             ax.plot(minute_avg_df['minute'], comp, label=labels[i], color=colors[i], linewidth=1.5)
             
         ax.plot(minute_avg_df['minute'], historical_wave, label='Fitted Multi-Sine (short/med/long)', color='black', linewidth=2)
