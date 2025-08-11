@@ -2299,6 +2299,12 @@ if not df.empty:
         # safety trim: ensure future_wave matches requested forecast_minutes
         future_wave = future_wave[:max(0, min(forecast_minutes, len(future_wave)))]
         
+        components = [] 
+        for i in range(0, len(params), 3):
+            amp, freq, phase = params[i], params[i+1], params[i+2]
+            sine_component = amp * np.sin(freq * minute_avg_df['minute'] + phase)
+            components.append(sine_component)
+        
         # ---------- PLOTTING ----------
         fig2, ax = plt.subplots(figsize=(10, 4))
         ax.plot(minute_avg_df['minute'], signal, label='Avg Multiplier (1-min)', alpha=0.6)
@@ -2307,6 +2313,10 @@ if not df.empty:
             
         ax.plot(minute_avg_df['minute'], historical_wave, label='Fitted Multi-Sine (short/med/long)', color='black', linewidth=2)
         
+        # Plot each component sine wave in a different style
+        for i, comp in enumerate(components):
+            ax.plot(minute_avg_df['minute'], comp, label=f'Cycle {i+1}', linestyle='--', alpha=0.7)
+                
         # mark historical peaks/troughs (only those inside historical window)
         if len(peak_hist_idxs) > 0:
             ax.scatter([minute_avg_df['minute'].iloc[i] for i in peak_hist_idxs],
