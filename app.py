@@ -2325,7 +2325,11 @@ if not df.empty:
         
         # Historical & future segments
         historical_wave = predicted_wave_full[:N]
+        
         future_wave = predicted_wave_full[N:]
+        # Make sure lengths match
+        future_wave = future_wave[:len(future_minutes_index)]
+
         
         # Detect peaks/troughs
         second_derivative_full = np.diff(np.sign(np.diff(predicted_wave_full)))
