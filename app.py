@@ -2328,7 +2328,7 @@ if not df.empty:
         
         future_wave = predicted_wave_full[N:]
         # Make sure lengths match
-        future_wave = future_wave[:len(future_minutes_index)]
+        future_wave = future_wave[:len(future_minutes)]
 
         
         # Detect peaks/troughs
