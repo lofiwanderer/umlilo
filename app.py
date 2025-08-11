@@ -2168,7 +2168,7 @@ if not df.empty:
         
         # ============ 1. TOP CHART: Raw filtered + Recon + Trend + Peak/Trough Lines ============
         ax[0].plot(minute_avg_df['minute'], filtered_signal, label='Filtered Signal', color='black', alpha=0.8)
-        ax[0].plot(minute_avg_df['minute'], minute_avg_df['recon'], label='Reconstructed Wave', color='magenta', linewidth=1.7)
+        ax[0].plot(minute_avg_df['minute'], minute_avg_df['recon'], label='Reconstructed Wave', color='purple', linewidth=1.7)
         ax[0].plot(minute_avg_df['minute'], minute_avg_df['trend'], label='Trend', color='orange', linestyle='--')
         
         # Peaks & troughs from recon
@@ -2204,13 +2204,13 @@ if not df.empty:
                 future_time = base_time + pd.Timedelta(minutes=lag)
                 if future_time <= last_time:
                     # Historical lag marker
-                    ax[1].axvline(future_time, color='red', linestyle='--', alpha=0.3)
+                    ax[1].axvline(future_time, color='red', linestyle='--', alpha=0.9)
                 elif future_time <= future_limit:
                     # Predictive lag marker
-                    ax[1].axvline(future_time, color='gray', linestyle=':', alpha=0.4)
+                    ax[1].axvline(future_time, color='gray', linestyle=':', alpha=0.9)
         
         # Horizontal threshold for ACF
-        ax[1].axhline(y=acf_threshold, color='orange', linestyle=':', alpha=0.5, label='ACF Threshold')
+        ax[1].axhline(y=acf_threshold, color='black', linestyle=':', alpha=0.7, label='ACF Threshold')
         
         ax[1].set_title(f"Seasonal Component (ACF spikes at lags: {spike_lags})")
         ax[1].legend(fontsize=8)
