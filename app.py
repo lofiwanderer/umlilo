@@ -2261,43 +2261,65 @@ if not df.empty:
             st.write(f"Peak #{i}: {peak_time.strftime('%H:%M')}")
 
         
-    with st.expander("📈 TDI Panel (RSI + BB + Signal Line)", expanded=False):
-        fig, ax = plt.subplots(figsize=(10, 4))
+    with st.expander("📈 Predictive Sine Rebuild + Projection)", expanded=True):
+        # Project the sine wave forward 10 minutes
+        forecast_minutes = 10
+        future_time = np.arange(N + forecast_minutes)  # extend time array
+        predicted_wave_full = sine_model(future_time, A_fit, phi_fit, offset_fit)
         
-        ax.plot(df["timestamp"], df['eq_rsi'], label='EQ-RSI', color='black', linewidth=2)
-        ax.plot(df["timestamp"], df["mini_tenkan_rsi"], label="mini Tenkan", color='purple', linewidth=0.9)
-         
-        ax.plot(df["timestamp"], df["rsi_signal"], label="Signal Line", color='orange', linestyle='--')
-        ax.plot(df["timestamp"], df["rsi_upper"], color='green', linestyle='--', alpha=0.5, label="RSI Upper Band")
-        ax.plot(df["timestamp"], df["rsi_lower"], color='red', linestyle='--', alpha=0.5, label="RSI Lower Band")
-        ax.fill_between(df["timestamp"], df["rsi_lower"], df["rsi_upper"], color='purple', alpha=0.1)
-
-        # 🔮 Mini-Cloud Overlays
-        ax.plot(df["timestamp"], df["mini_senkou_a"], color='cyan', linestyle='-', alpha=0.7, label="Mini-Senkou A")
-        ax.plot(df["timestamp"], df["mini_senkou_b"], color='purple', linestyle='-', alpha=0.7, label="Mini-Senkou B")
-        ax.fill_between(df["timestamp"], df["mini_senkou_a"], df["mini_senkou_b"],
-                        where=(df["mini_senkou_a"] >= df["mini_senkou_b"]),
-                        color='lightgreen', alpha=0.3, label="Future Bullish Cloud")
-        ax.fill_between(df["timestamp"], df["mini_senkou_a"], df["mini_senkou_b"],
-                        where=(df["mini_senkou_a"] < df["mini_senkou_b"]),
-                        color='red', alpha=0.5, label="Future Bearish Cloud")
-
-        ax.plot(df["timestamp"], df["mini_senkou_a_rsi"], color='cyan', linestyle='-', alpha=0.7, label="Mini-Senkou A rsi")
-        ax.plot(df["timestamp"], df["mini_senkou_b_rsi"], color='purple', linestyle='-', alpha=0.7, label="Mini-Senkou B rsi")
-        ax.fill_between(df["timestamp"], df["mini_senkou_a_rsi"], df["mini_senkou_b_rsi"],
-                        where=(df["mini_senkou_a_rsi"] >= df["mini_senkou_b_rsi"]),
-                        color='lightgreen', alpha=0.3)
-        ax.fill_between(df["timestamp"], df["mini_senkou_a_rsi"], df["mini_senkou_b_rsi"],
-                        where=(df["mini_senkou_a_rsi"] < df["mini_senkou_b_rsi"]),
-                        color='red', alpha=0.5)
+        # Historical segment
+        historical_wave = predicted_wave_full[:N]
         
-        ax.axhline(50, color='black', linestyle=':')  # Neutral RSI zone
-        ax.axhline(70, color='green', linestyle=':')  # Overbought
-        ax.axhline(30, color='red', linestyle=':')    # Oversold
+        # Future segment (projection)
+        future_wave = predicted_wave_full[N:]
         
-        ax.set_title("🧠 Trader’s Dynamic Index (RSI BB System)")
-        ax.legend(loc="upper left", fontsize=8)
-        st.pyplot(fig)
+        # Detect peaks/troughs in full wave
+        second_derivative_full = np.diff(np.sign(np.diff(predicted_wave_full)))
+        peak_indices_full = np.where(second_derivative_full == -2)[0] + 1
+        trough_indices_full = np.where(second_derivative_full == 2)[0] + 1
+        
+        # Separate future peaks/troughs
+        future_peak_indices = [i for i in peak_indices_full if i >= N]
+        future_trough_indices = [i for i in trough_indices_full if i >= N]
+        
+        future_peak_times = minute_avg_df['minute'].iloc[-1] + pd.to_timedelta(
+            (np.array(future_peak_indices) - N), unit='min'
+        )
+        future_trough_times = minute_avg_df['minute'].iloc[-1] + pd.to_timedelta(
+            (np.array(future_trough_indices) - N), unit='min'
+        )
+        
+        # Plot
+        fig2, ax = plt.subplots(figsize=(10, 4))
+        ax.plot(minute_avg_df['minute'], signal, label='Avg Multiplier (1-min)', alpha=0.6)
+        ax.plot(minute_avg_df['minute'], historical_wave, label='Fitted Surge Wave', color='black', linewidth=2)
+        
+        # Mark historical peaks/troughs
+        ax.scatter(peak_times, peak_values, color='red', label='Historical Peaks', zorder=5)
+        ax.scatter(trough_times, trough_values, color='purple', label='Historical Troughs', zorder=5)
+        
+        # Extend chart with projected sine
+        future_minutes_index = pd.date_range(start=minute_avg_df['minute'].iloc[-1] + pd.Timedelta(minutes=1), periods=forecast_minutes, freq='T')
+        ax.plot(future_minutes_index, future_wave, color='black', linestyle='--', label='Projected Wave')
+        
+        # Mark projected peaks/troughs
+        ax.scatter(future_peak_times, predicted_wave_full[future_peak_indices], color='orange', label='Projected Peaks', zorder=5)
+        ax.scatter(future_trough_times, predicted_wave_full[future_trough_indices], color='blue', label='Projected Troughs', zorder=5)
+        
+        ax.set_title("📈 Predictive Sine Rebuild + Projection")
+        ax.legend()
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        st.pyplot(fig2)
+        
+        # Display table of predicted events
+        pred_table = pd.DataFrame({
+            'Time': list(future_peak_times) + list(future_trough_times),
+            'Type': ['Peak']*len(future_peak_times) + ['Trough']*len(future_trough_times)
+        }).sort_values(by='Time')
+        
+        st.write("🔮 **Upcoming Predicted Events**")
+        st.dataframe(pred_table)
     
     FIB_WINDOWS = [3, 5, 8, 13, 21,34]  
     for w in FIB_WINDOWS:
