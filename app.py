@@ -2319,7 +2319,8 @@ if not df.empty:
         # Generate the multi-sine composite for full range
         forecast_minutes = 10
         future_time = np.arange(N + forecast_minutes)
-        predicted_wave_full = multi_sine_model(future_time, *params)
+        predicted_wave_full = predicted_wave_full[:len(minute_avg_df)]
+
         
         # Historical & future segments
         historical_wave = predicted_wave_full[:N]
