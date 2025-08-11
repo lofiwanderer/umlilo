@@ -1248,84 +1248,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     # Pull latest values from the last row
     latest = df.iloc[-1] if not df.empty else pd.Series()
 
-    # ===== IMPROVED MOMENTUM DETECTION =====
-    # 1. Calculate volatility index safely
-    df['volatility_index'] = df['multiplier'].rolling(10, min_periods=1).std().rank(pct=True)
     
-    # 2. Handle NaN/inf values before integer conversion
-    df['volatility_index'] = df['volatility_index'].replace([np.inf, -np.inf], np.nan).fillna(0.5)
-    
-    # 3. Dynamic window calculation with safety checks
-    df['dynamic_window'] = np.clip(
-        (5 + (df['volatility_index'] * 15)).round(),
-        5,  # Minimum window
-        20  # Maximum window
-    ).astype(int)
-    
-    # 4. Safe momentum calculations
-    df['raw_momentum'] = df['multiplier'].pct_change().fillna(0)
-    df['volume_proxy'] = (
-        (df['multiplier'].rolling(3, min_periods=1).std() * 10) + 
-        (df['multiplier'].diff().abs().rolling(5, min_periods=1).sum()))
-    df['momentum_impulse'] = (
-        np.sign(df['raw_momentum']) * 
-        np.sqrt(abs(df['raw_momentum'].clip(lower=1e-6))) * 
-        df['volume_proxy']
-    )
-    
-    # ===== ROBUST SMMI CALCULATION =====
-    def safe_smmi(df):
-        smmi_values = []
-        for i in range(len(df)):
-            window = df['dynamic_window'].iloc[i] if i < len(df) else 10
-            start_idx = max(0, i - window)
-            
-            impulse = df['momentum_impulse'].iloc[start_idx:i+1]
-            
-            # Handle edge cases
-            if len(impulse) < 2 or impulse.isna().all():
-                smmi_values.append(smmi_values[-1] if i > 0 else 50)
-                continue
-                
-            # Safe normalization
-            lowest = impulse.min()
-            highest = impulse.max()
-            current = impulse.iloc[-1]
-            
-            if pd.isna(current) or pd.isna(lowest) or pd.isna(highest):
-                smmi_values.append(50)
-            elif highest != lowest:
-                smmi_values.append(100 * (current - lowest) / (highest - lowest))
-            else:
-                smmi_values.append(50)
-        
-        return pd.Series(smmi_values, index=df.index)
-    
-    df['smmi'] = safe_smmi(df)
-    df['smmi_signal'] = df['smmi'].ewm(span=3, min_periods=1).mean()
-    
-    # ===== SAFE SIGNAL GENERATION =====
-    df['overextension'] = (
-        (df['smmi'].fillna(50) > 85) & 
-        (df['multiplier'].fillna(1) > df['multiplier'].rolling(5, min_periods=1).mean() * 1.5)
-    ).fillna(False)
-    
-    df['bullish_reversal'] = (
-        (df['smmi'].fillna(50) < 20) & 
-        (df['smmi'].diff().fillna(0) > 5) & 
-        (df['multiplier'].fillna(1) < 1.3)
-    ).fillna(False)
-    
-    df['bearish_reversal'] = (
-        (df['smmi'].fillna(50) > 80) & 
-        (df['smmi'].diff().fillna(0) < -5) & 
-        (df['multiplier'].fillna(1) > 1.5)
-    ).fillna(False)
-
-    df['squeeze'] = (
-    ((df['bb_upper_10'] - df['bb_lower_10']).fillna(1) < 
-    df['bb_upper_10'].rolling(20, min_periods=1).std().fillna(1) * 0.5)
-    ).fillna(False)
 
     # === Ichimoku Cloud on MSI ===
     high_9  = df["msi"].rolling(window=9).max()
@@ -1344,9 +1267,9 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     low_5 = df["msi"].rolling(5).min()
     df["mini_kijun"] = (high_5 + low_5)/2
 
-    high_2 = df["msi"].rolling(1).max()
-    low_2 = df["msi"].rolling(1).min()
-    df["nano_tenkan"] = df["msi"].ewm(span=2).mean()
+    #high_2 = df["msi"].rolling(1).max()
+    #low_2 = df["msi"].rolling(1).min()
+    #df["nano_tenkan"] = df["msi"].ewm(span=2).mean()
 
     # Projected Senkou A — mini average of short-term structure
     df["mini_senkou_a"] = ((df["mini_tenkan"] + df["mini_kijun"]) / 2).shift(6)
@@ -1357,34 +1280,34 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     df["mini_senkou_b"] = ((high_12 + low_12) / 2).shift(6)
 
     #df["rsi"] = compute_rsi(df["bb_mid_10"], period=14)
-    df = enhanced_quantum_rsi(df)
+    #df = enhanced_quantum_rsi(df)
 
     
-    df["rsi_mid"]   =  df['eq_rsi'].rolling(14).mean()
-    df["rsi_std"]   =  df['eq_rsi'].rolling(14).std()
-    df["rsi_upper"] = df["rsi_mid"] + 1.2 * df["rsi_std"]
-    df["rsi_lower"] = df["rsi_mid"] - 1.2 * df["rsi_std"]
-    df["rsi_signal"] =  df['eq_rsi'].ewm(span=7, adjust=False).mean()
+    #df["rsi_mid"]   =  df['eq_rsi'].rolling(14).mean()
+    #df["rsi_std"]   =  df['eq_rsi'].rolling(14).std()
+    #df["rsi_upper"] = df["rsi_mid"] + 1.2 * df["rsi_std"]
+    #df["rsi_lower"] = df["rsi_mid"] - 1.2 * df["rsi_std"]
+    #df["rsi_signal"] =  df['eq_rsi'].ewm(span=7, adjust=False).mean()
 
-    high_3 = df['eq_rsi'].rolling(3).max()
-    low_3 = df['eq_rsi'].rolling(3).min()
-    df["mini_tenkan_rsi"] = (high_3 + low_3)/2
+    #high_3 = df['eq_rsi'].rolling(3).max()
+    #low_3 = df['eq_rsi'].rolling(3).min()
+    #df["mini_tenkan_rsi"] = (high_3 + low_3)/2
 
-    high_5 = df['eq_rsi'].rolling(5).max()
-    low_5 = df['eq_rsi'].rolling(5).min()
-    df["mini_kijun_rsi"] = (high_5 + low_5)/2
+    #high_5 = df['eq_rsi'].rolling(5).max()
+    #low_5 = df['eq_rsi'].rolling(5).min()
+    #df["mini_kijun_rsi"] = (high_5 + low_5)/2
 
-    df["mini_senkou_a_rsi"] = ((df["mini_tenkan_rsi"] + df["mini_kijun_rsi"]) / 2).shift(6)
+    #df["mini_senkou_a_rsi"] = ((df["mini_tenkan_rsi"] + df["mini_kijun_rsi"]) / 2).shift(6)
     
     # Projected Senkou B — mini-range memory, 12-period HL midpoint
-    high_12 = df['eq_rsi'].rolling(12).max()
-    low_12 = df['eq_rsi'].rolling(12).min()
-    df["mini_senkou_b_rsi"] = ((high_12 + low_12) / 2).shift(6)
+    #high_12 = df['eq_rsi'].rolling(12).max()
+    #low_12 = df['eq_rsi'].rolling(12).min()
+    #df["mini_senkou_b_rsi"] = ((high_12 + low_12) / 2).shift(6)
     
 
      # MSI[5] and MSI[10]
-    df['msi_5'] = df['multiplier'].rolling(5).mean()
-    df['msi_10'] = df['multiplier'].rolling(10).mean()
+    #df['msi_5'] = df['multiplier'].rolling(5).mean()
+    #df['msi_10'] = df['multiplier'].rolling(10).mean()
     
     # Cross states
     #df['mini_surge'] = (df['msi_5'] > df['tenkan']) & (df['msi_5'].shift(1) <= df['tenkan'].shift(1))
