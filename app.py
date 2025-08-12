@@ -1744,8 +1744,7 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
 
 
 # Fast entry mode UI - simplified UI for mobile/quick decisions
-@st.cache_data
-@st.cache_data(ttl=600, show_spinner=False)
+
 def fast_entry_mode_ui():
     st.markdown("### ⚡ FAST ENTRY MODE")
     st.markdown("Tap a number to enter the corresponding round multiplier")
