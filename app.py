@@ -863,7 +863,8 @@ def map_multiplier_level(value):
     else:
         return 3  # Level 10x+
 
-
+@st.cache_data
+@st.cache_data(ttl=600, show_spinner=False)
 def plot_multiplier_timeseries(df, multiplier_col='multiplier', time_col='timestamp'):
     fig, ax = plt.subplots(figsize=(12, 6))
 
@@ -992,7 +993,8 @@ def build_multi_sine(time_vector, signal_array, top_periods):
     if len(top_periods) > 0:
         recon = recon / max(1, len(top_periods))
     return recon, fitted_params
-
+    
+@st.cache_data
 def predict_future_peaks(minute_index_series, fitted_params, horizon_minutes=60, n_peaks=3):
     # minute_index_series: pandas Series or index of minute timestamps
     # fitted_params: list of fitted sine dicts (A,phi,offset,omega)
@@ -1742,6 +1744,8 @@ def plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wa
 
 
 # Fast entry mode UI - simplified UI for mobile/quick decisions
+@st.cache_data
+@st.cache_data(ttl=600, show_spinner=False)
 def fast_entry_mode_ui():
     st.markdown("### ⚡ FAST ENTRY MODE")
     st.markdown("Tap a number to enter the corresponding round multiplier")
@@ -1983,7 +1987,7 @@ if not df.empty:
         plt.ylabel('Magnitude')
         plt.grid(True)
         plt.tight_layout()
-        plt.show()
+       
         # Convert dominant frequencies into periods (minutes per cycle)
         dominant_freqs = xf[np.argsort(fft_magnitude)[-10:]]  # Top 10
         # Only keep non-zero frequencies
@@ -2061,7 +2065,9 @@ if not df.empty:
         ax.legend()
         plt.xticks(rotation=45)
         plt.tight_layout()
-        st.pyplot(fig2)
+        plot_slot = st.empty()
+        with plot_slot.container():
+            st.pyplot(fig2)
 
         # --- Plot STL components ---
         st.subheader("🧪 STL Decomposition")
@@ -2078,9 +2084,10 @@ if not df.empty:
         
         axs.legend(loc="upper left", fontsize=8)
         plt.tight_layout()
-        st.pyplot(fig3)
+        plot_slot = st.empty()
+        #with plot_slot.container():
+        #    st.pyplot(fig3)
 
-       
          # --- SETTINGS ---
         forecast_horizon = 60  # minutes ahead to project lag lines
         acf_threshold = 0.4    # for horizontal line
@@ -2116,57 +2123,11 @@ if not df.empty:
         ax[0].legend(fontsize=8)
         ax[0].set_title("Signal vs Reconstructed Wave")
         
-        # ============ 2. MIDDLE CHART: Seasonal Component + ACF Lag Markers (historical + predictive) ============
-        ax[1].plot(minute_avg_df['minute'], minute_avg_df['seasonal'], label='Seasonal (STL)', color='green')
-        
-        last_time = minute_avg_df['minute'].iloc[-1]
-        future_limit = last_time + pd.Timedelta(minutes=forecast_horizon)
-        
-        for lag in spike_lags:
-            for base_time in minute_avg_df['minute']:
-                future_time = base_time + pd.Timedelta(minutes=lag)
-                if future_time <= last_time:
-                    # Historical lag marker
-                    ax[1].axvline(future_time, color='red', linestyle='--', alpha=0.9)
-                elif future_time <= future_limit:
-                    # Predictive lag marker
-                    ax[1].axvline(future_time, color='gray', linestyle=':', alpha=0.9)
-        
-        # Horizontal threshold for ACF
-        ax[1].axhline(y=acf_threshold, color='black', linestyle=':', alpha=0.7, label='ACF Threshold')
-        
-        ax[1].set_title(f"Seasonal Component (ACF spikes at lags: {spike_lags})")
-        ax[1].legend(fontsize=8)
-        
-        # Extend X-axis to fit predictions
-        ax[1].set_xlim(minute_avg_df['minute'].iloc[0], future_limit)
-        
-        # ============ 3. BOTTOM CHART: FFT Spectrum ============
-        if len(top_periods_simple) > 0:
-            xs = [p[0] for p in top_periods_simple]  # periods in minutes
-            ys = [p[1] / len(filtered_signal) for p in top_periods_simple]  # normalize
-        
-            ax[2].bar(xs, ys, width=0.8, color='purple', alpha=0.7)
-            ax[2].set_xlabel("Period (minutes)")
-            ax[2].set_ylabel("Normalized FFT Magnitude")
-            ax[2].set_title("Top FFT Periods (minutes)")
-        else:
-            ax[2].text(0.5, 0.5, "No significant FFT periods detected",
-                       transform=ax[2].transAxes,
-                       ha='center', va='center', fontsize=10, alpha=0.7)
         
         plt.tight_layout()
         st.pyplot(fig)
         
-        # --- HUD: next peaks ---
-        if len(next_peaks) > 0:
-            #hud_text = " | ".join([p.strftime('%H:%M') for p in next_peaks])
-            st.success(f"🕓 Next predicted peaks:")
-        else:
-            st.info("🔄 No future peaks found (insufficient fit or no dominant cycles).")
-
-        
-        
+      
         # 🔮 Display Wave Clock Prediction
         if len(next_peaks) > 0:
             formatted_peaks = [pd.to_datetime(p).strftime('%H:%M') for p in next_peaks]
@@ -2226,6 +2187,7 @@ if not df.empty:
             selected_freqs.append(float(chosen_freq))
         
         # Multi-sine model: frequencies are cycles-per-minute; t vector will be in minutes
+        @st.cache_data
         def multi_sine_model(t, *params):
             """
             params layout: [A1, f1, phi1, A2, f2, phi2, A3, f3, phi3, offset]
@@ -2340,8 +2302,10 @@ if not df.empty:
         ax.legend(fontsize=8)
         plt.xticks(rotation=45)
         plt.tight_layout()
-        st.pyplot(fig2)
-        
+        plot_slot = st.empty()
+        with plot_slot.container():
+            st.pyplot(fig2)
+            
         # ---------- Upcoming events table (sorted, de-duplicated) ----------
         future_events = []
         for t in peak_future_times:
@@ -2353,7 +2317,7 @@ if not df.empty:
         if pred_table.empty:
             st.write("🔮 **Upcoming Predicted Events** — none in projection window.")
         else:
-            pred_table = pred_table.drop_duplicates().sort_values(by='Time').reset_index(drop=True)
+            pred_table = pred_table.drop_duplicates().sort_values(by='Time').reset_index(drop=True).tail(30)
             st.write("🔮 **Upcoming Predicted Events**")
             st.dataframe(pred_table)
 
