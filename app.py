@@ -56,19 +56,6 @@ if "current_mult" not in st.session_state:
 if "alignment_score_history" not in st.session_state:
     st.session_state["alignment_score_history"] = []
 
-# Initialize session state for predictions
-if 'qfe_predictions' not in st.session_state:
-    st.session_state.qfe_predictions = {}
-    
-if 'qfe_accuracy' not in st.session_state:
-    st.session_state.qfe_accuracy = {
-        'total': 0,
-        'correct': 0,
-        'last_checked': -1
-    }
-
-
-
 # ================ CONFIGURATION SIDEBAR ==================
 with st.sidebar:
     st.header("⚙️ QUANTUM PARAMETERS")
@@ -1233,7 +1220,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     # Multi-window BBs on MSI
     df["bb_mid_20"], df["bb_upper_20"], df["bb_lower_20"] = bollinger_bands(df["msi"], 20, 2)
     df["bb_mid_10"], df["bb_upper_10"], df["bb_lower_10"] = bollinger_bands(df["msi"], 10, 1.5)
-    df["bb_mid_40"], df["bb_upper_40"], df["bb_lower_40"] = bollinger_bands(df["msi"], 40, 2.5)
+    #df["bb_mid_40"], df["bb_upper_40"], df["bb_lower_40"] = bollinger_bands(df["msi"], 40, 2.5)
     df['bandwidth'] = df["bb_upper_10"] - df["bb_lower_10"]  # Width of the band
     
     # Compute slope (1st derivative) for upper/lower bands
@@ -1348,18 +1335,18 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     fib_ratios = [1.0, 1.618, 2.618]
     
     # Center line: rolling MSI mean
-    df["feb_center"] = df["msi"].rolling(window=fib_window).mean()
-    df["feb_std"] = df["msi"].rolling(window=fib_window).std()
+    #df["feb_center"] = df["msi"].rolling(window=fib_window).mean()
+    #df["feb_std"] = df["msi"].rolling(window=fib_window).std()
     
     # Upper bands
-    df["feb_upper_1"] = df["feb_center"] + fib_ratios[0] * df["feb_std"]
-    df["feb_upper_1_618"] = df["feb_center"] + fib_ratios[1] * df["feb_std"]
-    df["feb_upper_2_618"] = df["feb_center"] + fib_ratios[2] * df["feb_std"]
+    #df["feb_upper_1"] = df["feb_center"] + fib_ratios[0] * df["feb_std"]
+    #df["feb_upper_1_618"] = df["feb_center"] + fib_ratios[1] * df["feb_std"]
+    #df["feb_upper_2_618"] = df["feb_center"] + fib_ratios[2] * df["feb_std"]
     
     # Lower bands
-    df["feb_lower_1"] = df["feb_center"] - fib_ratios[0] * df["feb_std"]
-    df["feb_lower_1_618"] = df["feb_center"] - fib_ratios[1] * df["feb_std"]
-    df["feb_lower_2_618"] = df["feb_center"] - fib_ratios[2] * df["feb_std"]
+    #df["feb_lower_1"] = df["feb_center"] - fib_ratios[0] * df["feb_std"]
+    #df["feb_lower_1_618"] = df["feb_center"] - fib_ratios[1] * df["feb_std"]
+    #df["feb_lower_2_618"] = df["feb_center"] - fib_ratios[2] * df["feb_std"]
 
     for window in selected_msi_windows:
         col_name = f"msi_{window}"
@@ -2093,7 +2080,7 @@ if not df.empty:
         
         # --- PLOTTING (upgraded) ---
         st.subheader("🔮 Combined STL + ACF + FFT Predictor")
-        fig, ax = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
+        fig, ax = plt.subplots(1, 1, figsize=(12, 9), sharex=True)
         
         # ============ 1. TOP CHART: Raw filtered + Recon + Trend + Peak/Trough Lines ============
         ax[0].plot(minute_avg_df['minute'], filtered_signal, label='Filtered Signal', color='black', alpha=0.8)
@@ -2144,7 +2131,7 @@ if not df.empty:
             st.write(f"Peak #{i}: {peak_time.strftime('%H:%M')}")
 
         
-    with st.expander("📈 Predictive Sine Rebuild + Projection)", expanded=True):
+    with st.expander("📈 Predictive Sine Rebuild + Projection)", expanded=False):
         # ---------- CONFIG ----------
         forecast_minutes = 10  # how many minutes ahead to project
         bands = {
@@ -2302,23 +2289,23 @@ if not df.empty:
         plt.xticks(rotation=45)
         plt.tight_layout()
         plot_slot = st.empty()
-        with plot_slot.container():
-            st.pyplot(fig2)
+        #with plot_slot.container():
+            #st.pyplot(fig2)
             
         # ---------- Upcoming events table (sorted, de-duplicated) ----------
-        future_events = []
-        for t in peak_future_times:
-            future_events.append({'Time': pd.to_datetime(t), 'Type': 'Peak'})
-        for t in trough_future_times:
-            future_events.append({'Time': pd.to_datetime(t), 'Type': 'Trough'})
+        #future_events = []
+        #for t in peak_future_times:
+            #future_events.append({'Time': pd.to_datetime(t), 'Type': 'Peak'})
+        #for t in trough_future_times:
+            #future_events.append({'Time': pd.to_datetime(t), 'Type': 'Trough'})
         
-        pred_table = pd.DataFrame(future_events)
-        if pred_table.empty:
-            st.write("🔮 **Upcoming Predicted Events** — none in projection window.")
-        else:
-            pred_table = pred_table.drop_duplicates().sort_values(by='Time').reset_index(drop=True).tail(30)
-            st.write("🔮 **Upcoming Predicted Events**")
-            st.dataframe(pred_table)
+        #pred_table = pd.DataFrame(future_events)
+        #if pred_table.empty:
+            #st.write("🔮 **Upcoming Predicted Events** — none in projection window.")
+        #else:
+            #pred_table = pred_table.drop_duplicates().sort_values(by='Time').reset_index(drop=True).tail(30)
+            #st.write("🔮 **Upcoming Predicted Events**")
+            #st.dataframe(pred_table)
 
     
     FIB_WINDOWS = [3, 5, 8, 13, 21,34]  
