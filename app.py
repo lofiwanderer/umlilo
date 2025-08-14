@@ -364,7 +364,8 @@ def check_envelope_breakouts(msi_value, bands):
         "breakout_1_618": msi_value >= bands[1],
         "breakout_2_618": msi_value >= bands[2],
     }
-
+@st.cache_data
+@st.cache_data(ttl=600, show_spinner=False)
 def compute_volatility(series, window=5):
     """Std deviation over recent rounds."""
     return round(series[-window:].std(), 3)
@@ -388,7 +389,8 @@ def fib_gap_alignment(gap):
 # ============================
 # MSI FIBONACCI RETRACEMENT MODULE
 # ============================
-
+@st.cache_data
+@st.cache_data(ttl=600, show_spinner=False)
 def calculate_fibonacci_retracements(msi_series, fib_lookback_window):
     """
     Calculate Fibonacci retracement and extension levels
@@ -492,7 +494,8 @@ def compute_fib_alignment_score(df, fib_threshold=10.0, lookback_window=34, tole
 
     return round(alignment_score, 3), gaps
 
-
+@st.cache_data
+@st.cache_data(ttl=600, show_spinner=False)
 def enhanced_quantum_rsi(df, window=10, slope_len=5):
     # 1. Core slope detection from MSI
     msi_slope = df['msi'].diff(slope_len).fillna(0)
@@ -517,6 +520,9 @@ def enhanced_quantum_rsi(df, window=10, slope_len=5):
     df['eq_rsi'] = smooth_rsi
     return df
 
+
+@st.cache_data
+@st.cache_data(ttl=600, show_spinner=False)
 def enhanced_msi_analysis(df):
     # Calculate base MSI (your existing implementation)
     #df = calculate_msi(df)  
@@ -535,6 +541,8 @@ def enhanced_msi_analysis(df):
     
     return df
 
+@st.cache_data
+@st.cache_data(ttl=600, show_spinner=False)
 def plot_enhanced_msi(df):
     fig = go.Figure()
     
@@ -652,6 +660,8 @@ def plot_momentum_triangles_on_ax(ax, df, triangles, msi_col='msi'):
 
 
 # MACD over MSI
+@st.cache_data
+@st.cache_data(ttl=600, show_spinner=False)
 def compute_msi_macd(df, msi_col='msi', fast=6, slow=13, signal=5):
     ema_fast = df[msi_col].ewm(span=fast, adjust=False).mean()
     ema_slow = df[msi_col].ewm(span=slow, adjust=False).mean()
@@ -661,6 +671,17 @@ def compute_msi_macd(df, msi_col='msi', fast=6, slow=13, signal=5):
     df['msi_hist'] = df['msi_macd'] - df['msi_signal']
     return df
     
+@st.cache_data
+@st.cache_data(ttl=600, show_spinner=False)
+def compute_signal_macd(df, col='multiplier', fast=6, slow=13, signal=5):
+    ema_fast = df[col].ewm(span=fast, adjust=False).mean()
+    ema_slow = df[col].ewm(span=slow, adjust=False).mean()
+    macd = ema_fast - ema_slow
+    macd_signal = macd.ewm(span=signal, adjust=False).mean()
+    macd_hist = macd - macd_signal
+    out = pd.DataFrame({'macd': macd, 'macd_signal': macd_signal, 'macd_hist': macd_hist}, index=df.index)
+    return out
+
 def compute_momentum_adaptive_ma(df, msi_col='msi', base_window=10, max_factor=2):
     df = df.copy()
 
@@ -1910,8 +1931,17 @@ if not df.empty:
         
     # Fit sine wave to the signal using curve fitting
     params, _ = curve_fit(sine_model, time, signal, p0=[1, 0, np.mean(signal)])
-    
 
+    # Secondary sine fit (less smooth, shorter cycle)
+    # Increase omega slightly to get a higher-frequency curve
+    omega_fast = omega * 1.5  # 50% faster cycle
+    def sine_model_fast(t, A, phi, offset):
+        return A * np.sin(omega_fast * t + phi) + offset
+        
+    params_fast, _ = curve_fit(sine_model_fast, time, signal, p0=[1, 0, np.mean(signal)])
+    
+    macd_df   = compute_signal_macd(minute_avg_df.set_index('minute'))
+    
     # --- STL Decomposition ---
     # Assume signal is the SavGol-filtered curve
     stl = STL(signal, period=6, robust=True)
@@ -1965,28 +1995,6 @@ if not df.empty:
         #st.pyplot(fig)
 
         
-
-        plt.figure(figsize=(14, 6))
-        plt.plot(xf / (1/60), fft_magnitude)  # Convert frequency to cycles per minute
-        plt.title('Fourier Spectrum of Avg Multiplier per Minute')
-        plt.xlabel('Cycles per Minute (Hz)')
-        plt.ylabel('Magnitude')
-        plt.grid(True)
-        plt.tight_layout()
-       
-        # Convert dominant frequencies into periods (minutes per cycle)
-        dominant_freqs = xf[np.argsort(fft_magnitude)[-10:]]  # Top 10
-        # Only keep non-zero frequencies
-        nonzero_freqs = dominant_freqs[dominant_freqs > 0]
-        dominant_periods = 1 / nonzero_freqs * 60  # in minutes
-
-        #dominant_periods = 1 / dominant_freqs * 60  # in minutes
-        
-        # Filter out unrealistic (very low or high) cycles
-        valid_periods = dominant_periods[(dominant_periods > 2) & (dominant_periods < 60)]
-        print("Top Detected Cycle Periods (minutes):", np.round(valid_periods, 2))
-
-        
         
         # Extract fitted params
         A_fit, phi_fit, offset_fit = params
@@ -1994,9 +2002,15 @@ if not df.empty:
 
         # Generate predicted sine wave
         predicted_wave = sine_model(time, A_fit, phi_fit, offset_fit)
+
+        
+        A_fit_fast, phi_fit_fast, offset_fit_fast = params_fast
+        predicted_wave_fast = sine_model_fast(time, A_fit_fast, phi_fit_fast, offset_fit_fast)
+
         
         # Append it to dataframe for plotting
         minute_avg_df['sine_wave'] = predicted_wave
+        minute_avg_df['sine_wave_fast'] = predicted_wave_fast
 
         # Detect local maxima (peak timestamps)
         second_derivative = np.diff(np.sign(np.diff(predicted_wave)))
@@ -2043,6 +2057,8 @@ if not df.empty:
         fig2, ax = plt.subplots(figsize=(10, 4))
         ax.plot(minute_avg_df['minute'], signal, label='Avg Multiplier (1-min)', alpha=0.6)
         ax.plot(minute_avg_df['minute'], predicted_wave, label='Fitted Surge Wave', color='black', linewidth=2)
+        ax.plot(minute_avg_df['minute'], predicted_wave_fast, label='Secondary Sine (less smooth)', color='red', linestyle='--', linewidth=1.5)
+        
         # Mark peaks
         ax.scatter(peak_times, peak_values, color='red', label='Predicted Peaks bruv', zorder=5)
         ax.scatter(trough_times, trough_values, color='purple', label='Predicted troughs bruv', zorder=5)
@@ -2132,6 +2148,32 @@ if not df.empty:
 
         
     with st.expander("📈 Predictive Sine Rebuild + Projection)", expanded=False):
+
+        # Compute MACD
+        
+        
+        # ---------- PLOTTING ----------
+        fig, ax = plt.subplots(figsize=(10, 4))
+        
+        # Plot MACD and Signal line
+        ax.plot(macd_df.index, macd_df['macd'], label='MACD', color='blue', linewidth=1.5)
+        ax.plot(macd_df.index, macd_df['macd_signal'], label='Signal', color='orange', linewidth=1.5)
+        
+        # Histogram
+        ax.bar(macd_df.index, macd_df['macd_hist'], label='Histogram', color='gray', alpha=0.5)
+        
+        # Labels & legend
+        ax.set_title("MACD Indicator (Minute Avg)")
+        ax.set_xlabel("Minute")
+        ax.set_ylabel("MACD Value")
+        ax.legend()
+        
+        plt.show()
+        plt.tight_layout()
+        plot_slot = st.empty()
+        with plot_slot.container():
+            st.pyplot(fig)
+
         # ---------- CONFIG ----------
         forecast_minutes = 10  # how many minutes ahead to project
         bands = {
