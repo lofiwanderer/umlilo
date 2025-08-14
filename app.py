@@ -1853,7 +1853,7 @@ if not df.empty:
         
     
     # Plot MSI Chart
-    plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_msi_window, fib_lookback_window,  spiral_centers=spiral_centers)
+    #plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_msi_window, fib_lookback_window,  spiral_centers=spiral_centers)
     
     #fig = plot_enhanced_msi(df)
     #st.plotly_chart(fig, use_container_width=True)
@@ -1974,8 +1974,8 @@ if not df.empty:
         next_peaks, forecast_values, future_minutes = predict_future_peaks(minute_avg_df['minute'], fitted_params, horizon_minutes=60, n_peaks=3)
 
     with st.expander("📊 Time Series Analyzer", expanded=True):
-        fig = plot_multiplier_timeseries(df)
-        st.pyplot(fig)
+        #fig = plot_multiplier_timeseries(df)
+        #st.pyplot(fig)
 
         
 
