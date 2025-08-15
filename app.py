@@ -2138,7 +2138,7 @@ if not df.empty:
             st.write(f"Peak #{i}: {peak_time.strftime('%H:%M')}")
 
         
-    with st.expander("📈 Predictive Sine Rebuild + Projection)", expanded=False):
+    with st.expander("📈 Predictive Sine Rebuild + Projection)", expanded=True):
 
         # Compute MACD
         
@@ -2162,8 +2162,8 @@ if not df.empty:
         plt.show()
         plt.tight_layout()
         plot_slot = st.empty()
-        #with plot_slot.container():
-        #    st.pyplot(fig)
+        with plot_slot.container():
+            st.pyplot(fig)
 
         
 
