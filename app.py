@@ -2043,7 +2043,30 @@ if not df.empty:
         
 
         
-
+                # Compute MACD
+        
+        
+        # ---------- PLOTTING ----------
+        fig, ax = plt.subplots(figsize=(10, 4))
+        
+        # Plot MACD and Signal line
+        ax.plot(minute_avg_df['minute'], macd_df['macd'], label='MACD', color='blue', linewidth=1.5)
+        ax.plot(minute_avg_df['minute'], macd_df['macd_signal'], label='Signal', color='orange', linewidth=1.5)
+        
+        # Histogram
+        #ax.bar(minute_avg_df['minute'], macd_df['macd_hist'], label='Histogram', color='gray', alpha=0.5)
+        
+        # Labels & legend
+        ax.set_title("MACD Indicator (Minute Avg)")
+        ax.set_xlabel("Minute")
+        ax.set_ylabel("MACD Value")
+        ax.legend()
+        
+        
+        plt.tight_layout()
+        plot_slot = st.empty()
+        with plot_slot.container():
+            st.pyplot(fig)
     
         fig2, ax = plt.subplots(figsize=(10, 4))
         ax.plot(minute_avg_df['minute'], signal, label='Avg Multiplier (1-min)', alpha=0.6)
@@ -2140,30 +2163,7 @@ if not df.empty:
         
     with st.expander("📈 Predictive Sine Rebuild + Projection)", expanded=True):
 
-        # Compute MACD
-        
-        
-        # ---------- PLOTTING ----------
-        fig, ax = plt.subplots(figsize=(10, 4))
-        
-        # Plot MACD and Signal line
-        ax.plot(minute_avg_df['minute'], macd_df['macd'], label='MACD', color='blue', linewidth=1.5)
-        ax.plot(minute_avg_df['minute'], macd_df['macd_signal'], label='Signal', color='orange', linewidth=1.5)
-        
-        # Histogram
-        #ax.bar(minute_avg_df['minute'], macd_df['macd_hist'], label='Histogram', color='gray', alpha=0.5)
-        
-        # Labels & legend
-        ax.set_title("MACD Indicator (Minute Avg)")
-        ax.set_xlabel("Minute")
-        ax.set_ylabel("MACD Value")
-        ax.legend()
-        
-        
-        plt.tight_layout()
-        plot_slot = st.empty()
-        with plot_slot.container():
-            st.pyplot(fig)
+
 
         
 
