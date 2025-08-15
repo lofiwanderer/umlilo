@@ -2151,7 +2151,7 @@ if not df.empty:
         ax.plot(minute_avg_df['minute'], macd_df['macd_signal'], label='Signal', color='orange', linewidth=1.5)
         
         # Histogram
-        ax.bar(minute_avg_df['minute'], macd_df['macd_hist'], label='Histogram', color='gray', alpha=0.5)
+        #ax.bar(minute_avg_df['minute'], macd_df['macd_hist'], label='Histogram', color='gray', alpha=0.5)
         
         # Labels & legend
         ax.set_title("MACD Indicator (Minute Avg)")
@@ -2159,7 +2159,7 @@ if not df.empty:
         ax.set_ylabel("MACD Value")
         ax.legend()
         
-        plt.show()
+        
         plt.tight_layout()
         plot_slot = st.empty()
         with plot_slot.container():
