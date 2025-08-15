@@ -2161,7 +2161,7 @@ if not df.empty:
             st.write(f"Peak #{i}: {peak_time.strftime('%H:%M')}")
 
         
-    with st.expander("📈 Predictive Sine Rebuild + Projection)", expanded=True):
+    
 
 
 
