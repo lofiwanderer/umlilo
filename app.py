@@ -2096,7 +2096,7 @@ if not df.empty:
         
         # --- PLOTTING (upgraded) ---
         st.subheader("🔮 Combined STL + ACF + FFT Predictor")
-        fig, ax = plt.subplots(1, 1, figsize=(12, 9), sharex=True)
+        fig, ax = plt.subplots(2, 1, figsize=(12, 9), sharex=True)
         
         # ============ 1. TOP CHART: Raw filtered + Recon + Trend + Peak/Trough Lines ============
         ax[0].plot(minute_avg_df['minute'], filtered_signal, label='Filtered Signal', color='black', alpha=0.8)
