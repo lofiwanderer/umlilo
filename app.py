@@ -2171,8 +2171,8 @@ if not df.empty:
         plt.show()
         plt.tight_layout()
         plot_slot = st.empty()
-        with plot_slot.container():
-            st.pyplot(fig)
+        #with plot_slot.container():
+        #    st.pyplot(fig)
 
         # ---------- CONFIG ----------
         forecast_minutes = 10  # how many minutes ahead to project
