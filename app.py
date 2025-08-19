@@ -1903,35 +1903,37 @@ if not df.empty:
 
     signal = savgol_filter(signal, window_length=5 if N >= 5 else N, polyorder=2)
 
-    df_sec = df.dropna(subset=['timestamp']).copy()
-    df_sec = df_sec.set_index('timestamp').sort_index()
+    # Ensure timestamp is parsed
+    #df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+    #df = df.dropna(subset=['timestamp'])
     
-    # Build a clean SECOND-LEVEL series (important: preserves sub-minute structure)
-    # If multiple rounds hit the same second, we average them.
-    sec_series = df_sec['multiplier'].resample('1S').mean().interpolate(limit_direction='both')
+    # Round to nearest second (for consistent time axis)
+    df['second'] = df['timestamp'].dt.floor('s')
     
-    # Fibonacci EWM lines in *seconds* (span = number of seconds)
+    # Group by each second → average multiplier
+    sec_df = df.groupby('second').agg({'multiplier': 'mean'}).reset_index()
+    
+    # Fill missing seconds (important for smooth EWM spans)
+    sec_df.set_index('second', inplace=True)
+    sec_df = sec_df.resample('1S').mean().interpolate()
+    sec_df.reset_index(inplace=True)
+    
+    # Build clean second-level series
+    sec_series = sec_df.set_index('second')['multiplier']
+    
+    # Fibonacci EWM lines in *seconds*
     fib_spans = [34, 55, 91]
-    fib_cols = []
+    fib_df = pd.DataFrame({'time': sec_series.index, 'multiplier_sec': sec_series})
     for s in fib_spans:
-        col = f'fib{s}'
-        sec_series_col = sec_series.ewm(span=s, adjust=False).mean()
-        fib_cols.append(col)
-        # stash in a small DataFrame for plotting & alignment
-        if 'fib_df' not in locals():
-            fib_df = pd.DataFrame({'multiplier_sec': sec_series})
-        fib_df[col] = sec_series_col
+        fib_df[f'fib{s}'] = sec_series.ewm(span=s, adjust=False).mean().values
+        fib_df[f'fib{s}']= savgol_filter(fib_df[f'fib{s}'], window_length=5 if N >= 5 else N, polyorder=2)
     
-    # Optional: derive a simple phase map via pairwise crossovers (fast over slow)
+    # Phase map (crossovers)
     fib_df['phase_34_55'] = np.sign((fib_df['fib34'] - fib_df['fib55']).fillna(0.0))
     fib_df['phase_55_91'] = np.sign((fib_df['fib55'] - fib_df['fib91']).fillna(0.0))
-    # Composite phase (both fast-over-slow alignments)
     fib_df['phase_align'] = ((fib_df['phase_34_55'] > 0) & (fib_df['phase_55_91'] > 0)).astype(int) \
-                            - ((fib_df['phase_34_55'] < 0) & (fib_df['phase_55_91'] < 0)).astype(int)
-
-    # Ensure explicit time column for plotting
-    fib_df = fib_df.reset_index().rename(columns={'timestamp': 'time'})
-
+                          - ((fib_df['phase_34_55'] < 0) & (fib_df['phase_55_91'] < 0)).astype(int)
+    
     # ========== PLOT ==========
     with st.expander("⏱️ Fibonacci Time Map (34s / 55s / 91s)", expanded=False):
         fig_fib, ax_fib = plt.subplots(figsize=(12, 4))
@@ -1944,13 +1946,14 @@ if not df.empty:
         plt.tight_layout()
         st.pyplot(fig_fib)
     
-        # Simple phase alignment ribbon (optional, helpful for “go/no-go” reads)
+        # Phase ribbon
         fig_phase, ax_phase = plt.subplots(figsize=(12, 2.2))
         ax_phase.plot(fib_df['time'], fib_df['phase_align'], linewidth=1.2)
         ax_phase.set_yticks([-1, 0, 1]); ax_phase.set_yticklabels(['Bear', 'Neutral', 'Bull'])
         ax_phase.set_title("Phase Alignment: (34>55 and 55>91) → Bull (+1), (34<55 and 55<91) → Bear (-1)")
         plt.tight_layout()
         st.pyplot(fig_phase)
+
     
     
     
