@@ -2150,8 +2150,8 @@ if not df.empty:
         axs.legend(loc="upper left", fontsize=8)
         plt.tight_layout()
         plot_slot = st.empty()
-        #with plot_slot.container():
-        #    st.pyplot(fig3)
+        with plot_slot.container():
+            st.pyplot(fig3)
 
          # --- SETTINGS ---
         forecast_horizon = 60  # minutes ahead to project lag lines
