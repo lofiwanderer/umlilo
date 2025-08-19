@@ -2093,7 +2093,16 @@ if not df.empty:
 
         
                 # Compute MACD
-        
+        # AX3: MACD over MSI
+        if show_macd and 'msi_macd' in df.columns:
+            fig3, ax3 = plt.subplots(figsize=(12, 2.5))
+            ax3.plot(df['msi_macd'], label='MSI-MACD', color='blue')
+            ax3.plot(df['msi_signal'], label='MACD Signal', color='red', linestyle='--')
+            ax3.bar(df.index, df['msi_hist'], label='MACD Hist', color='gray', alpha=0.4, width=1)
+            ax3.axhline(0, color='black', linewidth=0.5, linestyle='--')
+            ax3.set_ylabel('MSI-MACD')
+            ax3.legend(loc='upper left')
+            ax3.grid(True, alpha=0.15)
         
         # ---------- PLOTTING ----------
         fig, ax = plt.subplots(figsize=(10, 4))
