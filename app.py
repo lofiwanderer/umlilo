@@ -2103,6 +2103,9 @@ if not df.empty:
             ax3.set_ylabel('MSI-MACD')
             ax3.legend(loc='upper left')
             ax3.grid(True, alpha=0.15)
+            plot_slot = st.empty()
+            with plot_slot.container():
+                st.pyplot(fig3)
         
         # ---------- PLOTTING ----------
         fig, ax = plt.subplots(figsize=(10, 4))
