@@ -1032,6 +1032,41 @@ def predict_future_peaks(minute_index_series, fitted_params, horizon_minutes=60,
     # return next n_peaks
     return peak_times[:n_peaks], forecast, future_minutes
 
+def multi_wave_trap_scanner(round_df, windows=[1, 3, 5, 10]):
+    """Builds smoothed avg multiplier waves for multiple higher-minute windows."""
+    fig, ax = plt.subplots(figsize=(12, 5))
+    peak_dict, trough_dict = {}, {}
+
+    for w in windows:
+        # Aggregate to higher minute frames
+        df_w = (
+            round_df.resample(f"{w}T", on="timestamp")['multiplier']
+            .mean()
+            .reset_index()
+            .rename(columns={'multiplier': 'multiplier', 'timestamp': 'minute'})
+        )
+
+        signal, df_w = build_responsive_signal(df_w)
+
+        # Peak/trough detection
+        peaks, _ = find_peaks(signal, distance=2)
+        troughs, _ = find_peaks(-signal, distance=2)
+
+        peak_dict[w] = (df_w['minute'].iloc[peaks], signal[peaks])
+        trough_dict[w] = (df_w['minute'].iloc[troughs], signal[troughs])
+
+        # Plot
+        ax.plot(df_w['minute'], signal, label=f"{w}-min Wave")
+        ax.scatter(df_w['minute'].iloc[peaks], signal[peaks], color='red', marker='o', s=40)
+        ax.scatter(df_w['minute'].iloc[troughs], signal[troughs], color='purple', marker='x', s=40)
+
+    ax.set_title("🔮 Multi-Wave Trap Scanner (Smoothed Higher Minute Waves)")
+    ax.legend()
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    st.pyplot(fig)
+    return peak_dict, trough_dict
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
@@ -2165,8 +2200,8 @@ if not df.empty:
         axs.legend(loc="upper left", fontsize=8)
         plt.tight_layout()
         plot_slot = st.empty()
-        with plot_slot.container():
-            st.pyplot(fig3)
+        #with plot_slot.container():
+        #    st.pyplot(fig3)
 
          # --- SETTINGS ---
         forecast_horizon = 60  # minutes ahead to project lag lines
@@ -2228,6 +2263,9 @@ if not df.empty:
     
 
 
+    with st.expander("📊 Multi-Wave Trap Scanner"):
+        st.write("This shows smoothed multiplier waves across multiple timeframes.")
+        peak_dict, trough_dict = multi_wave_trap_scanner(df, windows=[1, 3, 5, 10])
 
         
 
