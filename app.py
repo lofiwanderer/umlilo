@@ -1963,11 +1963,7 @@ if not df.empty:
         fib_df[f'fib{s}'] = sec_series.ewm(span=s, adjust=False).mean().values
         fib_df[f'fib{s}']= savgol_filter(fib_df[f'fib{s}'], window_length=5 if N >= 5 else N, polyorder=2)
     
-    # Phase map (crossovers)
-    fib_df['phase_34_55'] = np.sign((fib_df['fib34'] - fib_df['fib55']).fillna(0.0))
-    fib_df['phase_55_91'] = np.sign((fib_df['fib55'] - fib_df['fib91']).fillna(0.0))
-    fib_df['phase_align'] = ((fib_df['phase_34_55'] > 0) & (fib_df['phase_55_91'] > 0)).astype(int) \
-                          - ((fib_df['phase_34_55'] < 0) & (fib_df['phase_55_91'] < 0)).astype(int)
+  
     
     # ========== PLOT ==========
     with st.expander("⏱️ Fibonacci Time Map (34s / 55s / 91s)", expanded=False):
@@ -1979,15 +1975,9 @@ if not df.empty:
         ax_fib.set_title("Fibonacci-Timed Signal Lines (Second-Level)")
         ax_fib.legend(loc='upper left')
         plt.tight_layout()
-        st.pyplot(fig_fib)
+        #st.pyplot(fig_fib)
     
-        # Phase ribbon
-        fig_phase, ax_phase = plt.subplots(figsize=(12, 2.2))
-        ax_phase.plot(fib_df['time'], fib_df['phase_align'], linewidth=1.2)
-        ax_phase.set_yticks([-1, 0, 1]); ax_phase.set_yticklabels(['Bear', 'Neutral', 'Bull'])
-        ax_phase.set_title("Phase Alignment: (34>55 and 55>91) → Bull (+1), (34<55 and 55<91) → Bear (-1)")
-        plt.tight_layout()
-        st.pyplot(fig_phase)
+        
 
     
     
