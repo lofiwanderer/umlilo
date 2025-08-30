@@ -2018,7 +2018,7 @@ if not df.empty:
   
     
     # ========== PLOT ==========
-    #with st.expander("⏱️ Fibonacci Time Map (34s / 55s / 91s)", expanded=False):
+    with st.expander("⏱️ Fibonacci Time Map (34s / 55s / 91s)", expanded=False):
         fig_fib, ax_fib = plt.subplots(figsize=(12, 4))
         ax_fib.plot(fib_df['time'], fib_df['multiplier_sec'], label='Multiplier (1s)', alpha=0.35)
         ax_fib.plot(fib_df['time'], fib_df['fib34'], label='fib34', linewidth=1.2)
