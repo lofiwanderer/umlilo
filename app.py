@@ -1037,6 +1037,9 @@ def multi_wave_trap_scanner(round_df, windows=[1, 3, 5, 10]):
     fig, ax = plt.subplots(figsize=(12, 5))
     peak_dict, trough_dict = {}, {}
 
+    raw_signals = {}  # keep raw signals per window
+    organic_signals = {}  # keep organic signals per window
+
     for w in windows:
         # Aggregate to higher minute frames
         df_w = (
@@ -1047,6 +1050,7 @@ def multi_wave_trap_scanner(round_df, windows=[1, 3, 5, 10]):
         )
 
         signal, df_w = build_responsive_signal(df_w)
+        raw_signals[w] = (df_w['minute'], signal)
 
         # Peak/trough detection
         peaks, _ = find_peaks(signal, distance=2)
@@ -1060,12 +1064,60 @@ def multi_wave_trap_scanner(round_df, windows=[1, 3, 5, 10]):
         ax.scatter(df_w['minute'].iloc[peaks], signal[peaks], color='red', marker='o', s=40)
         ax.scatter(df_w['minute'].iloc[troughs], signal[troughs], color='purple', marker='x', s=40)
 
+        # ----- ORGANIC without pinks -----
+        df_org = (
+            round_df[round_df['multiplier'] < 10]  # strip pinks
+            .resample(f"{w}T", on="timestamp")['multiplier']
+            .mean()
+            .reset_index()
+            .rename(columns={'multiplier': 'multiplier', 'timestamp': 'minute'})
+        )
+
+        org_signal, df_org = build_responsive_signal(df_org)
+        organic_signals[w] = (df_org['minute'], org_signal)
+
     ax.set_title("🔮 Multi-Wave Trap Scanner (Smoothed Higher Minute Waves)")
     ax.legend()
     plt.xticks(rotation=45)
     plt.tight_layout()
 
     st.pyplot(fig)
+
+    # === FIGURE 2: Organic Flow (ignoring pinks) ===
+    fig2, ax2 = plt.subplots(figsize=(12, 5))
+    for w, (minutes, signal) in organic_signals.items():
+        ax2.plot(minutes, signal, label=f"{w}-min Organic Flow")
+    ax2.set_title("🌱 Organic Flow (No Pinks)")
+    ax2.legend()
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    st.pyplot(fig2)
+
+    # === FIGURE 3: PMF (Raw - Organic) ===
+    fig3, ax3 = plt.subplots(figsize=(12, 5))
+    for w in windows:
+        if w in raw_signals and w in organic_signals:
+            raw_minutes, raw_sig = raw_signals[w]
+            org_minutes, org_sig = organic_signals[w]
+
+            # Align indexes safely
+            df_merge = pd.DataFrame({'minute': raw_minutes, 'raw': raw_sig}).merge(
+                pd.DataFrame({'minute': org_minutes, 'organic': org_sig}),
+                on='minute', how='inner'
+            )
+            df_merge['pmf'] = df_merge['raw'] - df_merge['organic']
+
+            ax3.plot(df_merge['minute'], df_merge['pmf'], label=f"{w}-min PMF")
+
+    ax3.axhline(0, color='gray', linestyle='--', linewidth=1)
+    ax3.set_title("🎭 Pink Manipulation Factor (PMF)")
+    ax3.legend()
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    st.pyplot(fig3)
+    
+
+    
     return peak_dict, trough_dict
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
@@ -1863,14 +1915,14 @@ if not df.empty:
     
     
 
-    spiral_detector = NaturalFibonacciSpiralDetector(df, window_size=selected_window)
-    spiral_centers = spiral_detector.detect_spirals()
+    #spiral_detector = NaturalFibonacciSpiralDetector(df, window_size=selected_window)
+    #spiral_centers = spiral_detector.detect_spirals()
 
-    spiral_echoes = get_spiral_echoes(spiral_centers, df)
+    #spiral_echoes = get_spiral_echoes(spiral_centers, df)
     # Assuming df is your main DataFrame
     max_rounds = len(df)
     
-    true_flp_watchlist = project_true_forward_flp(spiral_centers, fib_layers=selected_fib_layers, max_rounds=max_rounds)
+    #true_flp_watchlist = project_true_forward_flp(spiral_centers, fib_layers=selected_fib_layers, max_rounds=max_rounds)
     recent_scores = df['multiplier'].tail(34)  # use biggest fib window
     current_msi_values= [df[f"msi_{w}"].iloc[-1] for w in selected_msi_windows]
     current_slopes= [df[f"slope_{w}"].iloc[-1] for w in selected_msi_windows]
@@ -1966,7 +2018,7 @@ if not df.empty:
   
     
     # ========== PLOT ==========
-    with st.expander("⏱️ Fibonacci Time Map (34s / 55s / 91s)", expanded=False):
+    #with st.expander("⏱️ Fibonacci Time Map (34s / 55s / 91s)", expanded=False):
         fig_fib, ax_fib = plt.subplots(figsize=(12, 4))
         ax_fib.plot(fib_df['time'], fib_df['multiplier_sec'], label='Multiplier (1s)', alpha=0.35)
         ax_fib.plot(fib_df['time'], fib_df['fib34'], label='fib34', linewidth=1.2)
@@ -2061,7 +2113,7 @@ if not df.empty:
         # Predict next peaks (60-min horizon)
         next_peaks, forecast_values, future_minutes = predict_future_peaks(minute_avg_df['minute'], fitted_params, horizon_minutes=60, n_peaks=3)
 
-    with st.expander("📊 Time Series Analyzer", expanded=True):
+    with st.expander("📊 Time Series Analyzer", expanded=False):
         #fig = plot_multiplier_timeseries(df)
         #st.pyplot(fig)
 
@@ -2154,8 +2206,8 @@ if not df.empty:
         
         plt.tight_layout()
         plot_slot = st.empty()
-        with plot_slot.container():
-            st.pyplot(fig)
+        #with plot_slot.container():
+            #st.pyplot(fig)
     
         fig2, ax = plt.subplots(figsize=(10, 4))
         ax.plot(minute_avg_df['minute'], signal, label='Avg Multiplier (1-min)', alpha=0.6)
@@ -2253,7 +2305,7 @@ if not df.empty:
     
 
 
-    with st.expander("📊 Multi-Wave Trap Scanner"):
+    with st.expander("📊 Multi-Wave Trap Scanner", expanded=True):
         st.write("This shows smoothed multiplier waves across multiple timeframes.")
         peak_dict, trough_dict = multi_wave_trap_scanner(df, windows=[1, 3, 5, 10])
 
@@ -2288,18 +2340,7 @@ if not df.empty:
     # === WAVE ANALYSIS PANEL ===
     
     
-    # === BOLLINGER BANDS STATS ===
-    with st.expander("💹 Bollinger Bands Stats", expanded=False):
-        st.subheader("💹 Bollinger Bands Stats")
-        if upper_slope is not None:
-            st.metric("Upper Slope", f"{upper_slope}%")
-            st.metric("Upper Acceleration", f"{upper_accel}%")
-            st.metric("Lower Slope", f"{lower_slope}%")
-            st.metric("Lower Acceleration", f"{lower_accel}%")
-            st.metric("Bandwidth", f"{bandwidth} Scale (0-20)")
-            st.metric("Bandwidth Delta", f"{bandwidth_delta}% shift from last round")
-        else:
-            st.info("Not enough data for Bollinger Band metrics")
+    
     
     # === TPI INTERPRETATION HUD ===
     st.metric("TPI", f"{latest_tpi}", delta="Trend Pressure")
