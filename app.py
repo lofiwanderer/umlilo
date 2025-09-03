@@ -1119,6 +1119,105 @@ def multi_wave_trap_scanner(round_df, windows=[1, 3, 5, 10]):
 
     
     return peak_dict, trough_dict
+    
+@st.cache_data
+def compute_bsf_bmf_composite(
+    df, windows=(1,3,5,10), blue_cut=1.2, z_win=120, use_type_if_available=True
+):
+    """
+    Build per-TF Blue Suppression/Manipulation measures:
+      - no_blues_mean: resampled mean with blues removed
+      - BSF = raw_mean - no_blues_mean   (↑ means fewer blues; safer)
+      - BMF = -BSF                       (↑ means more blues; riskier)
+
+    Returns:
+      bsf_1m: DataFrame aligned to 1-minute with per-TF BSF, BMF, composite_BSF and regime
+      z_bsf:  z-scored per-TF BSF for visual comparison
+      weights: dict of TF weights used in composite
+    """
+    df = df.dropna(subset=['timestamp']).copy().sort_values('timestamp')
+
+    # ---- blue mask (prefer labels if available) ----
+    if use_type_if_available and 'type' in df.columns:
+        # Treat rows explicitly labeled "Blue" as blue; otherwise fallback to threshold.
+        blue_mask = df['type'].str.lower().eq('blue')
+        # If label coverage is partial, OR them with threshold to be safe:
+        if blue_mask.mean() < 0.05:  # very few labeled? fallback
+            blue_mask = blue_mask | (df['multiplier'] <= blue_cut)
+    else:
+        blue_mask = df['multiplier'] <= blue_cut
+
+    def resample_mean(data, w):
+        return (
+            data.resample(f"{w}T", on="timestamp")['multiplier']
+            .mean()
+            .rename(f'mean_{w}')
+        )
+
+    bsf_series, bmf_series = {}, {}
+
+    for w in windows:
+        raw_w = resample_mean(df, w)
+        noblues_w = resample_mean(df[~blue_mask], w)
+
+        # align & fill
+        idx = raw_w.index.union(noblues_w.index)
+        raw_w = raw_w.reindex(idx).interpolate().ffill().bfill()
+        noblues_w = noblues_w.reindex(idx).interpolate().ffill().bfill()
+
+        bsf_w = (raw_w - noblues_w).rename(f'bsf_{w}')
+        bmf_w = (-bsf_w).rename(f'bmf_{w}')
+
+        bsf_series[w] = bsf_w
+        bmf_series[w] = bmf_w
+
+    # Common 1-minute grid
+    start = min(s.index.min() for s in bsf_series.values())
+    end   = max(s.index.max() for s in bsf_series.values())
+    grid = pd.date_range(start=start, end=end, freq='T')
+
+    bsf_1m = pd.DataFrame(index=grid)
+    for w, s in bsf_series.items():
+        up = s.reindex(grid).interpolate().ffill().bfill()
+        tmp_df = pd.DataFrame({'minute': up.index, 'multiplier': up.values})
+        smoothed, _ = build_responsive_signal(tmp_df)
+        bsf_1m[f'bsf_{w}'] = smoothed
+
+    # z-score for comparability
+    roll_mean = bsf_1m.rolling(z_win, min_periods=max(10, z_win//6)).mean()
+    roll_std  = bsf_1m.rolling(z_win, min_periods=max(10, z_win//6)).std().replace(0, np.nan)
+    z = ((bsf_1m - roll_mean) / roll_std).fillna(0.0)
+    z_bsf = z.copy()
+
+    # weights: slow TF sets environment; mid TFs trigger; fast TF times
+    default_weights = {1:0.15, 3:0.3, 5:0.3, 10:0.25}
+    weights = {w: default_weights.get(w, 0.0) for w in windows}
+
+    # down-weight long TF if short history
+    if len(bsf_1m.index) < 200 and 10 in weights:
+        weights[10] *= 0.6
+
+    composite = sum(z_bsf[f'bsf_{w}'] * weights[w] for w in windows if f'bsf_{w}' in z_bsf.columns)
+    bsf_1m['composite_bsf'] = composite
+
+    slope = bsf_1m['composite_bsf'].diff()
+    bsf_1m['regime'] = np.select(
+        [ (composite >  0.5) & (slope > 0),
+          (composite < -0.5) & (slope < 0)],
+        ['Blue-Suppressed (safer to clip low)', 'Blue-Injected (stand down)'],
+        default='Neutral'
+    )
+
+    # Also add per-TF BMF (optional; mirrors sign)
+    for w, s in bmf_series.items():
+        up = s.reindex(grid).interpolate().ffill().bfill()
+        tmp_df = pd.DataFrame({'minute': up.index, 'multiplier': up.values})
+        smoothed, _ = build_responsive_signal(tmp_df)
+        bsf_1m[f'bmf_{w}'] = smoothed  # negative of bsf_{w} (conceptually)
+
+    return bsf_1m, z_bsf, weights
+
+
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
@@ -1297,23 +1396,23 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     latest_tpi = compute_tpi(df, window=window_size)
     
     
-    df["bb_mid"]   = df["msi"].rolling(WINDOW_SIZE).mean()
-    df["bb_std"]   = df["msi"].rolling(WINDOW_SIZE).std()
-    df["bb_upper"] = df["bb_mid"] + 2 * df["bb_std"]
-    df["bb_lower"] = df["bb_mid"] - 2 * df["bb_std"]
-    df["bandwidth"] = df["bb_upper"] - df["bb_lower"]
+    #df["bb_mid"]   = df["msi"].rolling(WINDOW_SIZE).mean()
+    #df["bb_std"]   = df["msi"].rolling(WINDOW_SIZE).std()
+    #df["bb_upper"] = df["bb_mid"] + 2 * df["bb_std"]
+    #df["bb_lower"] = df["bb_mid"] - 2 * df["bb_std"]
+    #df["bandwidth"] = df["bb_upper"] - df["bb_lower"]
     
     # === Detect Squeeze Zones (Low Volatility)
-    squeeze_threshold = df["bandwidth"].rolling(10).quantile(0.25)
-    df["squeeze_flag"] = df["bandwidth"] < squeeze_threshold
+    #squeeze_threshold = df["bandwidth"].rolling(10).quantile(0.25)
+    #df["squeeze_flag"] = df["bandwidth"] < squeeze_threshold
     
     # === Directional Breakout Detector
-    df["breakout_up"]   = df["msi"] > df["bb_upper"]
-    df["breakout_down"] = df["msi"] < df["bb_lower"]
+    #df["breakout_up"]   = df["msi"] > df["bb_upper"]
+    #df["breakout_down"] = df["msi"] < df["bb_lower"]
     
     # === Slope & Acceleration
-    df["msi_slope"]  = df["msi"].diff()
-    df["msi_accel"]  = df["msi_slope"].diff()
+    #df["msi_slope"]  = df["msi"].diff()
+    #df["msi_accel"]  = df["msi_slope"].diff()
 
     # MSI CALCULATION (Momentum Score Index)
     window_size = min(window_size, len(df))
@@ -1322,25 +1421,25 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     msi_color = 'green' if msi_score > 0.5 else ('yellow' if msi_score > 0 else 'red')
 
     #df = enhanced_msi_analysis(df)
-    df = compute_momentum_adaptive_ma(df)
-    df = compute_msi_macd(df, msi_col='msi')
+    #df = compute_momentum_adaptive_ma(df)
+    #df = compute_msi_macd(df, msi_col='msi')
 
     # Multi-window BBs on MSI
-    df["bb_mid_20"], df["bb_upper_20"], df["bb_lower_20"] = bollinger_bands(df["msi"], 20, 2)
-    df["bb_mid_10"], df["bb_upper_10"], df["bb_lower_10"] = bollinger_bands(df["msi"], 10, 1.5)
+    #df["bb_mid_20"], df["bb_upper_20"], df["bb_lower_20"] = bollinger_bands(df["msi"], 20, 2)
+    #df["bb_mid_10"], df["bb_upper_10"], df["bb_lower_10"] = bollinger_bands(df["msi"], 10, 1.5)
     #df["bb_mid_40"], df["bb_upper_40"], df["bb_lower_40"] = bollinger_bands(df["msi"], 40, 2.5)
-    df['bandwidth'] = df["bb_upper_10"] - df["bb_lower_10"]  # Width of the band
+    #df['bandwidth'] = df["bb_upper_10"] - df["bb_lower_10"]  # Width of the band
     
     # Compute slope (1st derivative) for upper/lower bands
-    df['upper_slope'] = df["bb_upper_10"].diff()
-    df['lower_slope'] = df["bb_lower_10"].diff()
+    #df['upper_slope'] = df["bb_upper_10"].diff()
+    #df['lower_slope'] = df["bb_lower_10"].diff()
     
     # Compute acceleration (2nd derivative) for upper/lower bands
-    df['upper_accel'] = df['upper_slope'].diff()
-    df['lower_accel'] = df['lower_slope'].diff()
+    #df['upper_accel'] = df['upper_slope'].diff()
+    #df['lower_accel'] = df['lower_slope'].diff()
     
     # How fast the band is expanding or shrinking
-    df['bandwidth_delta'] = df['bandwidth'].diff()
+    #df['bandwidth_delta'] = df['bandwidth'].diff()
     
     # Pull latest values from the last row
     latest = df.iloc[-1] if not df.empty else pd.Series()
@@ -1348,33 +1447,33 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     
 
     # === Ichimoku Cloud on MSI ===
-    high_9  = df["msi"].rolling(window=9).max()
-    low_9   = df["msi"].rolling(window=9).min()
-    df["tenkan"] = (high_9 + low_9) / 2
+    #high_9  = df["msi"].rolling(window=9).max()
+    #low_9   = df["msi"].rolling(window=9).min()
+    #df["tenkan"] = (high_9 + low_9) / 2
     
-    high_26 = df["msi"].rolling(window=26).max()
-    low_26  = df["msi"].rolling(window=26).min()
-    df["kijun"] = (high_26 + low_26) / 2
+    #high_26 = df["msi"].rolling(window=26).max()
+    #low_26  = df["msi"].rolling(window=26).min()
+    #df["kijun"] = (high_26 + low_26) / 2
 
-    high_3 = df["msi"].rolling(3).max()
-    low_3 = df["msi"].rolling(3).min()
-    df["mini_tenkan"] = (high_3 + low_3)/2
+    #high_3 = df["msi"].rolling(3).max()
+    #low_3 = df["msi"].rolling(3).min()
+    #df["mini_tenkan"] = (high_3 + low_3)/2
 
-    high_5 = df["msi"].rolling(5).max()
-    low_5 = df["msi"].rolling(5).min()
-    df["mini_kijun"] = (high_5 + low_5)/2
+    #high_5 = df["msi"].rolling(5).max()
+    #low_5 = df["msi"].rolling(5).min()
+    #df["mini_kijun"] = (high_5 + low_5)/2
 
     #high_2 = df["msi"].rolling(1).max()
     #low_2 = df["msi"].rolling(1).min()
     #df["nano_tenkan"] = df["msi"].ewm(span=2).mean()
 
     # Projected Senkou A — mini average of short-term structure
-    df["mini_senkou_a"] = ((df["mini_tenkan"] + df["mini_kijun"]) / 2).shift(6)
+    #df["mini_senkou_a"] = ((df["mini_tenkan"] + df["mini_kijun"]) / 2).shift(6)
     
     # Projected Senkou B — mini-range memory, 12-period HL midpoint
-    high_12 = df["msi"].rolling(12).max()
-    low_12 = df["msi"].rolling(12).min()
-    df["mini_senkou_b"] = ((high_12 + low_12) / 2).shift(6)
+    #high_12 = df["msi"].rolling(12).max()
+    #low_12 = df["msi"].rolling(12).min()
+    #df["mini_senkou_b"] = ((high_12 + low_12) / 2).shift(6)
 
     #df["rsi"] = compute_rsi(df["bb_mid_10"], period=14)
     #df = enhanced_quantum_rsi(df)
@@ -1424,14 +1523,14 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     
     #df['trap_zone'] = df['tenkan_flat'] & df['kijun_flat']
     
-    df["senkou_a"] = ((df["tenkan"] + df["kijun"]) / 2).shift(26)
+    #df["senkou_a"] = ((df["tenkan"] + df["kijun"]) / 2).shift(26)
     
-    high_52 = df["msi"].rolling(window=52).max()
-    low_52  = df["msi"].rolling(window=52).min()
-    df["senkou_b"] = ((high_52 + low_52) / 2).shift(26)
+    #high_52 = df["msi"].rolling(window=52).max()
+    #low_52  = df["msi"].rolling(window=52).min()
+    #df["senkou_b"] = ((high_52 + low_52) / 2).shift(26)
     
-    df["chikou"] = df["msi"].shift(-26)
-    df = compute_supertrend(df, period=10, multiplier=2.0, source="msi")
+    #df["chikou"] = df["msi"].shift(-26)
+    #df = compute_supertrend(df, period=10, multiplier=2.0, source="msi")
 
     # Custom Stochastic Mini-Momentum Index (SMMI)
     #lowest = df["momentum_impulse"].rolling(5).min()
@@ -1440,7 +1539,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
 
 
     # Core Fibonacci multipliers
-    fib_ratios = [1.0, 1.618, 2.618]
+    #fib_ratios = [1.0, 1.618, 2.618]
     
     # Center line: rolling MSI mean
     #df["feb_center"] = df["msi"].rolling(window=fib_window).mean()
@@ -1476,8 +1575,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
    
     
         # Prepare and safely round/format outputs, avoiding NoneType formatting
-    def safe_round(val, precision=4):
-        return round(val, precision) if pd.notnull(val) else None
+    
         
           
     
@@ -1489,19 +1587,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     bandwidth = (0, )
     bandwidth_delta = (0, )
         
-    if len(df["score"].fillna(0).values) > 20:
-        if upper_slope is not None:
-            upper_slope = safe_round(latest.get('upper_slope')) if 'upper_slope' in latest else 0 
-            lower_slope = safe_round(latest.get('lower_slope')) if 'lower_slope' in latest else 0
-            upper_accel = safe_round(latest.get('upper_accel')) if 'upper_accel' in latest else 0
-            lower_accel = safe_round(latest.get('lower_accel')) if 'lower_accel' in latest else 0
-            bandwidth = safe_round(latest.get('bandwidth')) if 'bandwidth' in latest else 0
-            bandwidth_delta = safe_round(latest.get('bandwidth_delta'))  if 'bandwidth_delta' in latest else 0
-                
-        
     
-    df["bb_squeeze"] = df["bb_upper_10"] - df["bb_lower_10"]
-    df["bb_squeeze_flag"] = df["bb_squeeze"] < df["bb_squeeze"].rolling(5).quantile(0.25)
     
     # Harmonic Cycle Estimation
     scores = df["score"].fillna(0).values
@@ -1995,38 +2081,38 @@ if not df.empty:
     #df = df.dropna(subset=['timestamp'])
     
     # Round to nearest second (for consistent time axis)
-    df['second'] = df['timestamp'].dt.floor('s')
+    #df['second'] = df['timestamp'].dt.floor('s')
     
     # Group by each second → average multiplier
-    sec_df = df.groupby('second').agg({'multiplier': 'mean'}).reset_index()
+    #sec_df = df.groupby('second').agg({'multiplier': 'mean'}).reset_index()
     
     # Fill missing seconds (important for smooth EWM spans)
-    sec_df.set_index('second', inplace=True)
-    sec_df = sec_df.resample('1S').mean().interpolate()
-    sec_df.reset_index(inplace=True)
+    #sec_df.set_index('second', inplace=True)
+    #sec_df = sec_df.resample('1S').mean().interpolate()
+    #sec_df.reset_index(inplace=True)
     
     # Build clean second-level series
-    sec_series = sec_df.set_index('second')['multiplier']
+    #sec_series = sec_df.set_index('second')['multiplier']
     
     # Fibonacci EWM lines in *seconds*
-    fib_spans = [34, 55, 91]
-    fib_df = pd.DataFrame({'time': sec_series.index, 'multiplier_sec': sec_series})
-    for s in fib_spans:
-        fib_df[f'fib{s}'] = sec_series.ewm(span=s, adjust=False).mean().values
-        fib_df[f'fib{s}']= savgol_filter(fib_df[f'fib{s}'], window_length=5 if N >= 5 else N, polyorder=2)
+    #fib_spans = [34, 55, 91]
+    #fib_df = pd.DataFrame({'time': sec_series.index, 'multiplier_sec': sec_series})
+    #for s in fib_spans:
+        #fib_df[f'fib{s}'] = sec_series.ewm(span=s, adjust=False).mean().values
+        #fib_df[f'fib{s}']= savgol_filter(fib_df[f'fib{s}'], window_length=5 if N >= 5 else N, polyorder=2)
     
   
     
     # ========== PLOT ==========
-    with st.expander("⏱️ Fibonacci Time Map (34s / 55s / 91s)", expanded=False):
-        fig_fib, ax_fib = plt.subplots(figsize=(12, 4))
-        ax_fib.plot(fib_df['time'], fib_df['multiplier_sec'], label='Multiplier (1s)', alpha=0.35)
-        ax_fib.plot(fib_df['time'], fib_df['fib34'], label='fib34', linewidth=1.2)
-        ax_fib.plot(fib_df['time'], fib_df['fib55'], label='fib55', linewidth=1.2)
-        ax_fib.plot(fib_df['time'], fib_df['fib91'], label='fib91', linewidth=1.2)
-        ax_fib.set_title("Fibonacci-Timed Signal Lines (Second-Level)")
-        ax_fib.legend(loc='upper left')
-        plt.tight_layout()
+    #with st.expander("⏱️ Fibonacci Time Map (34s / 55s / 91s)", expanded=False):
+        #fig_fib, ax_fib = plt.subplots(figsize=(12, 4))
+        #ax_fib.plot(fib_df['time'], fib_df['multiplier_sec'], label='Multiplier (1s)', alpha=0.35)
+        #ax_fib.plot(fib_df['time'], fib_df['fib34'], label='fib34', linewidth=1.2)
+        #ax_fib.plot(fib_df['time'], fib_df['fib55'], label='fib55', linewidth=1.2)
+        #ax_fib.plot(fib_df['time'], fib_df['fib91'], label='fib91', linewidth=1.2)
+        #ax_fib.set_title("Fibonacci-Timed Signal Lines (Second-Level)")
+        #ax_fib.legend(loc='upper left')
+        #plt.tight_layout()
         #st.pyplot(fig_fib)
     
         
@@ -2054,260 +2140,41 @@ if not df.empty:
     dominant_freq = xf[dominant_index]  # cycles per second (Hz)
     omega = 2 * np.pi * dominant_freq  # angular frequency
 
-    # Define sine wave function: A * sin(ωt + φ) + offset
-    def sine_model(t, A, phi, offset):
-        return A * np.sin(omega * t + phi) + offset
-        
-    # Fit sine wave to the signal using curve fitting
-    params, _ = curve_fit(sine_model, time, signal, p0=[1, 0, np.mean(signal)])
-
-   
     
-    macd_df   = compute_signal_macd(minute_avg_df.set_index('minute'))
-    
-    # --- STL Decomposition ---
-    # Assume signal is the SavGol-filtered curve
-    stl = STL(signal, period=6, robust=True)
-    res = stl.fit()
-    
-    trend = res.trend
-    seasonal = res.seasonal
-    residual = res.resid
-    
-    # Append to your working DataFrame for plotting
-    minute_avg_df['stl_trend'] = trend
-    minute_avg_df['stl_seasonal'] = seasonal
-    minute_avg_df['stl_residual'] = residual
-
-    # ---- assume minute_avg_df exists and has 'minute' and 'multiplier' ----
-    filtered_signal, minute_avg_df = build_responsive_signal(minute_avg_df)
-    if len(filtered_signal) == 0:
-        st.info("No data for time-series predictor yet.")
-    else:
-        # time vector for fitting (seconds since start)
-        N = len(filtered_signal)
-        t_seconds = np.arange(N) * 60.0  # each sample = 1 minute -> 60 sec steps
-    
-        # STL decomposition (period guess from small window)
-        est_period = max(3, min(12, int(max(3, N//6))))
-        tren, seasona, resid = stl_or_fallback(filtered_signal, period=est_period)
-        minute_avg_df['trend'] = tren
-        minute_avg_df['seasonal'] = seasona
-        minute_avg_df['resid'] = resid
-    
-        # ACF spike detection (on seasonal)
-        spike_lags, acf_vals = acf_spike_detector(seasona, max_lags=min(20, max(5, N//2)), threshold=0.4)
-    
-        # FFT top periods (work with filtered signal)
-        top_periods = get_top_fft_periods(filtered_signal, sample_seconds=60.0, topk=3,
-                                          min_period_minutes=2, max_period_minutes=120)
-        # extract just freq hz for fitting
-        top_periods_simple = [(p[0], p[1], p[2]) for p in top_periods]
-    
-        # Fit multi-sine reconstruction
-        recon_wave, fitted_params = build_multi_sine(t_seconds, filtered_signal, top_periods_simple)
-    
-        # Add recon to df
-        minute_avg_df['recon'] = recon_wave
-    
-        # Predict next peaks (60-min horizon)
-        next_peaks, forecast_values, future_minutes = predict_future_peaks(minute_avg_df['minute'], fitted_params, horizon_minutes=60, n_peaks=3)
-
-    with st.expander("📊 Time Series Analyzer", expanded=False):
-        #fig = plot_multiplier_timeseries(df)
-        #st.pyplot(fig)
-
         
-        
-        # Extract fitted params
-        A_fit, phi_fit, offset_fit = params
-        print(f"Sine Wave Params — Amplitude: {A_fit:.2f}, Phase: {phi_fit:.2f}, Offset: {offset_fit:.2f}")
-
-        # Generate predicted sine wave
-        predicted_wave = sine_model(time, A_fit, phi_fit, offset_fit)
-
-        
-        
-        # Append it to dataframe for plotting
-        minute_avg_df['sine_wave'] = predicted_wave
-        
-
-        # Detect local maxima (peak timestamps)
-        second_derivative = np.diff(np.sign(np.diff(predicted_wave)))
-        peak_indices = np.where(second_derivative == -2)[0] + 1  # adjust for diff offset
-        # Troughs: local minima where slope goes from - to +
-        trough_indices = np.where(second_derivative == 2)[0] + 1
-        
-        # Extract peak times (minute) and corresponding sine wave values
-        peak_times = minute_avg_df['minute'].iloc[peak_indices].values
-        peak_values = predicted_wave[peak_indices]
-
-        trough_times = minute_avg_df['minute'].iloc[trough_indices].values
-        trough_values = predicted_wave[trough_indices]
-        
-        # Get next 3 upcoming peak timestamps (if available)
-        
-        
-        next_peaks = peak_times[-3:] if len(peak_times) >= 3 else peak_times
-        next_peak_values = peak_values[-3:] if len(peak_values) >= 3 else peak_values
-
-        next_troughs = trough_times[-3:] if len(trough_times) >= 3 else trough_times
-        next_trough_values = trough_values[-3:] if len(trough_values) >= 3 else trough_values
-
-        # Predict next 3 peak times in future
-        num_future_peaks = 3
-        future_peaks = []
-        
-        # Time offset from last data point
-        t_last = time[-1]
-        
-        # Predict next peaks from fitted sine phase
-        for n in range(1, num_future_peaks + 1):
-            # Solve for t when sine is at its peak: sin(ωt + φ) = 1 → ωt + φ = π/2 + 2πn
-            t_peak = (np.pi / 2 + 2 * np.pi * n - phi_fit) / omega
-            t_peak_abs = t_last + (t_peak % (2 * np.pi / omega))  # align it into future
-            peak_minute = minute_avg_df['minute'].iloc[0] + pd.to_timedelta(int(t_peak_abs), unit='m')
-            future_peaks.append(peak_minute)
-        
-        
-
-        
-                # Compute MACD
-        # AX3: MACD over MSI
-        if show_macd and 'msi_macd' in df.columns:
-            fig3, ax3 = plt.subplots(figsize=(12, 2.5))
-            ax3.plot(df['msi_macd'], label='MSI-MACD', color='blue')
-            ax3.plot(df['msi_signal'], label='MACD Signal', color='red', linestyle='--')
-            ax3.bar(df.index, df['msi_hist'], label='MACD Hist', color='gray', alpha=0.4, width=1)
-            ax3.axhline(0, color='black', linewidth=0.5, linestyle='--')
-            ax3.set_ylabel('MSI-MACD')
-            ax3.legend(loc='upper left')
-            ax3.grid(True, alpha=0.15)
-            plot_slot = st.empty()
-            with plot_slot.container():
-                st.pyplot(fig3)
-        
-        # ---------- PLOTTING ----------
-        fig, ax = plt.subplots(figsize=(10, 4))
-        
-        # Plot MACD and Signal line
-        ax.plot(minute_avg_df['minute'], macd_df['macd'], label='MACD', color='blue', linewidth=1.5)
-        ax.plot(minute_avg_df['minute'], macd_df['macd_signal'], label='Signal', color='orange', linewidth=1.5)
-        
-        # Histogram
-        #ax.bar(minute_avg_df['minute'], macd_df['macd_hist'], label='Histogram', color='gray', alpha=0.5)
-        
-        # Labels & legend
-        ax.set_title("MACD Indicator (Minute Avg)")
-        ax.set_xlabel("Minute")
-        ax.set_ylabel("MACD Value")
-        ax.legend()
-        
-        
-        plt.tight_layout()
-        plot_slot = st.empty()
-        #with plot_slot.container():
-            #st.pyplot(fig)
-    
-        fig2, ax = plt.subplots(figsize=(10, 4))
-        ax.plot(minute_avg_df['minute'], signal, label='Avg Multiplier (1-min)', alpha=0.6)
-        ax.plot(minute_avg_df['minute'], predicted_wave, label='Fitted Surge Wave', color='black', linewidth=2)
-       
-        
-        # Mark peaks
-        ax.scatter(peak_times, peak_values, color='red', label='Predicted Peaks bruv', zorder=5)
-        ax.scatter(trough_times, trough_values, color='purple', label='Predicted troughs bruv', zorder=5)
-
-        ax.set_title("📈 Predictive Sine Rebuild")
-        ax.legend()
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-        plot_slot = st.empty()
-        with plot_slot.container():
-            st.pyplot(fig2)
-
-        # --- Plot STL components ---
-        st.subheader("🧪 STL Decomposition")
-        
-        fig3, axs = plt.subplots(figsize=(10, 4))
-        
-        axs.plot(minute_avg_df['minute'], signal, label='Filtered Signal', linewidth=1.8)
-        
-        axs.plot(minute_avg_df['minute'], trend, label='Trend', color='orange')
-        
-        axs.plot(minute_avg_df['minute'], seasonal, label='Seasonal', color='green')
-        
-        axs.plot(minute_avg_df['minute'], residual, label='Residual', color='red')
-        
-        axs.legend(loc="upper left", fontsize=8)
-        plt.tight_layout()
-        plot_slot = st.empty()
-        #with plot_slot.container():
-        #    st.pyplot(fig3)
-
-         # --- SETTINGS ---
-        forecast_horizon = 60  # minutes ahead to project lag lines
-        acf_threshold = 0.4    # for horizontal line
-        
-        # --- PLOTTING (upgraded) ---
-        st.subheader("🔮 Combined STL + ACF + FFT Predictor")
-        fig, ax = plt.subplots(2, 1, figsize=(12, 9), sharex=True)
-        
-        # ============ 1. TOP CHART: Raw filtered + Recon + Trend + Peak/Trough Lines ============
-        ax[0].plot(minute_avg_df['minute'], filtered_signal, label='Filtered Signal', color='black', alpha=0.8)
-        ax[0].plot(minute_avg_df['minute'], minute_avg_df['recon'], label='Reconstructed Wave', color='purple', linewidth=1.7)
-        ax[0].plot(minute_avg_df['minute'], minute_avg_df['trend'], label='Trend', color='orange', linestyle='--')
-        
-        # Peaks & troughs from recon
-        sec_deriv_recon = np.diff(np.sign(np.diff(minute_avg_df['recon'].values)))
-        peak_idx = np.where(sec_deriv_recon == -2)[0] + 1
-        trough_idx = np.where(sec_deriv_recon == 2)[0] + 1
-        
-        if len(peak_idx) > 0:
-            ax[0].scatter(minute_avg_df['minute'].iloc[peak_idx],
-                          minute_avg_df['recon'].iloc[peak_idx],
-                          color='red', label='Recon Peaks')
-            for t in minute_avg_df['minute'].iloc[peak_idx]:
-                ax[0].axvline(t, color='red', linestyle=':', alpha=0.3)
-        
-        if len(trough_idx) > 0:
-            ax[0].scatter(minute_avg_df['minute'].iloc[trough_idx],
-                          minute_avg_df['recon'].iloc[trough_idx],
-                          color='blue', label='Recon Troughs')
-            for t in minute_avg_df['minute'].iloc[trough_idx]:
-                ax[0].axvline(t, color='blue', linestyle=':', alpha=0.3)
-        
-        ax[0].legend(fontsize=8)
-        ax[0].set_title("Signal vs Reconstructed Wave")
-        
-        
-        plt.tight_layout()
-        st.pyplot(fig)
-        
-      
-        # 🔮 Display Wave Clock Prediction
-        if len(next_peaks) > 0:
-            formatted_peaks = [pd.to_datetime(p).strftime('%H:%M') for p in next_peaks]
-            st.success(f"🕓 Next Surge Peaks (Wave Clock): {', '.join(formatted_peaks)}")
-
-        if len(next_troughs) > 0:
-            formatted_troughs = [pd.to_datetime(p).strftime('%H:%M') for p in next_troughs]
-            st.success(f"🕓 Next troughs (Wave Clock): {', '.join(formatted_troughs)}")
-        else:
-            st.info("🔄 Waiting for enough data to predict wave clock...")
-            
-        # Display predicted peak minutes
-        st.markdown("### 🔮 Next Predicted Surge Times:")
-        for i, peak_time in enumerate(future_peaks, 1):
-            st.write(f"Peak #{i}: {peak_time.strftime('%H:%M')}")
-
-        
-    
-
 
     with st.expander("📊 Multi-Wave Trap Scanner", expanded=True):
         st.write("This shows smoothed multiplier waves across multiple timeframes.")
         peak_dict, trough_dict = multi_wave_trap_scanner(df, windows=[1, 3, 5, 10])
+
+    with st.expander("🧊 Blue Suppression / Injection (BSF/BMF)", expanded=True):
+        # tune `blue_cut` to your venue (1.2–1.3 typical for “blue” close risk)
+        bsf_1m, z_bsf, wts_b = compute_bsf_bmf_composite(
+            df, windows=(1,3,5,10), blue_cut=1.2, z_win=120
+        )
+    
+        st.caption("Weights → " + ", ".join(f"{w}m:{wts_b[w]:.2f}" for w in sorted(wts_b)))
+    
+        fig, ax = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+    
+        # Per-TF BSF (z-scored): up = fewer blues, safer clips
+        bsf_cols = [c for c in z_bsf.columns if c.startswith('bsf_')]
+        for c in bsf_cols:
+            ax[0].plot(z_bsf.index, z_bsf[c], label=c)
+        ax[0].axhline(0, linestyle='--', linewidth=1)
+        ax[0].set_title("Per-TF Blue Suppression (z-score)")
+        ax[0].legend(loc='upper left')
+    
+        # Composite BSF (your “safe to size” dial)
+        ax[1].plot(bsf_1m.index, bsf_1m['composite_bsf'], linewidth=2)
+        ax[1].axhline(0.5, linestyle='--', linewidth=1)
+        ax[1].axhline(-0.5, linestyle='--', linewidth=1)
+        ax[1].set_title("Composite BSF — ↑ safer to stake & clip low; ↓ blues injected")
+        plt.tight_layout()
+        st.pyplot(fig)
+    
+        st.metric("Blue Regime", bsf_1m['regime'].iloc[-1])
+
 
         
 
