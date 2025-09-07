@@ -682,31 +682,7 @@ def compute_signal_macd(df, col='multiplier', fast=6, slow=13, signal=5):
     out = pd.DataFrame({'macd': macd, 'macd_signal': macd_signal, 'macd_hist': macd_hist}, index=df.index)
     return out
 
-def compute_momentum_adaptive_ma(df, msi_col='msi', base_window=10, max_factor=2):
-    df = df.copy()
 
-    # Step 1: Momentum diff & normalization
-    momentum_strength = df[msi_col].diff().abs().rolling(base_window).mean().fillna(0)
-    max_strength = momentum_strength.max()
-    if max_strength == 0 or np.isnan(max_strength):
-        max_strength = 1  # prevent division by zero
-    norm_momentum = (momentum_strength / max_strength).clip(0, 1)
-
-    # Step 2: Adaptive span range
-    adaptive_span = base_window / (1 + max_factor * norm_momentum)
-    adaptive_span = adaptive_span.clip(lower=3, upper=base_window * 2)
-
-    # Step 3: Dynamic smoothing
-    ama = []
-    msi_series = df[msi_col].fillna(method='ffill').fillna(0)
-    prev = msi_series.iloc[0]
-    for i in range(len(msi_series)):
-        alpha = 2 / (adaptive_span.iloc[i] + 1)
-        prev = alpha * msi_series.iloc[i] + (1 - alpha) * prev
-        ama.append(prev)
-
-    df['msi_amma'] = ama
-    return df
 
 
 def detect_wave_points(series, min_distance=3, rel_prominence=0.2):
@@ -1217,7 +1193,185 @@ def compute_bsf_bmf_composite(
 
     return bsf_1m, z_bsf, weights
 
+@st.cache_data
+def thre_v2(df,
+           minute_avg_df = None,
+           min_rounds = 24,
+           num_harmonics=8,
+           smooth_roll=3):
+    """
+    THRE v2.0 - True Harmonic Resonance Engine with signal-line inflection layer and PMF alignment.
 
+    Inputs:
+      - df: raw rounds DataFrame with columns ['timestamp', 'multiplier', optional 'score']
+      - minute_avg_df: optional minute-aggregated dataframe with columns ['minute','multiplier']
+                       If provided and contains precomputed signal column use that; otherwise it will be computed.
+      - pmf_composite_series: optional pandas Series indexed by minute (datetime index) with composite PMF values
+      - min_rounds: minimum round count guard
+      - num_harmonics: how many top harmonics to include in THRE composite
+      - smooth_roll: small rolling for THRE smoothing (keeps as originally used)
+
+    Returns:
+      (df_out, thre_metrics) and draws 2-panel plot + PMF alignment panel when pmf_composite_series passed.
+      thre_metrics is dict: {'rds': latest_rds, 'rds_delta': latest_delta, 'inflection_points': list, ...}
+    """
+    # --- basic guards ---
+    if df is None or len(df) < min_rounds:
+        st.warning(f"Need at least {min_rounds} rounds to compute THRE v2.0.")
+        return df, None
+
+    # Ensure timestamps
+    df = df.copy()
+    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+    df = df.dropna(subset=['timestamp']).sort_values('timestamp')
+
+    # --- Build 1-minute signal (if not passed) using your existing responsive filter ---
+    if minute_avg_df is None:
+        # build minute aggregation from df
+        ma = df.set_index('timestamp').resample('1T')['multiplier'].mean().interpolate().reset_index()
+        ma.rename(columns={'timestamp':'minute'}, inplace=True)
+        minute_avg_df = ma
+    else:
+        minute_avg_df = minute_avg_df.copy()
+        # ensure minute col is datetime named 'minute'
+        if 'minute' not in minute_avg_df.columns and minute_avg_df.index.dtype.kind == 'M':
+            minute_avg_df = minute_avg_df.reset_index().rename(columns={minute_avg_df.index.name:'minute'})
+
+    # compute smoothed 1-min signal (if minute_avg_df doesn't already contain one)
+    if 'signal' in minute_avg_df.columns:
+        signal_1m = minute_avg_df['signal'].values
+    else:
+        sig, _ = build_responsive_signal(minute_avg_df[['minute','multiplier']].rename(columns={'minute':'minute','multiplier':'multiplier'}))
+        signal_1m = sig
+        minute_avg_df['signal'] = signal_1m
+
+    N = len(signal_1m)
+    if N < 4:
+        st.warning("THRE: need more minute history for stable harmonics (recommended >= 60 minutes). Falling back to limited result.")
+
+    # --- THRE harmonic decomposition built on the 1-minute signal (so multi-time info is captured if history is long) ---
+    x = np.asarray(signal_1m, dtype=float)
+    x_mean = np.nanmean(x)
+    x_d = x - x_mean
+
+    # window length and FFT
+    win = np.hanning(N) if N>1 else np.ones(N)
+    xw = x_d * win
+
+    # sampling in "minutes" units: sample spacing = 1 minute -> we treat freq units as cycles per minute
+    yf = rfft(xw)
+    xf = rfftfreq(N, d=1.0)  # cycles per minute
+    amps_full = np.abs(yf)
+    amps_full[0] = 0.0
+
+    # take top harmonics by amplitude
+    take = min(num_harmonics, len(amps_full))
+    if take <= 0:
+        # nothing to do
+        recon = x.copy()
+        smooth_rds = pd.Series(np.zeros_like(x))
+    else:
+        top_idx = np.argsort(amps_full)[-take:][::-1]
+        freqs = xf[top_idx]             # cycles per minute
+        amps  = amps_full[top_idx]
+        phases = np.angle(yf[top_idx])
+
+        # build harmonic matrix and weighted composite (like your original)
+        harmonic_matrix = np.zeros((N, len(freqs)))
+        for i, (f,p) in enumerate(zip(freqs, phases)):
+            harmonic_matrix[:, i] = np.sin(2 * np.pi * f * np.arange(N) + p)
+        composite_signal = (harmonic_matrix * amps).sum(axis=1) if amps.size>0 else np.zeros(N)
+
+        # normalize composite into RDS (resonance) space (z-like)
+        if np.std(composite_signal) > 1e-9:
+            normalized_signal = (composite_signal - np.mean(composite_signal)) / np.std(composite_signal)
+        else:
+            normalized_signal = np.zeros_like(composite_signal)
+
+        smooth_rds = pd.Series(normalized_signal).rolling(smooth_roll, min_periods=1).mean()
+        recon = composite_signal + 0.0  # raw harmonic recon (not mean-added); for plotting we later add x_mean if desired
+
+    # --- run your responsive signal extractor on THRE's smooth_rds to get inflection signal ---
+    # Build a temp df for the THRE time index (reuse minute timestamps)
+    time_index = minute_avg_df['minute'].iloc[:N].reset_index(drop=True)
+    thre_df = pd.DataFrame({'minute': time_index, 'rds': smooth_rds.values})
+    inflection_signal, _ = build_responsive_signal(thre_df.rename(columns={'minute':'minute','rds':'rds'}))  # returns numpy array
+    # derivative (discrete slope)
+    inflection_deriv = np.gradient(inflection_signal)
+
+    # detect local inflection peaks/troughs on the inflection_signal
+    pk_idx, _ = find_peaks(inflection_signal, distance=max(1, N//50))
+    tr_idx, _ = find_peaks(-inflection_signal, distance=max(1, N//50))
+
+    pk_times = time_index.iloc[pk_idx].tolist()
+    pk_vals  = inflection_signal[pk_idx].tolist()
+    tr_times = time_index.iloc[tr_idx].tolist()
+    tr_vals  = inflection_signal[tr_idx].tolist()
+
+    # latest metrics
+    latest_rds = float(smooth_rds.iloc[-1]) if len(smooth_rds)>0 else 0.0
+    latest_delta = float(inflection_deriv[-1]) if len(inflection_deriv)>0 else 0.0
+
+    
+    # --- Plotting: two panels + optional pmf alignment bar ---
+    fig, axs = plt.subplots( 2, 1,
+                            figsize=(13, 9),
+                            sharex=True)
+
+    # Panel 0: THRE resonance curve (smooth_rds) + bands
+    ax0 = axs[0]
+    ax0.plot(time_index, smooth_rds.values, label='THRE Resonance (RDS)', color='cyan', linewidth=1.6)
+    ax0.axhline(1.5, linestyle='--', color='green', alpha=0.6)
+    ax0.axhline(0.5, linestyle='--', color='blue', alpha=0.4)
+    ax0.axhline(-0.5, linestyle='--', color='orange', alpha=0.4)
+    ax0.axhline(-1.5, linestyle='--', color='red', alpha=0.6)
+    ax0.set_title("THRE v2.0 — Composite Harmonic Resonance Strength")
+    ax0.legend(loc='upper left')
+
+    # Panel 1: inflection signal (THRE signal line) + detected inflections
+    ax1 = axs[1]
+    ax1.plot(time_index, inflection_signal, label='THRE Inflection Signal', color='magenta', linewidth=1.8, alpha=0.95)
+    ax1.scatter(pk_times, pk_vals, color='red', marker='o', s=40, label='Inflection Peaks')
+    ax1.scatter(tr_times, tr_vals, color='purple', marker='x', s=40, label='Inflection Troughs')
+    ax1.axhline(0, linestyle=':', color='gray')
+    ax1.set_title("THRE Inflection Detector (signal-line on resonance)")
+    ax1.legend(loc='upper left')
+
+
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    st.pyplot(fig)
+
+    # --- Dashboard metrics and quick guidance ---
+    st.metric("🧠 Resonance Strength (RDS)", f"{latest_rds:.3f}")
+    st.metric("📉 THRE Δ (last)", f"{latest_delta:.3f}")
+    
+
+    # quick signals
+    signals = []
+    if latest_rds > 1.5:
+        signals.append(("High Constructive Stack — Pink Burst Risk ↑", "danger"))
+    elif latest_rds > 0.5:
+        signals.append(("Purple/Harmonically Supported Zone", "info"))
+    elif latest_rds < -1.5:
+        signals.append(("Collapse Zone — Blue Train Likely", "error"))
+    elif latest_rds < -0.5:
+        signals.append(("Destructive Micro-Waves — Risk", "warning"))
+    else:
+        signals.append(("Neutral Zone — Mid-range", "normal"))
+
+    
+
+    # return a small metrics dict
+    thre_metrics = {
+        'rds': latest_rds,
+        'rds_delta': latest_delta,
+        'inflection_peaks': pk_times,
+        'inflection_troughs': tr_times,
+        
+    }
+    return (df, thre_metrics)
+               
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
@@ -2174,6 +2328,11 @@ if not df.empty:
         st.pyplot(fig)
     
         st.metric("Blue Regime", bsf_1m['regime'].iloc[-1])
+
+
+        # call THRE v2.0 and draw its panels
+        df, thre_metrics = thre_v2(df, minute_avg_df=minute_avg_df)
+
 
 
         
