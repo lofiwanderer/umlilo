@@ -1332,7 +1332,7 @@ def thre_v2(df,
 
     # Panel 1: inflection signal (THRE signal line) + detected inflections
     ax1 = axs[1]
-    ax1.plot(time_index, inflection_signal, label='THRE Inflection Signal', color='magenta', linewidth=1.8, alpha=0.95)
+    ax1.plot(time_index, inflection_signal, label='THRE Inflection Signal', color='black', linewidth=1.8, alpha=0.95)
     ax1.scatter(pk_times, pk_vals, color='red', marker='o', s=40, label='Inflection Peaks')
     ax1.scatter(tr_times, tr_vals, color='purple', marker='x', s=40, label='Inflection Troughs')
     ax1.axhline(0, linestyle=':', color='gray')
