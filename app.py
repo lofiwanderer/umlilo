@@ -1193,7 +1193,7 @@ def compute_bsf_bmf_composite(
 
     return bsf_1m, z_bsf, weights
 
-@st.cache_data
+
 def thre_v2(df,
            minute_avg_df = None,
            min_rounds = 24,
