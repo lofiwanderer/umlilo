@@ -870,34 +870,8 @@ def plot_multiplier_timeseries(df, multiplier_col='multiplier', time_col='timest
     plt.tight_layout()
     return fig
 
-# Safe STL: try to use statsmodels.STL, otherwise fallback to rolling mean seasonal/trend
-def stl_or_fallback(signal_array, period=6):
-    try:
-        from statsmodels.tsa.seasonal import STL
-        stl = STL(signal_array, period=max(3, int(period)), robust=True)
-        res = stl.fit()
-        return res.trend, res.seasonal, res.resid
-    except Exception:
-        # Fallback: trend = rolling mean; seasonal = signal - trend; resid small
-        s = pd.Series(signal_array)
-        trend = s.rolling(window=max(3, int(period)), min_periods=1, center=True).mean().values
-        seasonal = signal_array - trend
-        resid = signal_array - trend - seasonal * 0  # basically zeros, kept for shape
-        return trend, seasonal, resid
 
-# Safe ACF: adaptive nlags and returns lags with strong spikes
-def acf_spike_detector(signal_array, max_lags=20, threshold=0.4):
-    n = len(signal_array)
-    if n < 4:
-        return [] , np.array([])  # not enough data
-    nlags = min(max_lags, max(3, n // 2))
-    try:
-        acf_vals = stats_acf(signal_array, nlags=nlags, fft=True)
-    except Exception:
-        # fallback simple serial correlation (very small)
-        acf_vals = np.array([1.0] + [0.0]*(nlags))
-    spike_lags = [i for i,v in enumerate(acf_vals[1:], start=1) if v >= threshold]
-    return spike_lags, acf_vals
+
 
 # Input: minute_avg_df with index or column 'minute' and column 'multiplier'
 def build_responsive_signal(minute_avg_df):
@@ -1056,8 +1030,9 @@ def multi_wave_trap_scanner(round_df, windows=[1, 3, 5, 10]):
     ax.legend()
     plt.xticks(rotation=45)
     plt.tight_layout()
-
-    st.pyplot(fig)
+    plot_slot = st.empty()
+    with plot_slot.container():
+        st.pyplot(fig)
 
     # === FIGURE 2: Organic Flow (ignoring pinks) ===
     fig2, ax2 = plt.subplots(figsize=(12, 5))
@@ -1067,7 +1042,9 @@ def multi_wave_trap_scanner(round_df, windows=[1, 3, 5, 10]):
     ax2.legend()
     plt.xticks(rotation=45)
     plt.tight_layout()
-    st.pyplot(fig2)
+    plot_slot = st.empty()
+    with plot_slot.container():
+        st.pyplot(fig2)
 
     # === FIGURE 3: PMF (Raw - Organic) ===
     fig3, ax3 = plt.subplots(figsize=(12, 5))
@@ -1090,7 +1067,9 @@ def multi_wave_trap_scanner(round_df, windows=[1, 3, 5, 10]):
     ax3.legend()
     plt.xticks(rotation=45)
     plt.tight_layout()
-    st.pyplot(fig3)
+    plot_slot = st.empty()
+    with plot_slot.container():
+        st.pyplot(fig3)
     
 
     
@@ -2298,12 +2277,14 @@ if not df.empty:
 
     
         
-
+    # call THRE v2.0 and draw its panels
+    df, thre_metrics = thre_v2(df, minute_avg_df=minute_avg_df)
+    
     with st.expander("📊 Multi-Wave Trap Scanner", expanded=True):
         st.write("This shows smoothed multiplier waves across multiple timeframes.")
         peak_dict, trough_dict = multi_wave_trap_scanner(df, windows=[1, 3, 5, 10])
 
-    with st.expander("🧊 Blue Suppression / Injection (BSF/BMF)", expanded=True):
+    with st.expander("🧊 Blue Suppression / Injection (BSF/BMF)", expanded=False):
         # tune `blue_cut` to your venue (1.2–1.3 typical for “blue” close risk)
         bsf_1m, z_bsf, wts_b = compute_bsf_bmf_composite(
             df, windows=(1,3,5,10), blue_cut=1.2, z_win=120
@@ -2327,13 +2308,14 @@ if not df.empty:
         ax[1].axhline(-0.5, linestyle='--', linewidth=1)
         ax[1].set_title("Composite BSF — ↑ safer to stake & clip low; ↓ blues injected")
         plt.tight_layout()
-        st.pyplot(fig)
+        plot_slot = st.empty()
+        with plot_slot.container():
+            st.pyplot(fig)
     
         st.metric("Blue Regime", bsf_1m['regime'].iloc[-1])
 
 
-        # call THRE v2.0 and draw its panels
-        df, thre_metrics = thre_v2(df, minute_avg_df=minute_avg_df)
+        
 
 
 
