@@ -1294,8 +1294,10 @@ def thre_v2(df,
     # --- run your responsive signal extractor on THRE's smooth_rds to get inflection signal ---
     # Build a temp df for the THRE time index (reuse minute timestamps)
     time_index = minute_avg_df['minute'].iloc[:N].reset_index(drop=True)
-    thre_df = pd.DataFrame({'minute': time_index, 'rds': smooth_rds.values})
-    inflection_signal, _ = build_responsive_signal(thre_df.rename(columns={'minute':'minute','rds':'rds'}))  # returns numpy array
+    # --- run your responsive signal extractor on THRE's smooth_rds to get inflection signal ---
+    thre_df = pd.DataFrame({'minute': time_index, 'multiplier': smooth_rds.values})
+    inflection_signal, _ = build_responsive_signal(thre_df)
+
     # derivative (discrete slope)
     inflection_deriv = np.gradient(inflection_signal)
 
