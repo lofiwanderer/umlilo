@@ -1491,7 +1491,60 @@ def resonance_forecast(harmonic_waves, resonance_matrix, steps=10):
 
 
 
-
+def thre_panel(df):
+    st.subheader("🔬 True Harmonic Resonance Engine (THRE)")
+    if len(df) < 20: 
+        st.warning("Need at least 20 rounds to compute THRE.")
+        return df, None, None
+        
+    scores = df["score"].fillna(0).values
+    N = len(scores)
+    T = 1
+    yf = rfft(scores - np.mean(scores))
+    xf = rfftfreq(N, T)
+    mask = (xf > 0) & (xf < 0.5)
+    freqs = xf[mask]
+    amps = np.abs(yf[mask])
+    phases = np.angle(yf[mask])
+    harmonic_matrix = np.zeros((N, len(freqs)))
+    
+    for i, (f, p) in enumerate(zip(freqs, phases)):
+        harmonic_matrix[:, i] = np.sin(2 * np.pi * f * np.arange(N) + p)
+    
+    composite_signal = (harmonic_matrix * amps).sum(axis=1) if amps.size > 0 else np.zeros(N)
+    normalized_signal = (composite_signal - np.mean(composite_signal)) / np.std(composite_signal) if np.std(composite_signal) > 0 else np.zeros(N)
+    smooth_rds = pd.Series(normalized_signal).rolling(3, min_periods=1).mean()
+    rds_delta = np.gradient(smooth_rds)
+    
+    fig, ax = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
+    ax[0].plot(df["timestamp"], smooth_rds, label="THRE Resonance", color='cyan')
+    ax[0].axhline(1.5, linestyle='--', color='green', alpha=0.5)
+    ax[0].axhline(0.5, linestyle='--', color='blue', alpha=0.3)
+    ax[0].axhline(-0.5, linestyle='--', color='orange', alpha=0.3)
+    ax[0].axhline(-1.5, linestyle='--', color='red', alpha=0.5)
+    ax[0].set_title("Composite Harmonic Resonance Strength")
+    ax[0].legend()
+    
+    ax[1].plot(df["timestamp"], rds_delta, label="Δ Resonance Slope", color='purple')
+    ax[1].axhline(0, linestyle=':', color='gray')
+    ax[1].set_title("RDS Inflection Detector")
+    ax[1].legend()
+    
+    st.pyplot(fig)
+    
+    latest_rds = smooth_rds.iloc[-1] if len(smooth_rds) > 0 else 0
+    latest_delta = rds_delta[-1] if len(rds_delta) > 0 else 0
+    
+    st.metric("🧠 Resonance Strength", f"{latest_rds:.3f}")
+    st.metric("📉 Δ Slope", f"{latest_delta:.3f}")
+    
+    if latest_rds > 1.5: st.success("💥 High Constructive Stack — Pink Burst Risk ↑")
+    elif latest_rds > 0.5: st.info("🟣 Purple Zone — Harmonically Supported")
+    elif latest_rds < -1.5: st.error("🌪️ Collapse Zone — Blue Train Likely")
+    elif latest_rds < -0.5: st.warning("⚠️ Destructive Micro-Waves — High Risk")
+    else: st.info("⚖️ Neutral Zone — Mid-Range Expected")
+    
+    return (df, latest_rds, latest_delta)
 
 
 @st.cache_data   
@@ -2276,7 +2329,7 @@ if not df.empty:
     omega = 2 * np.pi * dominant_freq  # angular frequency
 
     
-        
+    (df, latest_rds, latest_delta) = thre_panel(df)    
     # call THRE v2.0 and draw its panels
     df, thre_metrics = thre_v2(df, minute_avg_df=minute_avg_df)
     
@@ -2284,42 +2337,8 @@ if not df.empty:
         st.write("This shows smoothed multiplier waves across multiple timeframes.")
         peak_dict, trough_dict = multi_wave_trap_scanner(df, windows=[1, 3, 5, 10])
 
-    with st.expander("🧊 Blue Suppression / Injection (BSF/BMF)", expanded=False):
-        # tune `blue_cut` to your venue (1.2–1.3 typical for “blue” close risk)
-        bsf_1m, z_bsf, wts_b = compute_bsf_bmf_composite(
-            df, windows=(1,3,5,10), blue_cut=1.2, z_win=120
-        )
     
-        st.caption("Weights → " + ", ".join(f"{w}m:{wts_b[w]:.2f}" for w in sorted(wts_b)))
-    
-        fig, ax = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
-    
-        # Per-TF BSF (z-scored): up = fewer blues, safer clips
-        bsf_cols = [c for c in z_bsf.columns if c.startswith('bsf_')]
-        for c in bsf_cols:
-            ax[0].plot(z_bsf.index, z_bsf[c], label=c)
-        ax[0].axhline(0, linestyle='--', linewidth=1)
-        ax[0].set_title("Per-TF Blue Suppression (z-score)")
-        ax[0].legend(loc='upper left')
-    
-        # Composite BSF (your “safe to size” dial)
-        ax[1].plot(bsf_1m.index, bsf_1m['composite_bsf'], linewidth=2)
-        ax[1].axhline(0.5, linestyle='--', linewidth=1)
-        ax[1].axhline(-0.5, linestyle='--', linewidth=1)
-        ax[1].set_title("Composite BSF — ↑ safer to stake & clip low; ↓ blues injected")
-        plt.tight_layout()
-        plot_slot = st.empty()
-        with plot_slot.container():
-            st.pyplot(fig)
-    
-        st.metric("Blue Regime", bsf_1m['regime'].iloc[-1])
 
-
-        
-
-
-
-        
 
     
     FIB_WINDOWS = [3, 5, 8, 13, 21,34]  
