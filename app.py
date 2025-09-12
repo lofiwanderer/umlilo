@@ -220,366 +220,6 @@ def get_phase_label(position, cycle_length):
 
 
 
-
-
-FIB_NUMBERS = [3, 5, 8, 13, 21, 34, 55]
-FIBONACCI_NUMBERS = [3, 5, 8, 13, 21, 34, 55]
-ENVELOPE_MULTS = [1.0, 1.618, 2.618]
-FIB_GAPS = [3, 5, 8, 13, 21, 34, 55]
-
-class NaturalFibonacciSpiralDetector:
-    def __init__(self, df, window_size=34):
-        self.df = df.tail(window_size).reset_index(drop=True)
-        self.df["round_index"] = self.df.index
-        self.window_size = window_size
-        self.spiral_candidates = []
-
-    def detect_spirals(self):
-        score_types = [-1, 1, 2]  # Blue, Purple, Pink
-        scores = self.df["score"].fillna(0).values
-
-        for score_type in score_types:
-            idxs = [i for i, val in enumerate(scores) if val == score_type]
-
-            # Check for Fibonacci Gaps within this score type
-            for i in range(len(idxs)):
-                for j in range(i + 1, len(idxs)):
-                    gap = idxs[j] - idxs[i]
-                    if gap in FIB_NUMBERS:
-                        self.spiral_candidates.append({
-                            "score_type": score_type,
-                            "start_idx": idxs[i],
-                            "end_idx": idxs[j],
-                            "gap": gap,
-                            "center_idx": (idxs[i] + idxs[j]) // 2
-                        })
-
-        return self._select_strongest_spirals()
-
-    def _select_strongest_spirals(self, max_spirals=3):
-        centers = defaultdict(int)
-
-        # Count how often each center index appears
-        for candidate in self.spiral_candidates:
-            centers[candidate["center_idx"]] += 1
-
-        # Sort by frequency (descending)
-        top_centers = sorted(centers.items(), key=lambda x: -x[1])[:max_spirals]
-        spiral_centers = []
-
-        for center_idx, freq in top_centers:
-            ts = self.df.loc[center_idx, "timestamp"]
-            label = self._label_score(self.df.loc[center_idx, "score"])
-            spiral_centers.append({
-                "center_index": center_idx,
-                "round_index": center_idx,
-                "timestamp": ts,
-                "score_type": self.df.loc[center_idx, "score"],
-                "label": label,
-                "confirmations": freq
-            })
-
-        return spiral_centers
-
-    def _label_score(self, s):
-        return { -1: "Blue", 1: "Purple", 2: "Pink" }.get(s, "Unknown")
-    
-def get_spiral_echoes(spiral_centers, df, gaps=[3, 5, 8, 13]):
-    echoes = []
-
-    for sc in spiral_centers:
-        base_idx = sc["round_index"]
-
-        for gap in gaps:
-            echo_idx = base_idx + gap
-            if echo_idx < len(df):
-                echoes.append({
-                    "echo_round": echo_idx,
-                    "source_round": base_idx,
-                    "timestamp": df.loc[echo_idx, "timestamp"],
-                    "source_label": sc["label"],
-                    "gap": gap
-                })
-
-    return echoes    
-
-def project_true_forward_flp(spiral_centers, fib_layers=[6, 12, 18, 24, 30], max_rounds=None):
-    """
-    Create a forward projection map from spiral centers using Fibonacci gaps.
-    Returns a list of watchlist targets.
-    """
-
-    watchlist = []
-
-    for sc in spiral_centers:
-        base_idx = sc["round_index"]
-
-        for gap in fib_layers:
-            target_idx = base_idx + gap
-            if max_rounds is None or target_idx < max_rounds:
-                watchlist.append({
-                    "source_round": base_idx,
-                    "source_label": sc["label"],
-                    "gap": gap,
-                    "target_round": target_idx
-                })
-
-    return watchlist
-
-@st.cache_data
-@st.cache_data(ttl=600, show_spinner=False)
-def compute_resonance(row, selected_windows, weights=None):
-    if weights is None:
-        weights = [1] * len(selected_windows)
-    weighted_sum = 0
-    weight_total = sum(weights)
-    
-    for i, window in enumerate(selected_windows):
-        sign_col = f"sign_{window}"
-        weighted_sum += row[sign_col] * weights[i]
-    
-    resonance_score = weighted_sum / weight_total
-    return round(resonance_score, 2) 
-
-
-@st.cache_data
-@st.cache_data(ttl=600, show_spinner=False)
-def dynamic_feb_bands(ma_value, phase_score):
-    """Phase-weighted dynamic envelope bands."""
-    if phase_score >= 0.75:
-        mults = ENVELOPE_MULTS
-    elif phase_score >= 0.5:
-        mults = [0.85, 1.3, 2.0]
-    else:
-        mults = [0.7, 1.0, 1.5]
-    return [round(ma_value * m, 3) for m in mults]
-
-
-@st.cache_data
-@st.cache_data(ttl=600, show_spinner=False)
-def check_envelope_breakouts(msi_value, bands):
-    """Flags for each breakout level."""
-    return {
-        "breakout_1": msi_value >= bands[0],
-        "breakout_1_618": msi_value >= bands[1],
-        "breakout_2_618": msi_value >= bands[2],
-    }
-@st.cache_data
-@st.cache_data(ttl=600, show_spinner=False)
-def compute_volatility(series, window=5):
-    """Std deviation over recent rounds."""
-    return round(series[-window:].std(), 3)
-
-def compute_gap_since_last_pink(current_index, last_pink_index):
-    """How many rounds since last surge/pink?"""
-    if last_pink_index is None:
-        return None
-    return max(1, current_index - last_pink_index)
-
-def fib_gap_alignment(gap):
-    """How closely does gap match Fibonacci numbers?"""
-    if gap is None:
-        return 0.5
-    closest = min(FIBONACCI_NUMBERS, key=lambda x: abs(x - gap))
-    alignment = 1 - (abs(closest - gap) / max(FIBONACCI_NUMBERS))
-    return round(max(0, alignment), 2)
-
-
-
-# ============================
-# MSI FIBONACCI RETRACEMENT MODULE
-# ============================
-@st.cache_data
-@st.cache_data(ttl=600, show_spinner=False)
-def calculate_fibonacci_retracements(msi_series, fib_lookback_window):
-    """
-    Calculate Fibonacci retracement and extension levels
-    from swing high/low over user-specified lookback window.
-    """
-    recent = msi_series.tail(fib_lookback_window).dropna()
-    if recent.empty or len(recent) < 2:
-        return None
-
-    swing_high = recent.max()
-    swing_low = recent.min()
-
-    if swing_high == swing_low:
-        # Avoid division by zero when flat
-        return None
-
-    # Compute standard retracement levels
-    retracements = {
-        "0.0": round(swing_low, 3),
-        "0.236": round(swing_high - 0.236 * (swing_high - swing_low), 3),
-        "0.382": round(swing_high - 0.382 * (swing_high - swing_low), 3),
-        "0.5": round((swing_high + swing_low) / 2, 3),
-        "0.618": round(swing_high - 0.618 * (swing_high - swing_low), 3),
-        "0.786": round(swing_high - 0.786 * (swing_high - swing_low), 3),
-        "1.0": round(swing_high, 3)
-    }
-
-    # Compute extension levels
-    range_ = swing_high - swing_low
-    extensions = {
-        "1.618": round(swing_high + 0.618 * range_, 3),
-        "2.618": round(swing_high + 1.618 * range_, 3),
-        "3.618": round(swing_high + 2.618 * range_, 3),
-        "-0.618": round(swing_low - 0.618 * range_, 3),
-        "-1.618": round(swing_low - 1.618 * range_, 3),
-        "-2.618": round(swing_low - 2.618 * range_, 3)
-    }
-
-    return retracements, extensions, swing_high, swing_low
-
-def compute_multi_window_fib_retracements(df, msi_column, windows):
-    """
-    For each selected lookback window, compute retracement levels.
-    Returns a dict of window -> retracement levels.
-    """
-    results = {}
-    for w in windows:
-        res = calculate_fibonacci_retracements(df[msi_column], w)
-        if res:
-            retrace, ext, high, low = res
-            results[w] = {
-                "retracements": retrace,
-                "extensions": ext,
-                "swing_high": high,
-                "swing_low": low
-            }
-    return results
-
-def compute_fib_alignment_score(df, fib_threshold=10.0, lookback_window=34, tolerance=1.0):
-    """
-    Compute a score 0–1 for how well the sequence of recent 'pink' rounds
-    aligns to Fibonacci intervals.
-    #- fib_threshold: multiplier value considered a pink.
-    #- lookback_window: number of rounds to analyze.
-    #- tolerance: +/- range allowed when matching Fib gaps.
-    """
-    if len(df) < lookback_window:
-        return None, []
-
-    recent_df = df.tail(lookback_window).copy()
-    recent_df = recent_df.reset_index(drop=True)
-    recent_df['relative_index'] = recent_df.index
-
-    # Find pink rounds in recent window
-    pink_indexes = recent_df[recent_df['multiplier'] >= fib_threshold]['relative_index'].tolist()
-
-    if len(pink_indexes) < 2:
-        return 0.0, []
-
-    # Compute gaps between pink rounds
-    gaps = [pink_indexes[i+1] - pink_indexes[i] for i in range(len(pink_indexes)-1)]
-
-    # For each gap, score it by closeness to Fib sequence
-    scores = []
-    for gap in gaps:
-        diffs = [abs(gap - fib) for fib in FIB_GAPS]
-        min_diff = min(diffs)
-        if min_diff <= tolerance:
-            # Perfect or near-perfect match
-            scores.append(1.0)
-        else:
-            # Score decays with distance
-            decay = np.exp(-min_diff / tolerance)
-            scores.append(decay)
-
-    # Average score
-    if scores:
-        alignment_score = np.clip(np.mean(scores), 0, 1)
-    else:
-        alignment_score = 0.0
-
-    return round(alignment_score, 3), gaps
-
-@st.cache_data
-@st.cache_data(ttl=600, show_spinner=False)
-def enhanced_quantum_rsi(df, window=10, slope_len=5):
-    # 1. Core slope detection from MSI
-    msi_slope = df['msi'].diff(slope_len).fillna(0)
-    msi_accel = msi_slope.diff().fillna(0)
-
-    # 2. Weight the gain/loss by slope * acceleration
-    delta = df['msi'].diff().fillna(0)
-
-    weighted_up = np.where(msi_slope > 0, delta * (1 + msi_accel), 0)
-    weighted_down = np.where(msi_slope < 0, -delta * (1 - msi_accel), 0)
-
-    # 3. Rolling average with exponential memory
-    up_ewm = pd.Series(weighted_up).ewm(span=window).mean()
-    down_ewm = pd.Series(weighted_down).ewm(span=window).mean()
-
-    # 4. RSI-style final calc
-    rs = up_ewm / (down_ewm.replace(0, np.nan))
-    rsi_like = 100 - (100 / (1 + rs))
-
-    # 5. Smooth final result to remove noise & spikes
-    smooth_rsi = rsi_like.ewm(span=3).mean().fillna(0)
-    df['eq_rsi'] = smooth_rsi
-    return df
-
-
-@st.cache_data
-@st.cache_data(ttl=600, show_spinner=False)
-def enhanced_msi_analysis(df):
-    # Calculate base MSI (your existing implementation)
-    #df = calculate_msi(df)  
-    
-    # Add momentum dimensions
-    df['msi_slope'] = np.arctan(df['msi'].diff(5))  # Angle in radians
-    df['momentum_impulse'] = np.where(
-        df['msi_slope'].abs() > np.radians(25),
-        df['msi'].diff(3) * 2,  # Amplify strong moves
-        df['msi'].diff(3)
-    )
-    df['score_std'] = df['score'].rolling(5).std().replace(0, np.nan).bfill()
-    df['price_slope'] = df['score'].diff(5) / df['score_std']
-    # Convergence detector
-    df['price_msi_conv'] = df['price_slope']* df['msi_slope']
-    
-    return df
-
-@st.cache_data
-@st.cache_data(ttl=600, show_spinner=False)
-def plot_enhanced_msi(df):
-    fig = go.Figure()
-    
-    # MSI Baseline
-    fig.add_trace(go.Scatter(
-        x=df.index, y=df['msi'],
-        line=dict(color='#888888'),
-        name='MSI Baseline'
-    ))
-    
-    # Momentum Slope
-    fig.add_trace(go.Scatter(
-        x=df.index, y=np.degrees(df['msi_slope']),
-        line=dict(color='#00ffff', width=3),
-        name='Slope Angle (°)',
-        yaxis='y2'
-    ))
-    
-    # Impulse Bars
-    fig.add_trace(go.Bar(
-        x=df.index, y=df['momentum_impulse'],
-        marker_color=np.where(df['momentum_impulse'] > 0, '#00ff88', '#ff0066'),
-        name='Impulse Strength',
-        opacity=0.5
-    ))
-    
-    fig.update_layout(
-        yaxis2=dict(
-            title="Slope Angle (°)",
-            overlaying='y',
-            side='right',
-            range=[-45, 45]
-        ),
-        title='⚡ MSI Momentum Triangulation'
-    )
-    return fig
-
 def find_momentum_triangles(df, msi_col='msi', order=3, fib_min=0.5, fib_max=1.618, max_gap=30, min_area=0.5):
     from scipy.signal import argrelextrema
 
@@ -1173,186 +813,165 @@ def compute_bsf_bmf_composite(
     return bsf_1m, z_bsf, weights
 
 
-def thre_v2(df,
-           minute_avg_df = None,
-           min_rounds = 24,
-           num_harmonics=8,
-           smooth_roll=3):
+@st.cache_data
+def compute_organic_signal_and_slope_composites(
+    df,
+    windows=(1, 3, 5, 10),
+    pink_cut=10.0,
+    z_win=120,
+    weights=None
+):
     """
-    THRE v2.0 - True Harmonic Resonance Engine with signal-line inflection layer and PMF alignment.
-
-    Inputs:
-      - df: raw rounds DataFrame with columns ['timestamp', 'multiplier', optional 'score']
-      - minute_avg_df: optional minute-aggregated dataframe with columns ['minute','multiplier']
-                       If provided and contains precomputed signal column use that; otherwise it will be computed.
-      - pmf_composite_series: optional pandas Series indexed by minute (datetime index) with composite PMF values
-      - min_rounds: minimum round count guard
-      - num_harmonics: how many top harmonics to include in THRE composite
-      - smooth_roll: small rolling for THRE smoothing (keeps as originally used)
-
     Returns:
-      (df_out, thre_metrics) and draws 2-panel plot + PMF alignment panel when pmf_composite_series passed.
-      thre_metrics is dict: {'rds': latest_rds, 'rds_delta': latest_delta, 'inflection_points': list, ...}
+      organic_1m : DataFrame indexed by 1-min grid with columns:
+         - org_{w}         : smoothed organic (no-pink) signal for window w
+         - slope_{w}       : gradient of org_{w}
+      z_signals   : DataFrame with z-scored signals per TF (z_signal_{w})
+      z_slopes    : DataFrame with z-scored slopes per TF (z_slope_{w})
+      composites  : dict with:
+         - 'composite_signal' : weighted sum of z_signals (series)
+         - 'composite_slope'  : gradient(composite_signal) or weighted z_slopes
+         - 'weights'          : used weights dict
+    Notes:
+      - Uses your build_responsive_signal(...) which expects tmp_df with columns ['minute','multiplier'].
+      - Aligns everything to a 1-minute grid across the full span of df.
     """
-    # --- basic guards ---
-    if df is None or len(df) < min_rounds:
-        st.warning(f"Need at least {min_rounds} rounds to compute THRE v2.0.")
-        return df, None
+    import numpy as np
+    import pandas as pd
 
-    # Ensure timestamps
-    df = df.copy()
+    # guards
+    if df is None or df.empty:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), {}
+
+    df = df.dropna(subset=['timestamp']).copy()
     df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
     df = df.dropna(subset=['timestamp']).sort_values('timestamp')
 
-    # --- Build 1-minute signal (if not passed) using your existing responsive filter ---
-    if minute_avg_df is None:
-        # build minute aggregation from df
-        ma = df.set_index('timestamp').resample('1T')['multiplier'].mean().interpolate().reset_index()
-        ma.rename(columns={'timestamp':'minute'}, inplace=True)
-        minute_avg_df = ma
-    else:
-        minute_avg_df = minute_avg_df.copy()
-        # ensure minute col is datetime named 'minute'
-        if 'minute' not in minute_avg_df.columns and minute_avg_df.index.dtype.kind == 'M':
-            minute_avg_df = minute_avg_df.reset_index().rename(columns={minute_avg_df.index.name:'minute'})
+    # prepare grid
+    grid_start = df['timestamp'].dt.floor('min').min()
+    grid_end   = df['timestamp'].dt.floor('min').max()
+    grid = pd.date_range(start=grid_start, end=grid_end, freq='T')
 
-    # compute smoothed 1-min signal (if minute_avg_df doesn't already contain one)
-    if 'signal' in minute_avg_df.columns:
-        signal_1m = minute_avg_df['signal'].values
-    else:
-        sig, _ = build_responsive_signal(minute_avg_df[['minute','multiplier']].rename(columns={'minute':'minute','multiplier':'multiplier'}))
-        signal_1m = sig
-        minute_avg_df['signal'] = signal_1m
+    # filter organic rounds (no pinks)
+    df_org_all = df[df['multiplier'] < pink_cut]
+    if df_org_all.empty:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), {}
 
-    N = len(signal_1m)
-    if N < 4:
-        st.warning("THRE: need more minute history for stable harmonics (recommended >= 60 minutes). Falling back to limited result.")
+    organic_1m = pd.DataFrame(index=grid)
+    z_signals = pd.DataFrame(index=grid)
+    z_slopes = pd.DataFrame(index=grid)
+    present_windows = []
 
-    # --- THRE harmonic decomposition built on the 1-minute signal (so multi-time info is captured if history is long) ---
-    x = np.asarray(signal_1m, dtype=float)
-    x_mean = np.nanmean(x)
-    x_d = x - x_mean
+    for w in windows:
+        try:
+            org_w = df_org_all.resample(f"{w}T", on='timestamp')['multiplier'].mean()
+        except Exception:
+            continue
+        if org_w.dropna().empty:
+            continue
 
-    # window length and FFT
-    win = np.hanning(N) if N>1 else np.ones(N)
-    xw = x_d * win
+        # upsample to 1-min grid and fill
+        up = org_w.reindex(grid).interpolate().ffill().bfill()
 
-    # sampling in "minutes" units: sample spacing = 1 minute -> we treat freq units as cycles per minute
-    yf = rfft(xw)
-    xf = rfftfreq(N, d=1.0)  # cycles per minute
-    amps_full = np.abs(yf)
-    amps_full[0] = 0.0
+        # prepare tmp df for your build_responsive_signal
+        tmp_df = pd.DataFrame({'minute': up.index, 'multiplier': up.values})
 
-    # take top harmonics by amplitude
-    take = min(num_harmonics, len(amps_full))
-    if take <= 0:
-        # nothing to do
-        recon = x.copy()
-        smooth_rds = pd.Series(np.zeros_like(x))
-    else:
-        top_idx = np.argsort(amps_full)[-take:][::-1]
-        freqs = xf[top_idx]             # cycles per minute
-        amps  = amps_full[top_idx]
-        phases = np.angle(yf[top_idx])
+        # smooth (uses your sgolay inside)
+        try:
+            smoothed, _ = build_responsive_signal(tmp_df)
+        except Exception:
+            smoothed = pd.Series(up.values, index=up.index).rolling(window=max(3, min(len(up), 5)), center=True, min_periods=1).mean().fillna(method='bfill').fillna(method='ffill').values
 
-        # build harmonic matrix and weighted composite (like your original)
-        harmonic_matrix = np.zeros((N, len(freqs)))
-        for i, (f,p) in enumerate(zip(freqs, phases)):
-            harmonic_matrix[:, i] = np.sin(2 * np.pi * f * np.arange(N) + p)
-        composite_signal = (harmonic_matrix * amps).sum(axis=1) if amps.size>0 else np.zeros(N)
+        organic_1m[f'org_{w}'] = smoothed
+        # slope (per-minute)
+        slope = np.gradient(smoothed)
+        organic_1m[f'slope_{w}'] = slope
 
-        # normalize composite into RDS (resonance) space (z-like)
-        if np.std(composite_signal) > 1e-9:
-            normalized_signal = (composite_signal - np.mean(composite_signal)) / np.std(composite_signal)
-        else:
-            normalized_signal = np.zeros_like(composite_signal)
+        # z-score the SIGNAL (rolling) so TFs are comparable for composite signal
+        s_series = pd.Series(smoothed, index=grid)
+        s_mean = s_series.rolling(z_win, min_periods=max(10, z_win//6)).mean()
+        s_std  = s_series.rolling(z_win, min_periods=max(10, z_win//6)).std().replace(0, np.nan)
+        z_sig = ((s_series - s_mean) / s_std).fillna(0.0)
+        z_signals[f'z_signal_{w}'] = z_sig
 
-        smooth_rds = pd.Series(normalized_signal).rolling(smooth_roll, min_periods=1).mean()
-        recon = composite_signal + 0.0  # raw harmonic recon (not mean-added); for plotting we later add x_mean if desired
+        # z-score the slope as well (for composite slope)
+        slope_s = pd.Series(slope, index=grid)
+        sm = slope_s.rolling(z_win, min_periods=max(10, z_win//6)).mean()
+        ss = slope_s.rolling(z_win, min_periods=max(10, z_win//6)).std().replace(0, np.nan)
+        z_slp = ((slope_s - sm) / ss).fillna(0.0)
+        z_slopes[f'z_slope_{w}'] = z_slp
 
-    # --- run your responsive signal extractor on THRE's smooth_rds to get inflection signal ---
-    # Build a temp df for the THRE time index (reuse minute timestamps)
-    time_index = minute_avg_df['minute'].iloc[:N].reset_index(drop=True)
-    # --- run your responsive signal extractor on THRE's smooth_rds to get inflection signal ---
-    thre_df = pd.DataFrame({'minute': time_index, 'multiplier': smooth_rds.values})
-    inflection_signal, _ = build_responsive_signal(thre_df)
+        present_windows.append(w)
 
-    # derivative (discrete slope)
-    inflection_deriv = np.gradient(inflection_signal)
+    if z_signals.empty:
+        return organic_1m, z_signals, z_slopes, {}
 
-    # detect local inflection peaks/troughs on the inflection_signal
-    pk_idx, _ = find_peaks(inflection_signal, distance=max(1, N//50))
-    tr_idx, _ = find_peaks(-inflection_signal, distance=max(1, N//50))
+    # default weights (slow sets bias)
+    if weights is None:
+        default_weights = {1:0.15, 3:0.30, 5:0.30, 10:0.25}
+        weights = {w: default_weights.get(w, 0.0) for w in windows}
 
-    pk_times = time_index.iloc[pk_idx].tolist()
-    pk_vals  = inflection_signal[pk_idx].tolist()
-    tr_times = time_index.iloc[tr_idx].tolist()
-    tr_vals  = inflection_signal[tr_idx].tolist()
+    # keep only present windows and normalize
+    used_weights = {w: weights.get(w, 0.0) for w in present_windows}
+    s = sum(used_weights.values()) or 1.0
+    used_weights = {w: (used_weights[w] / s) for w in used_weights}
 
-    # latest metrics
-    latest_rds = float(smooth_rds.iloc[-1]) if len(smooth_rds)>0 else 0.0
-    latest_delta = float(inflection_deriv[-1]) if len(inflection_deriv)>0 else 0.0
+    # composite signal = weighted sum of z_signals
+    composite_signal = None
+    for w in present_windows:
+        col = f'z_signal_{w}'
+        if col in z_signals.columns:
+            if composite_signal is None:
+                composite_signal = z_signals[col] * used_weights.get(w, 0.0)
+            else:
+                composite_signal = composite_signal + z_signals[col] * used_weights.get(w, 0.0)
+    if composite_signal is None:
+        composite_signal = pd.Series(0.0, index=grid)
 
-    
-    # --- Plotting: two panels + optional pmf alignment bar ---
-    fig, axs = plt.subplots( 2, 1,
-                            figsize=(13, 9),
-                            sharex=True)
+    # composite slope: two options (choose both)
+    # A) gradient of composite_signal (natural, reflects change in bias)
+    comp_slope_from_signal = np.gradient(composite_signal.values)
+    comp_slope_from_signal = pd.Series(comp_slope_from_signal, index=grid)
 
-    # Panel 0: THRE resonance curve (smooth_rds) + bands
-    ax0 = axs[0]
-    ax0.plot(time_index, smooth_rds.values, label='THRE Resonance (RDS)', color='cyan', linewidth=1.6)
-    ax0.axhline(1.5, linestyle='--', color='green', alpha=0.6)
-    ax0.axhline(0.5, linestyle='--', color='blue', alpha=0.4)
-    ax0.axhline(-0.5, linestyle='--', color='orange', alpha=0.4)
-    ax0.axhline(-1.5, linestyle='--', color='red', alpha=0.6)
-    ax0.set_title("THRE v2.0 — Composite Harmonic Resonance Strength")
-    ax0.legend(loc='upper left')
+    # B) weighted sum of z_slopes (direct momentum composite)
+    composite_slope2 = None
+    for w in present_windows:
+        col = f'z_slope_{w}'
+        if col in z_slopes.columns:
+            if composite_slope2 is None:
+                composite_slope2 = z_slopes[col] * used_weights.get(w, 0.0)
+            else:
+                composite_slope2 = composite_slope2 + z_slopes[col] * used_weights.get(w, 0.0)
+    if composite_slope2 is None:
+        composite_slope2 = pd.Series(0.0, index=grid)
 
-    # Panel 1: inflection signal (THRE signal line) + detected inflections
-    ax1 = axs[1]
-    ax1.plot(time_index, inflection_signal, label='THRE Inflection Signal', color='black', linewidth=1.8, alpha=0.95)
-    ax1.scatter(pk_times, pk_vals, color='red', marker='o', s=40, label='Inflection Peaks')
-    ax1.scatter(tr_times, tr_vals, color='purple', marker='x', s=40, label='Inflection Troughs')
-    ax1.axhline(0, linestyle=':', color='gray')
-    ax1.set_title("THRE Inflection Detector (signal-line on resonance)")
-    ax1.legend(loc='upper left')
+    # store composites and regimes
+    organic_1m['composite_signal'] = composite_signal.values
+    organic_1m['composite_slope'] = comp_slope_from_signal.values
+    organic_1m['composite_slope_zweighted'] = composite_slope2.values
 
+    # regime labeling (bias + momentum)
+    comp = organic_1m['composite_signal']
+    comp_dx = organic_1m['composite_slope']
+    conds = [
+        (comp > 0.6) & (comp_dx > 0),
+        (comp < -0.6) & (comp_dx < 0)
+    ]
+    choices = ['Organic-Up (bias)', 'Organic-Down (bias)']
+    organic_1m['regime'] = pd.Series(np.select(conds, choices, default='Neutral'), index=grid)
 
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    st.pyplot(fig)
-
-    # --- Dashboard metrics and quick guidance ---
-    st.metric("🧠 Resonance Strength (RDS)", f"{latest_rds:.3f}")
-    st.metric("📉 THRE Δ (last)", f"{latest_delta:.3f}")
-    
-
-    # quick signals
-    signals = []
-    if latest_rds > 1.5:
-        signals.append(("High Constructive Stack — Pink Burst Risk ↑", "danger"))
-    elif latest_rds > 0.5:
-        signals.append(("Purple/Harmonically Supported Zone", "info"))
-    elif latest_rds < -1.5:
-        signals.append(("Collapse Zone — Blue Train Likely", "error"))
-    elif latest_rds < -0.5:
-        signals.append(("Destructive Micro-Waves — Risk", "warning"))
-    else:
-        signals.append(("Neutral Zone — Mid-range", "normal"))
-
-    
-
-    # return a small metrics dict
-    thre_metrics = {
-        'rds': latest_rds,
-        'rds_delta': latest_delta,
-        'inflection_peaks': pk_times,
-        'inflection_troughs': tr_times,
-        
+    composites = {
+        'composite_signal': composite_signal,
+        'composite_slope_from_signal': comp_slope_from_signal,
+        'composite_slope_zweighted': composite_slope2,
+        'weights': used_weights
     }
-    return (df, thre_metrics)
-               
+
+    return organic_1m, z_signals, z_slopes, composites
+
+
+
+
 @st.cache_data
 def calculate_purple_pressure(df, window=10):
     recent = df.tail(window)
@@ -1490,61 +1109,6 @@ def resonance_forecast(harmonic_waves, resonance_matrix, steps=10):
     return forecast
 
 
-
-def thre_panel(df):
-    st.subheader("🔬 True Harmonic Resonance Engine (THRE)")
-    if len(df) < 20: 
-        st.warning("Need at least 20 rounds to compute THRE.")
-        return df, None, None
-        
-    scores = df["score"].fillna(0).values
-    N = len(scores)
-    T = 1
-    yf = rfft(scores - np.mean(scores))
-    xf = rfftfreq(N, T)
-    mask = (xf > 0) & (xf < 0.5)
-    freqs = xf[mask]
-    amps = np.abs(yf[mask])
-    phases = np.angle(yf[mask])
-    harmonic_matrix = np.zeros((N, len(freqs)))
-    
-    for i, (f, p) in enumerate(zip(freqs, phases)):
-        harmonic_matrix[:, i] = np.sin(2 * np.pi * f * np.arange(N) + p)
-    
-    composite_signal = (harmonic_matrix * amps).sum(axis=1) if amps.size > 0 else np.zeros(N)
-    normalized_signal = (composite_signal - np.mean(composite_signal)) / np.std(composite_signal) if np.std(composite_signal) > 0 else np.zeros(N)
-    smooth_rds = pd.Series(normalized_signal).rolling(3, min_periods=1).mean()
-    rds_delta = np.gradient(smooth_rds)
-    
-    fig, ax = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
-    ax[0].plot(df["timestamp"], smooth_rds, label="THRE Resonance", color='cyan')
-    ax[0].axhline(1.5, linestyle='--', color='green', alpha=0.5)
-    ax[0].axhline(0.5, linestyle='--', color='blue', alpha=0.3)
-    ax[0].axhline(-0.5, linestyle='--', color='orange', alpha=0.3)
-    ax[0].axhline(-1.5, linestyle='--', color='red', alpha=0.5)
-    ax[0].set_title("Composite Harmonic Resonance Strength")
-    ax[0].legend()
-    
-    ax[1].plot(df["timestamp"], rds_delta, label="Δ Resonance Slope", color='purple')
-    ax[1].axhline(0, linestyle=':', color='gray')
-    ax[1].set_title("RDS Inflection Detector")
-    ax[1].legend()
-    
-    st.pyplot(fig)
-    
-    latest_rds = smooth_rds.iloc[-1] if len(smooth_rds) > 0 else 0
-    latest_delta = rds_delta[-1] if len(rds_delta) > 0 else 0
-    
-    st.metric("🧠 Resonance Strength", f"{latest_rds:.3f}")
-    st.metric("📉 Δ Slope", f"{latest_delta:.3f}")
-    
-    if latest_rds > 1.5: st.success("💥 High Constructive Stack — Pink Burst Risk ↑")
-    elif latest_rds > 0.5: st.info("🟣 Purple Zone — Harmonically Supported")
-    elif latest_rds < -1.5: st.error("🌪️ Collapse Zone — Blue Train Likely")
-    elif latest_rds < -0.5: st.warning("⚠️ Destructive Micro-Waves — High Risk")
-    else: st.info("⚖️ Neutral Zone — Mid-Range Expected")
-    
-    return (df, latest_rds, latest_delta)
 
 
 @st.cache_data   
@@ -2197,10 +1761,10 @@ if not df.empty:
     max_rounds = len(df)
     
     #true_flp_watchlist = project_true_forward_flp(spiral_centers, fib_layers=selected_fib_layers, max_rounds=max_rounds)
-    recent_scores = df['multiplier'].tail(34)  # use biggest fib window
-    current_msi_values= [df[f"msi_{w}"].iloc[-1] for w in selected_msi_windows]
-    current_slopes= [df[f"slope_{w}"].iloc[-1] for w in selected_msi_windows]
-    slope_history_series = [df[f"slope_{w}"].tail(5).tolist() for w in selected_msi_windows]
+    #recent_scores = df['multiplier'].tail(34)  # use biggest fib window
+    #current_msi_values= [df[f"msi_{w}"].iloc[-1] for w in selected_msi_windows]
+    #current_slopes= [df[f"slope_{w}"].iloc[-1] for w in selected_msi_windows]
+    #slope_history_series = [df[f"slope_{w}"].tail(5).tolist() for w in selected_msi_windows]
 
     
     current_round_index= df['round_index'].iloc[-1],
@@ -2224,10 +1788,6 @@ if not df.empty:
     # Plot MSI Chart
     #plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_msi_window, fib_lookback_window,  spiral_centers=spiral_centers)
     
-    #fig = plot_enhanced_msi(df)
-    #st.plotly_chart(fig, use_container_width=True)
-    #df['multiplier_level'] = df['multiplier'].apply(map_multiplier_level)
-
     # Ensure timestamp is parsed
     df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
     
@@ -2329,10 +1889,31 @@ if not df.empty:
     omega = 2 * np.pi * dominant_freq  # angular frequency
 
     
-    (df, latest_rds, latest_delta) = thre_panel(df)    
-    # call THRE v2.0 and draw its panels
-    df, thre_metrics = thre_v2(df, minute_avg_df=minute_avg_df)
+    org_1m, z_sigs, z_slps, comps = compute_organic_signal_and_slope_composites(df, windows=(1,3,5,10), pink_cut=10.0, z_win=120)
+
+    with st.expander("🌱 Organic Signal Composite (multi-TF)", expanded=True):
+        if org_1m.empty:
+            st.info("Not enough organic data.")
+        else:
+            fig, ax = plt.subplots(2, 1, figsize=(12, 7), sharex=True)
+            # Top: per-TF z-scored signals (z_signal_{w})
+            for c in z_sigs.columns:
+                ax[0].plot(z_sigs.index, z_sigs[c], label=c)
+            ax[0].axhline(0, linestyle='--', color='gray', linewidth=1)
+            ax[0].set_title("Per-TF Organic Signals (z-scored)")
+            ax[0].legend(loc='upper left')
     
+            # Bottom: composite signal + composite slope (scaled)
+            ax[1].plot(org_1m.index, org_1m['composite_signal'], label='Composite Signal (z-weighted)', linewidth=2)
+            ax[1].plot(org_1m.index, org_1m['composite_slope_zweighted'] * 0.8, label='Composite Slope (scaled)', linewidth=1, alpha=0.8)
+            ax[1].axhline(0.6, linestyle='--', color='green')
+            ax[1].axhline(-0.6, linestyle='--', color='red')
+            ax[1].set_title("Composite Organic Signal (bias) + Slope (timing)")
+            ax[1].legend()
+            plt.tight_layout()
+            st.pyplot(fig)
+    
+           
     with st.expander("📊 Multi-Wave Trap Scanner", expanded=True):
         st.write("This shows smoothed multiplier waves across multiple timeframes.")
         peak_dict, trough_dict = multi_wave_trap_scanner(df, windows=[1, 3, 5, 10])
