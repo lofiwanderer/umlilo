@@ -970,6 +970,112 @@ def compute_organic_signal_and_slope_composites(
     return organic_1m, z_signals, z_slopes, composites
 
 
+@st.cache_data(show_spinner=False)
+def compute_momentum_tracker(df, alpha=0.75):
+    """
+    Momentum tracker with Fibonacci trap detection and tactical visuals.
+    - Uses raw precision scoring on multipliers
+    - Builds momentum line
+    - Detects Fibonacci trap danger zones
+    - Flags pink reaction zones
+    - Returns tactical overlay chart (matplotlib figure)
+    """
+
+    # === 1. Precision scoring === #
+    def score_round(multiplier):
+        if multiplier < 1.5:
+            return -1.5
+        return np.interp(
+            multiplier,
+            [1.5, 2.0, 5.0, 10.0, 20.0],
+            [-1.0, 1.0, 1.5, 2.0, 3.0]
+        )
+
+    df = df.copy()
+    df['score'] = df['multiplier'].apply(score_round)
+
+    # === 2. Momentum line (cumulative scoring) === #
+    df['momentum'] = df['score'].cumsum()
+
+    # === 3. Fibonacci danger zones (trap detection) === #
+    danger_zones = [
+        i for i in range(4, len(df))
+        if sum(df['multiplier'].iloc[i-4:i+1] < 2.0) >= 4
+    ]
+
+    # === 4. Pink reaction zones === #
+    pink_mask = df['multiplier'] >= 10
+    pink_zones = {
+        'indices': df.index[pink_mask].tolist(),
+        'multipliers': df['multiplier'][pink_mask].tolist()
+    }
+
+    # === 5. Tactical overlay chart === #
+    plt.style.use('dark_background')
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # Momentum line with EWMA smoothing + white dots
+    momentum_smooth = df['momentum'].ewm(alpha=alpha).mean()
+    ax.plot(
+        momentum_smooth,
+        color='#00fffa',
+        lw=2,
+        marker='o',
+        markersize=6,
+        markerfacecolor='white',
+        markeredgecolor='white',
+        zorder=4
+    )
+
+    # Pink reaction zones (shaded + vertical markers)
+    for mult, idx in zip(pink_zones['multipliers'], pink_zones['indices']):
+        
+         # Get the momentum value at the pink’s index
+        if idx < len(momentum):
+            pink_level = momentum.iloc[idx]
+    
+            # Draw horizontal S/R line
+            ax.axhline(y=pink_level,
+                       color='#ff00ff',
+                       linestyle='--',
+                       linewidth=1.2,
+                       alpha=0.6,
+                       zorder=1)
+    
+            # Optional marker at the exact pink point
+            ax.scatter(idx, pink_level,
+                       color='#ff00ff',
+                       edgecolor='white',
+                       s=60,
+                       zorder=5)
+        ax.axvline(
+            x=idx,
+            color='#ff00ff',
+            linestyle=':',
+            alpha=0.4,
+            zorder=2
+        )
+
+    # Danger zones (red spans)
+    for zone in danger_zones:
+        ax.axvspan(zone - 0.5, zone + 0.5, color='#d50000', alpha=0.15)
+
+    ax.set_title(
+        "CYA TACTICAL OVERLAY v6.0",
+        color='#00fffa',
+        fontsize=18,
+        weight='bold'
+    )
+    ax.set_facecolor('#000000')
+
+    plt.tight_layout()
+
+    # === 6. Store results for session use === #
+    st.session_state.momentum_line = df['momentum'].tolist()
+    st.session_state.danger_zones = danger_zones
+    st.session_state.pink_zones = pink_zones
+
+    return df, fig
 
 
 @st.cache_data
