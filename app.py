@@ -992,10 +992,10 @@ def compute_momentum_tracker(df, alpha=0.75):
         )
 
     df = df.copy()
-    df['score'] = df['multiplier'].apply(score_round)
+    df['scores'] = df['multiplier'].apply(score_round)
 
     # === 2. Momentum line (cumulative scoring) === #
-    df['momentum'] = df['score'].cumsum()
+    df['momentum'] = df['scores'].cumsum()
 
     # === 3. Fibonacci danger zones (trap detection) === #
     danger_zones = [
@@ -1247,7 +1247,7 @@ def analyze_data(data, pink_threshold, window_size, RANGE_WINDOW,  window = sele
     
     df["type"] = df["multiplier"].apply(lambda x: "Pink" if x >= pink_threshold else ("Purple" if x >= 2 else "Blue"))
     df["msi"] = df["score"].rolling(window_size).sum()
-    df["momentum"] = df["score"].cumsum()
+    #df["momentum"] = df["score"].cumsum()
     df["round_index"] = range(len(df))
     # Define latest_msi safely
     latest_msi = df["msi"].iloc[-1] if not df["msi"].isna().all() else 0
@@ -1793,7 +1793,7 @@ def fast_entry_mode_ui():
         [1, 2, 3],
         [4, 5, 6],
         [7, 8, 9],
-        [0, 10]
+        [1.5, 10, 20]
     ]
 
     for row in num_rows:
