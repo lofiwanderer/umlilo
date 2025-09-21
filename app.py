@@ -1002,6 +1002,33 @@ def compute_momentum_tracker(df, alpha=0.75):
         df['momentum'], window=10, num_std=1.5
     )
 
+    # === 4. Fitted sine wave cycle === #
+    signal = df['momentum'].values
+    N = len(signal)
+    if N > 8:  # need enough points
+        signal = savgol_filter(signal, window_length=min(7, N-(N%2==0)), polyorder=2)
+
+        T = 1.0  # 1 step per round
+        time = np.arange(N)
+
+        # FFT
+        yf = rfft(signal)
+        xf = rfftfreq(N, T)[:N // 2]
+        fft_magnitude = 2.0 / N * np.abs(yf[0:N // 2])
+
+        if len(fft_magnitude[1:]) > 0:
+            dominant_index = np.argmax(fft_magnitude[1:]) + 1
+            dominant_freq = xf[dominant_index]
+            omega = 2 * np.pi * dominant_freq
+
+            # Sine model
+            def sine_model(t, A, phi, offset):
+                return A * np.sin(omega * t + phi) + offset
+
+            params, _ = curve_fit(sine_model, time, signal, p0=[1, 0, np.mean(signal)])
+            A_fit, phi_fit, offset_fit = params
+            df['sine_wave'] = sine_model(time, A_fit, phi_fit, offset_fit)
+
 
     # === 3. Fibonacci danger zones (trap detection) === #
     danger_zones = [
@@ -1020,18 +1047,11 @@ def compute_momentum_tracker(df, alpha=0.75):
     plt.style.use('dark_background')
     fig, ax = plt.subplots(figsize=(12, 6))
 
-    # Momentum line with EWMA smoothing + white dots
+    # Momentum line
     momentum_smooth = df['momentum'].ewm(alpha=alpha).mean()
-    ax.plot(
-        momentum_smooth,
-        color='#00fffa',
-        lw=2,
-        marker='o',
-        markersize=6,
-        markerfacecolor='white',
-        markeredgecolor='white',
-        zorder=4
-    )
+    ax.plot(momentum_smooth, color='#00fffa', lw=2,
+            marker='o', markersize=6, markerfacecolor='white',
+            markeredgecolor='white', zorder=4, label="Momentum")
 
     # Bollinger Bands
     ax.plot(df['bb_mid_10'], color='yellow', lw=1.2, alpha=0.6, label="BB Mid (10)")
@@ -1039,6 +1059,10 @@ def compute_momentum_tracker(df, alpha=0.75):
     ax.plot(df['bb_lower_10'], color='green', lw=1, alpha=0.4, linestyle="--", label="BB Lower")
     ax.fill_between(df.index, df['bb_lower_10'], df['bb_upper_10'],
                     color='gray', alpha=0.1)
+
+    # Fitted sine wave overlay
+    if 'sine_wave' in df.columns:
+        ax.plot(df['sine_wave'], color='black', lw=2, label="Fitted Cycle")
 
     # Pink reaction zones (shaded + vertical markers)
     for mult, idx in zip(pink_zones['multipliers'], pink_zones['indices']):
@@ -1073,21 +1097,17 @@ def compute_momentum_tracker(df, alpha=0.75):
     for zone in danger_zones:
         ax.axvspan(zone - 0.5, zone + 0.5, color='#d50000', alpha=0.15)
 
-    ax.set_title(
-        "CYA TACTICAL OVERLAY v6.0",
-        color='#00fffa',
-        fontsize=18,
-        weight='bold'
-    )
+    ax.set_title("CYA TACTICAL OVERLAY v6.2 (BB + Fitted Cycle)",
+                 color='#00fffa', fontsize=18, weight='bold')
     ax.set_facecolor('#000000')
+    ax.legend(loc="upper left", fontsize=8)
 
     plt.tight_layout()
 
-    # === 6. Store results for session use === #
+    # === 8. Store results === #
     st.session_state.momentum_line = df['momentum'].tolist()
     st.session_state.danger_zones = danger_zones
     st.session_state.pink_zones = pink_zones
-
     return df, fig
 
 
