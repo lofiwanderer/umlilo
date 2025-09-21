@@ -997,6 +997,12 @@ def compute_momentum_tracker(df, alpha=0.75):
     # === 2. Momentum line (cumulative scoring) === #
     df['momentum'] = df['scores'].cumsum()
 
+    # === 3. Bollinger Bands on momentum === #
+    df['bb_mid_10'], df['bb_upper_10'], df['bb_lower_10'] = bollinger_bands(
+        df['momentum'], window=10, num_std=1.5
+    )
+
+
     # === 3. Fibonacci danger zones (trap detection) === #
     danger_zones = [
         i for i in range(4, len(df))
@@ -1026,6 +1032,13 @@ def compute_momentum_tracker(df, alpha=0.75):
         markeredgecolor='white',
         zorder=4
     )
+
+    # Bollinger Bands
+    ax.plot(df['bb_mid_10'], color='yellow', lw=1.2, alpha=0.6, label="BB Mid (10)")
+    ax.plot(df['bb_upper_10'], color='red', lw=1, alpha=0.4, linestyle="--", label="BB Upper")
+    ax.plot(df['bb_lower_10'], color='green', lw=1, alpha=0.4, linestyle="--", label="BB Lower")
+    ax.fill_between(df.index, df['bb_lower_10'], df['bb_upper_10'],
+                    color='gray', alpha=0.1)
 
     # Pink reaction zones (shaded + vertical markers)
     for mult, idx in zip(pink_zones['multipliers'], pink_zones['indices']):
@@ -1993,6 +2006,12 @@ if not df.empty:
     dominant_index = np.argmax(fft_magnitude[1:]) + 1
     dominant_freq = xf[dominant_index]  # cycles per second (Hz)
     omega = 2 * np.pi * dominant_freq  # angular frequency
+
+
+    df, battle_fig = compute_momentum_tracker(df)
+
+    with st.expander("⚔️ Tactical Overlay", expanded=True):
+        st.pyplot(battle_fig)
 
     
     org_1m, z_sigs, z_slps, comps = compute_organic_signal_and_slope_composites(df, windows=(1,3,5,10), pink_cut=10.0, z_win=120)
