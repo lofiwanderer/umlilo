@@ -1079,7 +1079,7 @@ def compute_momentum_tracker(df, alpha=0.75):
     }
 
     # === 5. Tactical overlay chart === #
-    plt.style.use('dark_background')
+    plt.style.use('light_background')
     fig, ax = plt.subplots(figsize=(12, 6))
 
     # Momentum line
@@ -1091,13 +1091,13 @@ def compute_momentum_tracker(df, alpha=0.75):
     # Bollinger Bands
     ax.plot(df['bb_mid_10'], color='yellow', lw=1.2, alpha=0.6, label="BB Mid (10)")
     ax.plot(df['bb_upper_10'], color='red', lw=1, alpha=0.4, linestyle="--", label="BB Upper")
-    ax.plot(df['bb_lower_10'], color='cyan', lw=1, alpha=0.4, linestyle="--", label="BB Lower")
+    ax.plot(df['bb_lower_10'], color='green', lw=1, alpha=0.4, linestyle="--", label="BB Lower")
     ax.fill_between(df.index, df['bb_lower_10'], df['bb_upper_10'],
                     color='gray', alpha=0.1)
 
      # Fitted sine wave + extrema
     if 'sine_wave' in df.columns:
-        ax.plot(df['sine_wave'], color='white', lw=2, label="Fitted Cycle")
+        ax.plot(df['sine_wave'], color='black', lw=2, label="Fitted Cycle")
 
         ax.scatter(peaks, df['sine_wave'].iloc[peaks],
                    color='red', edgecolor='white', s=80, zorder=6, label="Cycle Peaks")
@@ -1116,12 +1116,12 @@ def compute_momentum_tracker(df, alpha=0.75):
 
     # Pink zones
     for mult, idx in zip(pink_zones['multipliers'], pink_zones['indices']):
-        if idx < len(df['momentum']):
-            pink_level = df['momentum'].iloc[idx]
-            ax.axhline(y=pink_level, color='#ff00ff', linestyle='--',
-                       linewidth=1.2, alpha=0.6)
-            ax.scatter(idx, pink_level, color='#ff00ff',
-                       edgecolor='white', s=60, zorder=5)
+        #if idx < len(df['momentum']):
+        pink_level = df['momentum'].iloc[idx]
+        ax.axhline(y=pink_level, color='#ff00ff', linestyle='--',
+                    linewidth=1.2, alpha=0.6)
+        ax.scatter(idx, pink_level, color='#ff00ff',
+                    edgecolor='white', s=60, zorder=5)
         ax.axvline(x=idx, color='#ff00ff', linestyle=':', alpha=0.4)
 
     # Danger zones (red spans)
