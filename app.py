@@ -1079,7 +1079,7 @@ def compute_momentum_tracker(df, alpha=0.75):
     }
 
     # === 5. Tactical overlay chart === #
-    plt.style.use('cyan_background')
+    plt.style.use('white_background')
     fig, ax = plt.subplots(figsize=(12, 6))
 
     # Momentum line
