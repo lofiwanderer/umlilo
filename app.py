@@ -1130,8 +1130,8 @@ def compute_momentum_tracker(df, alpha=0.75):
 
     ax.set_title("CYA TACTICAL OVERLAY v6.2 (BB + Fitted Cycle)",
                  color='#00fffa', fontsize=18, weight='bold')
-    ax.set_facecolor('#000000')
-    ax.legend(loc="upper left", fontsize=8)
+    #ax.set_facecolor('#000000')
+    ax.legend(loc="upper left", fontsize=10)
 
     plt.tight_layout()
 
