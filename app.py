@@ -1133,7 +1133,7 @@ def compute_momentum_tracker(df, alpha=0.75):
     #ax.set_facecolor('#000000')
     ax.legend(loc="upper left", fontsize=10)
 
-    plt.tight_layout()
+    #plt.tight_layout()
 
    # === 8. Store results === #
     st.session_state.momentum_line = df['momentum'].tolist()
