@@ -1118,11 +1118,11 @@ def compute_momentum_tracker(df, alpha=0.75):
     for mult, idx in zip(pink_zones['multipliers'], pink_zones['indices']):
         #if idx < len(df['momentum']):
         pink_level = df['momentum'].iloc[idx]
-        ax.axhline(y=pink_level, color='#ff00ff', linestyle='--',
+        ax.axhline(y=pink_level, color='purple', linestyle='--',
                     linewidth=1.2, alpha=0.6)
         ax.scatter(idx, pink_level, color='#ff00ff',
-                    edgecolor='white', s=60, zorder=5)
-        ax.axvline(x=idx, color='#ff00ff', linestyle=':', alpha=0.4)
+                    edgecolor='black', s=60, zorder=5)
+        ax.axvline(x=idx, color='purple', linestyle=':', alpha=0.4)
 
     # Danger zones (red spans)
     for zone in danger_zones:
