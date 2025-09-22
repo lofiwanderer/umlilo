@@ -1005,10 +1005,12 @@ def compute_momentum_tracker(df, alpha=0.75):
     # === 4. Fitted sine wave cycle === #
     signal = df['momentum'].values
     N = len(signal)
-    if N > 8:  # need enough points
-        signal = savgol_filter(signal, window_length=min(7, N-(N%2==0)), polyorder=2)
+    peaks, troughs = [], []
+    ghost_marker = None
 
-        T = 1.0  # 1 step per round
+    if N > 8:
+        signal = savgol_filter(signal, window_length=min(7, N-(N%2==0)), polyorder=2)
+        T = 1.0
         time = np.arange(N)
 
         # FFT
@@ -1021,13 +1023,46 @@ def compute_momentum_tracker(df, alpha=0.75):
             dominant_freq = xf[dominant_index]
             omega = 2 * np.pi * dominant_freq
 
-            # Sine model
             def sine_model(t, A, phi, offset):
                 return A * np.sin(omega * t + phi) + offset
 
             params, _ = curve_fit(sine_model, time, signal, p0=[1, 0, np.mean(signal)])
             A_fit, phi_fit, offset_fit = params
             df['sine_wave'] = sine_model(time, A_fit, phi_fit, offset_fit)
+
+            # Extrema detection
+            second_derivative = np.diff(np.sign(np.diff(df['sine_wave'])))
+            peaks = list(np.where(second_derivative == -2)[0] + 1)
+            troughs = list(np.where(second_derivative == 2)[0] + 1)
+
+            # Estimate cycle period
+            cycle_lengths = []
+            if len(peaks) >= 2:
+                cycle_lengths.append(peaks[-1] - peaks[-2])
+            if len(troughs) >= 2:
+                cycle_lengths.append(troughs[-1] - troughs[-2])
+
+            if cycle_lengths:
+                est_period = int(np.mean(cycle_lengths))
+
+                # Project next extrema based on last one
+                if peaks and (not troughs or peaks[-1] > troughs[-1]):
+                    next_idx = peaks[-1] + est_period
+                    if next_idx < N + est_period:  # allow projection just beyond data
+                        ghost_marker = {
+                            "type": "peak",
+                            "x": next_idx,
+                            "y": sine_model(next_idx, A_fit, phi_fit, offset_fit)
+                        }
+                elif troughs:
+                    next_idx = troughs[-1] + est_period
+                    if next_idx < N + est_period:
+                        ghost_marker = {
+                            "type": "trough",
+                            "x": next_idx,
+                            "y": sine_model(next_idx, A_fit, phi_fit, offset_fit)
+                        }
+
 
 
     # === 3. Fibonacci danger zones (trap detection) === #
@@ -1060,9 +1095,24 @@ def compute_momentum_tracker(df, alpha=0.75):
     ax.fill_between(df.index, df['bb_lower_10'], df['bb_upper_10'],
                     color='gray', alpha=0.1)
 
-    # Fitted sine wave overlay
+     # Fitted sine wave + extrema
     if 'sine_wave' in df.columns:
         ax.plot(df['sine_wave'], color='black', lw=2, label="Fitted Cycle")
+
+        ax.scatter(peaks, df['sine_wave'].iloc[peaks],
+                   color='red', edgecolor='white', s=80, zorder=6, label="Cycle Peaks")
+        ax.scatter(troughs, df['sine_wave'].iloc[troughs],
+                   color='lime', edgecolor='white', s=80, zorder=6, label="Cycle Troughs")
+
+        # Ghost marker
+        if ghost_marker:
+            ax.scatter(
+                ghost_marker["x"], ghost_marker["y"],
+                facecolors='none',
+                edgecolors='red' if ghost_marker["type"] == "peak" else 'lime',
+                s=120, lw=2, alpha=0.7, zorder=7,
+                label=f"Projected {ghost_marker['type'].capitalize()}"
+            )
 
     # Pink reaction zones (shaded + vertical markers)
     for mult, idx in zip(pink_zones['multipliers'], pink_zones['indices']):
@@ -1104,10 +1154,15 @@ def compute_momentum_tracker(df, alpha=0.75):
 
     plt.tight_layout()
 
-    # === 8. Store results === #
+   # === 8. Store results === #
     st.session_state.momentum_line = df['momentum'].tolist()
     st.session_state.danger_zones = danger_zones
     st.session_state.pink_zones = pink_zones
+    st.session_state.cycle_peaks = peaks
+    st.session_state.cycle_troughs = troughs
+    st.session_state.ghost_marker = ghost_marker
+
+    
     return df, fig
 
 
