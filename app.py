@@ -1114,34 +1114,15 @@ def compute_momentum_tracker(df, alpha=0.75):
                 label=f"Projected {ghost_marker['type'].capitalize()}"
             )
 
-    # Pink reaction zones (shaded + vertical markers)
+    # Pink zones
     for mult, idx in zip(pink_zones['multipliers'], pink_zones['indices']):
-        
-         # Get the momentum value at the pink’s index
-        if idx < len(momentum):
-            pink_level = momentum.iloc[idx]
-    
-            # Draw horizontal S/R line
-            ax.axhline(y=pink_level,
-                       color='#ff00ff',
-                       linestyle='--',
-                       linewidth=1.2,
-                       alpha=0.6,
-                       zorder=1)
-    
-            # Optional marker at the exact pink point
-            ax.scatter(idx, pink_level,
-                       color='#ff00ff',
-                       edgecolor='white',
-                       s=60,
-                       zorder=5)
-        ax.axvline(
-            x=idx,
-            color='#ff00ff',
-            linestyle=':',
-            alpha=0.4,
-            zorder=2
-        )
+        if idx < len(df['momentum']):
+            pink_level = df['momentum'].iloc[idx]
+            ax.axhline(y=pink_level, color='#ff00ff', linestyle='--',
+                       linewidth=1.2, alpha=0.6)
+            ax.scatter(idx, pink_level, color='#ff00ff',
+                       edgecolor='white', s=60, zorder=5)
+        ax.axvline(x=idx, color='#ff00ff', linestyle=':', alpha=0.4)
 
     # Danger zones (red spans)
     for zone in danger_zones:
