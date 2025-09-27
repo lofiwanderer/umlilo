@@ -1027,7 +1027,32 @@ def compute_supertrend(df, period=10, multiplier=2.0, source="momentum"):
 
     return df
 
+
+
+
+def add_stl_decomposition(df, period=12, source="momentum"):
+    """
+    Adds STL decomposition (trend, seasonal, residual) 
+    on the raw momentum line.
     
+    Args:
+        df (pd.DataFrame): momentum tracker dataframe
+        period (int): seasonal cycle length (in rounds, tuneable)
+        source (str): which series to decompose, default='momentum'
+    """
+    df = df.copy()
+    signal = df[source].astype(float).values
+
+    # --- STL Decomposition ---
+    stl = STL(signal, period=period, robust=True)
+    res = stl.fit()
+
+    df["stl_trend"] = res.trend
+    df["stl_seasonal"] = res.seasonal
+    df["stl_residual"] = res.resid
+
+    return df
+
 
 @st.cache_data(show_spinner=False)
 def compute_momentum_tracker(df, alpha=0.75):
@@ -1140,7 +1165,11 @@ def compute_momentum_tracker(df, alpha=0.75):
     # === Supertrend calculation ===
     df = compute_supertrend(df, period=10, multiplier=2.0, source="momentum")
     
+    # === STL decomposition ===
+    df = add_stl_decomposition(df, period=12, source="momentum")
     
+    
+
 
     # === 5. Tactical overlay chart === #
     #plt.style.use('ggplot')
@@ -1169,6 +1198,15 @@ def compute_momentum_tracker(df, alpha=0.75):
     
     ax.scatter(df.index[df['sell_signal']], df['supertrend'][df['sell_signal']],
                marker='v', color='red', edgecolor='black', s=90, zorder=8, label="Sell Signal")
+
+    # Plot STL trend as a thicker background line
+    ax.plot(df['stl_trend'], color='yellow', lw=2.2, alpha=0.8, label="STL Trend")
+    
+    # Seasonal component as dotted wave (hidden cycles)
+    ax.plot(df['stl_seasonal'], color='navy', lw=1.5, linestyle='--', alpha=0.7, label="STL Seasonal")
+    
+    # Optional: residual as thin gray line for noise view
+    ax.plot(df['stl_residual'], color='gray', lw=0.8, alpha=0.5, label="STL Residual")
 
      # Fitted sine wave + extrema
     if 'sine_wave' in df.columns:
@@ -1220,6 +1258,105 @@ def compute_momentum_tracker(df, alpha=0.75):
 
     
     return df, fig
+
+
+@st.cache_data(show_spinner=False)
+def compute_momentum_time_series(df):
+    """
+    Momentum Time Series Analyzer:
+    - Averages momentum scores per minute
+    - Applies SavGol smoothing
+    - Fits FFT-derived sine curve
+    - Detects peaks/troughs
+    - Projects forward next cycle turns
+    """
+
+    df = df.copy()
+    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+    df = df.dropna(subset=['timestamp'])
+    df['minute'] = df['timestamp'].dt.floor('min')
+
+    # === Average momentum score per minute ===
+    minute_avg_df = df.groupby('minute').agg({'momentum': 'mean'}).reset_index()
+
+    # Fill gaps for clean FFT
+    minute_avg_df.set_index('minute', inplace=True)
+    minute_avg_df = minute_avg_df.resample('1min').mean().interpolate()
+    minute_avg_df.reset_index(inplace=True)
+
+    signal = minute_avg_df['momentum'].values
+    N = len(signal)
+
+    if N < 6:
+        st.warning(f"⚠️ Low data length for FFT ({N} points). Accuracy may be poor.")
+
+    # Smooth signal for cleaner cycle detection
+    from scipy.signal import savgol_filter
+    if N >= 5:
+        signal = savgol_filter(signal, window_length=min(11, N-(N%2==0)), polyorder=2)
+
+    # FFT prep
+    from scipy.fft import rfft, rfftfreq
+    from scipy.optimize import curve_fit
+
+    T = 60.0  # 1 min = 60s
+    time = np.arange(N)
+    yf = rfft(signal)
+    xf = rfftfreq(N, T)[:N // 2]
+
+    fft_magnitude = 2.0 / N * np.abs(yf[0:N // 2])
+    if len(fft_magnitude[1:]) == 0:
+        raise ValueError("🚫 Empty FFT magnitude — not enough signal.")
+
+    # Find dominant cycle
+    dominant_index = np.argmax(fft_magnitude[1:]) + 1
+    dominant_freq = xf[dominant_index]
+    omega = 2 * np.pi * dominant_freq
+
+    def sine_model(t, A, phi, offset):
+        return A * np.sin(omega * t + phi) + offset
+
+    params, _ = curve_fit(sine_model, time, signal, p0=[1, 0, np.mean(signal)])
+    A_fit, phi_fit, offset_fit = params
+    predicted_wave = sine_model(time, A_fit, phi_fit, offset_fit)
+
+    # Add fitted curve
+    minute_avg_df['sine_wave'] = predicted_wave
+
+    # Detect extrema
+    second_derivative = np.diff(np.sign(np.diff(predicted_wave)))
+    peak_indices = np.where(second_derivative == -2)[0] + 1
+    trough_indices = np.where(second_derivative == 2)[0] + 1
+
+    peak_times = minute_avg_df['minute'].iloc[peak_indices].values
+    peak_values = predicted_wave[peak_indices]
+    trough_times = minute_avg_df['minute'].iloc[trough_indices].values
+    trough_values = predicted_wave[trough_indices]
+
+    # Project next expected peak/trough
+    cycle_length = int(round(2 * np.pi / omega))
+    next_peak_time = minute_avg_df['minute'].iloc[-1] + pd.to_timedelta(cycle_length // 2, unit='m')
+    next_trough_time = minute_avg_df['minute'].iloc[-1] + pd.to_timedelta(cycle_length, unit='m')
+
+    # --- Plot ---
+    fig2, ax2 = plt.subplots(figsize=(10, 4))
+    ax2.plot(minute_avg_df['minute'], signal, label='Avg Momentum (1-min)', alpha=0.6)
+    ax2.plot(minute_avg_df['minute'], predicted_wave, label='Fitted Cycle', color='black', linewidth=2)
+
+    ax2.scatter(peak_times, peak_values, color='red', marker='o', s=60, label='Peaks')
+    ax2.scatter(trough_times, trough_values, color='purple', marker='o', s=60, label='Troughs')
+
+    # Ghost markers for projected next cycle
+    ax2.scatter(next_peak_time, predicted_wave[-1], color='red', marker='o', s=80, alpha=0.3, label='Next Peak (Projected)')
+    ax2.scatter(next_trough_time, predicted_wave[-1], color='purple', marker='o', s=80, alpha=0.3, label='Next Trough (Projected)')
+
+    ax2.set_title("⏳ Momentum Time Series Analyzer (MTSA)", fontsize=14, color='cyan')
+    ax2.legend()
+    ax2.grid(True, alpha=0.2)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    return minute_avg_df, fig2
 
 
 @st.cache_data
@@ -2038,41 +2175,7 @@ if not df.empty:
     # Plot MSI Chart
     #plot_msi_chart(df, window_size, recent_df, msi_score, msi_color, harmonic_wave, micro_wave, harmonic_forecast, forecast_times, fib_msi_window, fib_lookback_window,  spiral_centers=spiral_centers)
     
-    # Ensure timestamp is parsed
-    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
     
-    # Drop rows with bad timestamps
-    df = df.dropna(subset=['timestamp'])
-    
-    
-    
-    # Round timestamp to the nearest minute
-    df['minute'] = df['timestamp'].dt.floor('min')
-    
-    # Group by each minute and calculate average multiplier
-    minute_avg_df = df.groupby('minute').agg({'multiplier': 'mean'}).reset_index()
-    
-    # Optional: Fill missing minutes if gaps exist (important for clean FFT)
-    minute_avg_df.set_index('minute', inplace=True)
-    minute_avg_df = minute_avg_df.resample('1min').mean().interpolate()
-    minute_avg_df.reset_index(inplace=True)
-    minute_avg_df = minute_avg_df.dropna(subset=['multiplier'])
-
-    # DEBUG: Print how many minutes we're working with
-    st.write(f"📊 Minutes of data for FFT: {len(minute_avg_df)}")
-
-    # Extract signal: average multiplier values
-    signal = minute_avg_df['multiplier'].values
-    N = len(signal)
-    
-    # Guard against too-short series
-    if N < 6:
-        st.warning(f"⚠️ FFT running on low data ({N} points). Accuracy may be poor.")
-
-    if N < 16:
-        signal = savgol_filter(signal, window_length=5 if N >= 5 else N, polyorder=2)
-
-    signal = savgol_filter(signal, window_length=5 if N >= 5 else N, polyorder=2)
 
     # Ensure timestamp is parsed
     #df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
@@ -2115,28 +2218,6 @@ if not df.empty:
     
         
 
-    
-    
-    
-    # Sample spacing (1 minute interval = 60 seconds)
-    T = 60.0  # seconds per sample (1 per minute)
-    time = np.arange(N)  # N = number of minutes
-    
-        # Apply FFT
-    yf = rfft(signal)
-    xf = rfftfreq(N, T)[:N // 2]  # frequency axis (positive half)
-        
-    # Magnitude of FFT
-    fft_magnitude = 2.0 / N * np.abs(yf[0:N // 2])
-    
-    # Safety: Check if there's anything to analyze
-    if len(fft_magnitude[1:]) == 0:
-        raise ValueError("🚫 FFT magnitude array is empty. Check your data input.")
-        
-    # Get dominant frequency (excluding 0 Hz / DC component)
-    dominant_index = np.argmax(fft_magnitude[1:]) + 1
-    dominant_freq = xf[dominant_index]  # cycles per second (Hz)
-    omega = 2 * np.pi * dominant_freq  # angular frequency
 
 
     df, battle_fig = compute_momentum_tracker(df)
@@ -2145,34 +2226,13 @@ if not df.empty:
         st.pyplot(battle_fig)
 
     
-    org_1m, z_sigs, z_slps, comps = compute_organic_signal_and_slope_composites(df, windows=(1,3,5,10), pink_cut=10.0, z_win=120)
-
-    with st.expander("🌱 Organic Signal Composite (multi-TF)", expanded=True):
-        if org_1m.empty:
-            st.info("Not enough organic data.")
-        else:
-            fig, ax = plt.subplots(2, 1, figsize=(12, 7), sharex=True)
-            # Top: per-TF z-scored signals (z_signal_{w})
-            for c in z_sigs.columns:
-                ax[0].plot(z_sigs.index, z_sigs[c], label=c)
-            ax[0].axhline(0, linestyle='--', color='gray', linewidth=1)
-            ax[0].set_title("Per-TF Organic Signals (z-scored)")
-            ax[0].legend(loc='upper left')
-    
-            # Bottom: composite signal + composite slope (scaled)
-            ax[1].plot(org_1m.index, org_1m['composite_signal'], label='Composite Signal (z-weighted)', linewidth=2)
-            ax[1].plot(org_1m.index, org_1m['composite_slope_zweighted'] * 0.8, label='Composite Slope (scaled)', linewidth=1, alpha=0.8)
-            ax[1].axhline(0.6, linestyle='--', color='green')
-            ax[1].axhline(-0.6, linestyle='--', color='red')
-            ax[1].set_title("Composite Organic Signal (bias) + Slope (timing)")
-            ax[1].legend()
-            plt.tight_layout()
-            st.pyplot(fig)
+        minute_avg_df, fig2 = compute_momentum_time_series(df)
+        st.pyplot(fig2)
     
            
-    with st.expander("📊 Multi-Wave Trap Scanner", expanded=True):
-        st.write("This shows smoothed multiplier waves across multiple timeframes.")
-        peak_dict, trough_dict = multi_wave_trap_scanner(df, windows=[1, 3, 5, 10])
+    #with st.expander("📊 Multi-Wave Trap Scanner", expanded=True):
+        #st.write("This shows smoothed multiplier waves across multiple timeframes.")
+        #peak_dict, trough_dict = multi_wave_trap_scanner(df, windows=[1, 3, 5, 10])
 
     
 
