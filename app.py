@@ -1347,8 +1347,8 @@ def compute_momentum_time_series(df):
     ax2.scatter(trough_times, trough_values, color='purple', marker='o', s=60, label='Troughs')
 
     # Ghost markers for projected next cycle
-    ax2.scatter(next_peak_time, predicted_wave[-1], color='red', marker='o', s=80, alpha=0.3, label='Next Peak (Projected)')
-    ax2.scatter(next_trough_time, predicted_wave[-1], color='purple', marker='o', s=80, alpha=0.3, label='Next Trough (Projected)')
+    #ax2.scatter(next_peak_time, predicted_wave[-1], color='red', marker='o', s=80, alpha=0.3, label='Next Peak (Projected)')
+    #ax2.scatter(next_trough_time, predicted_wave[-1], color='purple', marker='o', s=80, alpha=0.3, label='Next Trough (Projected)')
 
     ax2.set_title("⏳ Momentum Time Series Analyzer (MTSA)", fontsize=14, color='cyan')
     ax2.legend()
