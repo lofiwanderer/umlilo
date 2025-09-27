@@ -970,6 +970,65 @@ def compute_organic_signal_and_slope_composites(
     return organic_1m, z_signals, z_slopes, composites
 
 
+@st.cache_data
+def compute_supertrend(df, period=10, multiplier=2.0, source="momentum"):
+    """
+    Supertrend calculation adapted for Momentum Tracker.
+    Uses the momentum line (or other chosen column) as the source.
+    """
+    df = df.copy()
+    src = df[source].astype(float)
+
+    # True range approximation (adapted to momentum shifts)
+    df['prev_val'] = src.shift(1)
+    df['tr'] = (src - df['prev_val']).abs()
+    df['atr'] = df['tr'].rolling(window=period).mean()
+
+    # Bands
+    df['upper_band'] = src - multiplier * df['atr']
+    df['lower_band'] = src + multiplier * df['atr']
+
+    # Initialize trend
+    trend = [1]  # start uptrend
+
+    for i in range(1, len(df)):
+        curr = df.iloc[i]
+        prev = df.iloc[i - 1]
+
+        # Carry-forward logic
+        upper_band = (
+            max(curr['upper_band'], prev['upper_band'])
+            if prev['prev_val'] > prev['upper_band']
+            else curr['upper_band']
+        )
+        lower_band = (
+            min(curr['lower_band'], prev['lower_band'])
+            if prev['prev_val'] < prev['lower_band']
+            else curr['lower_band']
+        )
+
+        # Switch trend if thresholds crossed
+        if trend[-1] == -1 and curr['prev_val'] > lower_band:
+            trend.append(1)
+        elif trend[-1] == 1 and curr['prev_val'] < upper_band:
+            trend.append(-1)
+        else:
+            trend.append(trend[-1])
+
+        # Update bands
+        df.at[df.index[i], 'upper_band'] = upper_band
+        df.at[df.index[i], 'lower_band'] = lower_band
+
+    # Final outputs
+    df["trend"] = trend
+    df["supertrend"] = np.where(df["trend"] == 1, df["upper_band"], df["lower_band"])
+    df["buy_signal"] = (df["trend"] == 1) & (pd.Series(trend).shift(1) == -1)
+    df["sell_signal"] = (df["trend"] == -1) & (pd.Series(trend).shift(1) == 1)
+
+    return df
+
+    
+
 @st.cache_data(show_spinner=False)
 def compute_momentum_tracker(df, alpha=0.75):
     """
@@ -1078,6 +1137,11 @@ def compute_momentum_tracker(df, alpha=0.75):
         'multipliers': df['multiplier'][pink_mask].tolist()
     }
 
+    # === Supertrend calculation ===
+    df = compute_supertrend(df, period=10, multiplier=2.0, source="momentum")
+    
+    
+
     # === 5. Tactical overlay chart === #
     #plt.style.use('ggplot')
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -1094,6 +1158,17 @@ def compute_momentum_tracker(df, alpha=0.75):
     ax.plot(df['bb_lower_10'], color='green', lw=1, alpha=0.4, linestyle="--", label="BB Lower")
     ax.fill_between(df.index, df['bb_lower_10'], df['bb_upper_10'],
                     color='gray', alpha=0.1)
+
+
+    # Supertrend line
+    ax.plot(df['supertrend'], color='orange', lw=1.8, label="Supertrend")
+    
+    # Buy/Sell markers
+    ax.scatter(df.index[df['buy_signal']], df['supertrend'][df['buy_signal']],
+               marker='^', color='lime', edgecolor='black', s=90, zorder=8, label="Buy Signal")
+    
+    ax.scatter(df.index[df['sell_signal']], df['supertrend'][df['sell_signal']],
+               marker='v', color='red', edgecolor='black', s=90, zorder=8, label="Sell Signal")
 
      # Fitted sine wave + extrema
     if 'sine_wave' in df.columns:
