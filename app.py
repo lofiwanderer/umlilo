@@ -1027,6 +1027,15 @@ def compute_supertrend(df, period=10, multiplier=2.0, source="momentum"):
 
     return df
 
+@st.cache_data(ttl=600, show_spinner=False)
+def compute_momentum_macd(minute_avg_df, col='momentum', fast=6, slow=13, signal=5):
+    df = minute_avg_df.copy()
+    df['ema_fast'] = df[col].ewm(span=fast, adjust=False).mean()
+    df['ema_slow'] = df[col].ewm(span=slow, adjust=False).mean()
+    df['macd'] = df['ema_fast'] - df['ema_slow']
+    df['macd_signal'] = df['macd'].ewm(span=signal, adjust=False).mean()
+    df['macd_hist'] = df['macd'] - df['macd_signal']
+    return df
 
 
 
@@ -1401,47 +1410,7 @@ def compute_rsi(series, period=14):
     rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
     
-@st.cache_data 
-def compute_supertrend(df, period=10, multiplier=2.0, source="msi"):
-        df = df.copy()
-        src = df[source]
-        hl2 = src  # substitute for high+low/2
-    
-        # True range approximation
-        df['prev_close'] = src.shift(1)
-        df['tr'] = abs(src - df['prev_close'])
-        df['atr'] = df['tr'].rolling(window=period).mean()
-    
-        # Bands
-        df['upper_band'] = hl2 - multiplier * df['atr']
-        df['lower_band'] = hl2 + multiplier * df['atr']
-    
-        # Initialize trend
-        trend = [1]  # start with uptrend
-    
-        for i in range(1, len(df)):
-            curr = df.iloc[i]
-            prev = df.iloc[i - 1]
-    
-            upper_band = max(curr['upper_band'], prev['upper_band']) if prev['prev_close'] > prev['upper_band'] else curr['upper_band']
-            lower_band = min(curr['lower_band'], prev['lower_band']) if prev['prev_close'] < prev['lower_band'] else curr['lower_band']
-    
-            if trend[-1] == -1 and curr['prev_close'] > lower_band:
-                trend.append(1)
-            elif trend[-1] == 1 and curr['prev_close'] < upper_band:
-                trend.append(-1)
-            else:
-                trend.append(trend[-1])
-    
-            df.at[df.index[i], 'upper_band'] = upper_band
-            df.at[df.index[i], 'lower_band'] = lower_band
-    
-        df["trend"] = trend
-        df["supertrend"] = np.where(df["trend"] == 1, df["upper_band"], df["lower_band"])
-        df["buy_signal"] = (df["trend"] == 1) & (pd.Series(trend).shift(1) == -1)
-        df["sell_signal"] = (df["trend"] == -1) & (pd.Series(trend).shift(1) == 1)
-    
-        return df
+
     
 
 
@@ -2227,7 +2196,27 @@ if not df.empty:
 
     
         minute_avg_df, fig2 = compute_momentum_time_series(df)
+        
+        # Compute MACD on the 1-min averaged momentum
+        macd_df = compute_momentum_macd(minute_avg_df, col='momentum')
+
         st.pyplot(fig2)
+
+        fig3, ax3 = plt.subplots(figsize=(10, 3), sharex=False)
+
+        ax3.plot(macd_df['minute'], macd_df['macd'], label='MACD', color='cyan', linewidth=1.5)
+        ax3.plot(macd_df['minute'], macd_df['macd_signal'], label='Signal Line', color='orange', linewidth=1)
+        ax3.bar(macd_df['minute'], macd_df['macd_hist'], color=np.where(macd_df['macd_hist']>0, 'green', 'red'),
+                alpha=0.4, label='Histogram')
+        
+        ax3.axhline(0, color='white', linewidth=0.8, alpha=0.5)
+        ax3.set_title("🔍 MACD on Momentum (MTSA Signal)", color='cyan', fontsize=13)
+        ax3.legend()
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        
+        st.pyplot(fig3)
+
     
            
     #with st.expander("📊 Multi-Wave Trap Scanner", expanded=True):
