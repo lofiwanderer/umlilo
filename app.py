@@ -1209,13 +1209,13 @@ def compute_momentum_tracker(df, alpha=0.75):
                marker='v', color='red', edgecolor='black', s=90, zorder=8, label="Sell Signal")
 
     # Plot STL trend as a thicker background line
-    ax.plot(df['stl_trend'], color='yellow', lw=2.2, alpha=0.8, label="STL Trend")
+    #ax.plot(df['stl_trend'], color='yellow', lw=2.2, alpha=0.8, label="STL Trend")
     
     # Seasonal component as dotted wave (hidden cycles)
     ax.plot(df['stl_seasonal'], color='navy', lw=1.5, linestyle='--', alpha=0.7, label="STL Seasonal")
     
     # Optional: residual as thin gray line for noise view
-    ax.plot(df['stl_residual'], color='gray', lw=0.8, alpha=0.5, label="STL Residual")
+    #ax.plot(df['stl_residual'], color='gray', lw=0.8, alpha=0.5, label="STL Residual")
 
      # Fitted sine wave + extrema
     if 'sine_wave' in df.columns:
